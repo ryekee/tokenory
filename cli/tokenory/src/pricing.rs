@@ -211,8 +211,9 @@ pub fn assign(r: &mut UsageRecord, id: &str, p: &PriceSnapshot) {
 pub fn snapshot_from_service(db: &Database, service: &PricingService) -> Result<PriceSnapshot> {
     let mut p = PriceSnapshot::deepseek_reference();
     if let Some((_, old)) = active_snapshot(&db.connection)? {
-        for entry in old.entries.into_iter().filter(|e|e.source=="User") {
-            p.entries.retain(|e|e.provider!=entry.provider || e.model!=entry.model);
+        for entry in old.entries.into_iter().filter(|e| e.source == "User") {
+            p.entries
+                .retain(|e| e.provider != entry.provider || e.model != entry.model);
             p.entries.push(entry);
         }
     }

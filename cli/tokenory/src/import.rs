@@ -1,4 +1,5 @@
 pub mod cc_switch;
+pub mod tokens_ci;
 use crate::{
     db::{advance_revision, put_record, Database},
     usage::UsageRecord,
@@ -33,11 +34,14 @@ pub struct ImportPreview {
     pub unpriced_tokens: i64,
     pub source_timezone: Option<String>,
     pub conflicts: Vec<Conflict>,
+    #[serde(default)]
+    pub partial_dates: Vec<String>,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct ApplyOptions {
     pub accept_original_dates: bool,
+    pub accept_partial_dates: bool,
     pub replace_conflicts: bool,
     pub resolutions: BTreeMap<String, String>,
 }
@@ -84,16 +88,46 @@ fn selected(c: &Connection, date: &str, client: &str) -> Result<Option<Choice>> 
     )
     .optional()?)
 }
+fn client_spans<'a>(
+    pairs: impl Iterator<Item = (&'a str, &'a str)>,
+) -> BTreeMap<String, (String, String)> {
+    let mut spans = BTreeMap::<String, (String, String)>::new();
+    for (client, date) in pairs {
+        let span = spans
+            .entry(client.into())
+            .or_insert_with(|| (date.into(), date.into()));
+        if date < span.0.as_str() {
+            span.0 = date.into();
+        }
+        if date > span.1.as_str() {
+            span.1 = date.into();
+        }
+    }
+    spans
+}
 fn fingerprint(c: &Connection, scopes: &[Scope]) -> Result<String> {
     let mut hash = Sha256::new();
+    let mut keys: BTreeSet<(String, String)> = scopes
+        .iter()
+        .map(|s| (s.date.clone(), s.client.clone()))
+        .collect();
+    let spans = client_spans(scopes.iter().map(|s| (s.client.as_str(), s.date.as_str())));
+    let mut coverage = c.prepare(
+        "SELECT date,client FROM coverage_choices WHERE client=?1 AND date>=?2 AND date<=?3",
+    )?;
+    for (client, (from, to)) in spans {
+        for row in coverage.query_map(params![client, from, to], |r| Ok((r.get(0)?, r.get(1)?)))? {
+            keys.insert(row?);
+        }
+    }
     let mut stmt=c.prepare("SELECT source,batch_id,item_key,body FROM effective_usage WHERE date=?1 AND client=?2 ORDER BY item_key")?;
-    for scope in scopes {
+    for (date, client) in keys {
         hash.update(serde_json::to_vec(&(
-            &scope.date,
-            &scope.client,
-            selected(c, &scope.date, &scope.client)?,
+            &date,
+            &client,
+            selected(c, &date, &client)?,
         ))?);
-        for row in stmt.query_map(params![scope.date, scope.client], |r| {
+        for row in stmt.query_map(params![date, client], |r| {
             Ok((
                 r.get::<_, String>(0)?,
                 r.get::<_, String>(1)?,
@@ -114,6 +148,7 @@ pub fn preview_import(
 ) -> Result<ImportPreview> {
     let records = match source {
         "cc-switch" => cc_switch::parse(bytes, timezone.clone())?,
+        "tokens-ci" => tokens_ci::parse(bytes, timezone.clone())?,
         _ => bail!("unsupported import source: {source}"),
     };
     preview_records(db, source, bytes, records, timezone)
@@ -132,18 +167,26 @@ pub fn preview_records(
         .iter()
         .map(|r| (r.date.clone(), r.client.clone()))
         .collect();
-    // A corrected snapshot replaces prior selected dates inside its stated span,
+    // A full snapshot offers every selected date/client inside its stated span,
     // including a day/model removed from the replacement snapshot.
-    let clients: BTreeSet<_> = records.iter().map(|r| r.client.clone()).collect();
-    let mut stmt = db.connection.prepare(
-        "SELECT date,client FROM coverage_choices WHERE source=?1 AND date>=?2 AND date<=?3",
-    )?;
-    for row in stmt.query_map(params![source, start, end], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    let spans = client_spans(records.iter().map(|r| (r.client.as_str(), r.date.as_str())));
+    let mut stmt = db
+        .connection
+        .prepare("SELECT date,client,source FROM coverage_choices WHERE date>=?1 AND date<=?2")?;
+    for row in stmt.query_map(params![start, end], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
     })? {
         let pair = row?;
-        if clients.contains(&pair.1) {
-            keys.insert(pair);
+        if pair.2 == source
+            || spans
+                .get(&pair.1)
+                .is_some_and(|(from, to)| pair.0 >= *from && pair.0 <= *to)
+        {
+            keys.insert((pair.0, pair.1));
         }
     }
     drop(stmt);
@@ -197,6 +240,13 @@ pub fn preview_records(
         unpriced_tokens: tokens,
         source_timezone: timezone,
         conflicts,
+        partial_dates: records
+            .iter()
+            .filter(|r| r.metadata["partialDay"].as_bool() == Some(true))
+            .map(|r| r.date.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect(),
     };
     let state = fingerprint(&db.connection, &scopes)?;
     db.connection.execute(
@@ -243,6 +293,7 @@ pub fn apply_import(db: &mut Database, id: &str, options: &ApplyOptions) -> Resu
         p.view.source_timezone.is_some() || options.accept_original_dates,
         "confirm preservation of original dates: source timezone is unknown"
     );
+    ensure!(p.view.partial_dates.is_empty()||options.accept_partial_dates,"snapshot includes incomplete dates; explicitly accept partial coverage or import a completed snapshot");
     for c in &p.view.conflicts {
         ensure!(
             options.replace_conflicts

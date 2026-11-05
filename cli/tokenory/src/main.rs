@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use fs2::FileExt;
 use std::{fs::File, path::PathBuf};
 use tokenory::{
@@ -16,10 +16,33 @@ struct Args {
     #[command(subcommand)]
     command: Command,
 }
+#[derive(Clone, ValueEnum)]
+enum GroupBy {
+    Day,
+    Client,
+    Provider,
+    Model,
+}
 #[derive(Subcommand)]
 enum Command {
+    Restore {
+        source: PathBuf,
+    },
+    Export {
+        #[arg(long)]
+        format: String,
+        destination: PathBuf,
+    },
+    Worker {
+        #[arg(long)]
+        stdio: bool,
+    },
     Scan,
     Report {
+        #[arg(long)]
+        group_by: Option<GroupBy>,
+        #[arg(long)]
+        json: bool,
         #[arg(long)]
         from: Option<String>,
         #[arg(long)]
@@ -52,6 +75,8 @@ enum ImportAction {
         id: String,
         #[arg(long)]
         accept_original_dates: bool,
+        #[arg(long)]
+        accept_partial_dates: bool,
         #[arg(long)]
         replace_conflicts: bool,
     },
@@ -86,8 +111,32 @@ fn main() -> Result<()> {
         Some(f)
     };
     let mut db = Database::open(&directory)?;
-    if !matches!(args.command,Command::Report {..}|Command::Backup {..}) {tokenory::pricing::initialize(&mut db)?;}
+    if !matches!(
+        args.command,
+        Command::Report { .. } | Command::Backup { .. }
+    ) {
+        tokenory::pricing::initialize(&mut db)?;
+    }
     let value = match args.command {
+        Command::Restore { source } => {
+            db.restore(&source)?;
+            serde_json::json!({"restored":source})
+        }
+        Command::Export {
+            format,
+            destination,
+        } => {
+            tokenory::ipc::export(&mut db, &destination, &format, &Filter::default())?;
+            serde_json::json!({"path":destination})
+        }
+        Command::Worker { stdio } => {
+            anyhow::ensure!(stdio, "worker requires --stdio");
+            let config = tokenory::config::Config::load(&directory)?;
+            let runtime = tokio::runtime::Runtime::new()?;
+            let result = runtime.block_on(tokenory::ipc::run(&mut db, config));
+            runtime.shutdown_timeout(std::time::Duration::from_millis(100));
+            return result;
+        }
         Command::Scan => {
             let config = tokenory::config::Config::load(&directory)?;
             let mut cache = tokenory::collector::DiagnosticCache::persistent();
@@ -101,17 +150,32 @@ fn main() -> Result<()> {
             client,
             model,
             provider,
-        } => serde_json::to_value(report(
-            &mut db,
-            &Filter {
-                from,
-                to,
-                client,
-                model,
-                provider,
-                ..Default::default()
-            },
-        )?)?,
+            group_by,
+            json: _,
+        } => {
+            let r = report(
+                &mut db,
+                &Filter {
+                    from,
+                    to,
+                    client,
+                    model,
+                    provider,
+                    ..Default::default()
+                },
+            )?;
+            if let Some(group) = group_by {
+                let groups = match group {
+                    GroupBy::Day => r.daily,
+                    GroupBy::Client => r.clients,
+                    GroupBy::Provider => r.providers,
+                    GroupBy::Model => r.models,
+                };
+                serde_json::json!({"revision":r.revision,"summary":r.summary,"groups":groups})
+            } else {
+                serde_json::to_value(r)?
+            }
+        }
         Command::Import { action } => match action {
             ImportAction::Preview {
                 source,
@@ -126,12 +190,14 @@ fn main() -> Result<()> {
             ImportAction::Apply {
                 id,
                 accept_original_dates,
+                accept_partial_dates,
                 replace_conflicts,
             } => serde_json::to_value(apply_import(
                 &mut db,
                 &id,
                 &ApplyOptions {
                     accept_original_dates,
+                    accept_partial_dates,
                     replace_conflicts,
                     ..Default::default()
                 },

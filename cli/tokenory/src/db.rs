@@ -42,6 +42,53 @@ impl Database {
             .context("create consistent SQLite backup")?;
         Ok(())
     }
+    pub fn restore(&mut self, source_path: &Path) -> Result<()> {
+        let source =
+            Connection::open_with_flags(source_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .context("open backup")?;
+        source.execute_batch("BEGIN;")?;
+        let integrity: String = source.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
+        ensure!(integrity == "ok", "backup integrity check failed");
+        let version: i64 = source.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        ensure!(
+            (1..=2).contains(&version),
+            "unsupported backup schema version"
+        );
+        {
+            let mut statement = source.prepare("SELECT body,tokens FROM usage_records")?;
+            for row in
+                statement.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?
+            {
+                let (body, total) = row?;
+                let record: UsageRecord = serde_json::from_str(&body)?;
+                record.validate()?;
+                ensure!(
+                    record.tokens.checked_total()? == total,
+                    "backup token totals do not match record bodies"
+                );
+            }
+            source.query_row("SELECT count(*) FROM effective_usage", [], |r| {
+                r.get::<_, i64>(0)
+            })?;
+            source.query_row("SELECT value FROM meta WHERE key='revision'", [], |r| {
+                r.get::<_, i64>(0)
+            })?;
+        }
+        self.backup_before("restore")?;
+        // Keep the validated source read transaction open while copying it.
+        // SQLite applies the replacement as one destination transaction.
+        {
+            let backup = rusqlite::backup::Backup::new(&source, &mut self.connection)?;
+            backup.run_to_completion(100, Duration::from_millis(5), None)?;
+        }
+        source.execute_batch("COMMIT;")?;
+        if version == 1 {
+            self.connection
+                .execute_batch(include_str!("../migrations/002_pricing.sql"))?;
+        }
+        advance_revision(&self.connection)?;
+        Ok(())
+    }
     pub fn backup_before(&self, action: &str) -> Result<PathBuf> {
         let target = self.directory.join("backups").join(format!(
             "{}-{action}.sqlite3",
