@@ -1,0 +1,265 @@
+name: CI
+
+# Does the Rust workspace compile, link, run, and stay lint-clean — on every
+# platform family it ships to. Nothing here publishes anything.
+#
+# Three runners rather than one because the workspace carries 61 `cfg(unix)` /
+# `cfg(windows)` / `cfg(target_os)` branches across 12 files, 20 of them in
+# antigravity.rs and 8 in auth.rs. Code behind a `cfg` the host does not match
+# is never compiled at all, so a Linux-only job would give a green tick to a PR
+# that does not build on Windows — which is where the credential-writing
+# fallback in auth.rs lives.
+#
+# The publish workflow builds eight targets, but only on demand for a release.
+# This is the gate that runs before a PR merges.
+
+# Deliberately unfiltered, with the path decision moved into the `changes` job
+# below. A workflow skipped by a top-level `paths:` filter reports nothing at
+# all, so a check made required later would sit "Pending" forever and block the
+# merge; a *job* skipped by an `if:` reports the "skipped" conclusion, which
+# branch protection accepts. Always starting the workflow is what buys that,
+# and it costs one ~20s runner on a change that touches neither tree.
+#
+# One caveat, measured rather than assumed (PR #102): that guarantee holds for
+# `web`, but not for the matrix. A skipped matrix job never evaluates its
+# matrix, so GitHub cannot expand `name: ${{ matrix.name }}` and reports the
+# three platforms as a single check literally named `matrix.name` instead of
+# Linux/macOS/Windows. Nothing is a required check here today, so this is
+# cosmetic. If Linux, macOS or Windows is ever made required, those names will
+# never report on a web-only PR and will block the merge — at which point move
+# the `if:` off the matrix job and onto its Clippy/Build/Smoke/Test steps, so
+# each platform still reports under its own name for the price of a runner
+# start.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A PR that gets three pushes in a minute should not tie up nine runners
+# answering a question about the first one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  # Which trees does this push actually touch? Most PRs here are CLI-only or
+  # web-only, and before this job a web-only change still paid for three Rust
+  # runners (Windows alone is ~6 minutes).
+  #
+  # Hand-rolled rather than a third-party paths-filter action: the whole job is
+  # one `git diff`, and a dependency that reads the event payload and gates
+  # every other job is not worth adding for that.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    outputs:
+      cli: ${{ steps.filter.outputs.cli }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      # Full history: the diff needs the base commit, which a shallow fetch
+      # does not have.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        shell: bash
+        env:
+          # Via env rather than inline `${{ }}`: these come from the event
+          # payload, and a script body is the wrong place to paste them.
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -uo pipefail
+
+          # Fail open. A job that should have run and did not is a gate that
+          # lies; a job that ran for nothing costs minutes. So anything we
+          # cannot resolve — a first push to a branch, where `before` is all
+          # zeroes, a force-push, a base commit missing from the clone —
+          # runs everything.
+          if [ -z "$BASE_SHA" ] || ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "base commit unavailable ($BASE_SHA); running every job" >&2
+            echo "cli=true" >> "$GITHUB_OUTPUT"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$BASE_SHA" HEAD) || {
+            echo "git diff failed; running every job" >&2
+            echo "cli=true" >> "$GITHUB_OUTPUT"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          echo "changed files:" >&2
+          printf '%s\n' "$changed" >&2
+
+          touches() { printf '%s\n' "$changed" | grep -Eq "$1"; }
+
+          # A change to this workflow re-runs everything it gates: the point of
+          # such a change is usually to find out whether the jobs still pass.
+          if touches '^cli/' || touches '^\.github/workflows/ci\.yml$'; then
+            cli=true
+          else
+            cli=false
+          fi
+          if touches '^web/' || touches '^\.github/workflows/ci\.yml$'; then
+            web=true
+          else
+            web=false
+          fi
+
+          echo "cli=$cli web=$web" >&2
+          echo "cli=$cli" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.name }}
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Not fail-fast: "builds on Linux, breaks on Windows" is the single most
+      # useful thing this workflow can tell you, and cancelling the other legs
+      # the moment one fails is what hides it.
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux, os: ubuntu-latest, bin: tokens }
+          - { name: macOS, os: macos-latest, bin: tokens }
+          - { name: Windows, os: windows-latest, bin: tokens.exe }
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            cli/target/
+          key: ci-${{ matrix.os }}-${{ hashFiles('cli/Cargo.lock') }}
+          restore-keys: ci-${{ matrix.os }}-
+
+      # tokens-core already carries `#![deny(clippy::all)]`, but tokens-cli does
+      # not, so `-D warnings` is what actually holds the line there. The
+      # workspace is at zero warnings today; this keeps it that way instead of
+      # letting them accumulate until nobody reads the output.
+      #
+      # `--all-targets` reaches tests and benches too, so a PR cannot leave a
+      # test file that no longer compiles.
+      - name: Clippy
+        shell: bash
+        run: cargo clippy --manifest-path cli/Cargo.toml --all-targets -- -D warnings
+
+      # Clippy type-checks but stops short of codegen and linking, so it would
+      # not notice a missing system library or a bad `#[link]` — a real risk
+      # with rusqlite, zstd and libc in the tree. Build the release profile that
+      # actually ships, and link a real binary.
+      - name: Build
+        shell: bash
+        run: cargo build --release --manifest-path cli/Cargo.toml -p tokens-cli
+
+      # A binary that links but dies on startup still fails every user. Running
+      # `--version` is the cheapest proof that it does not.
+      - name: Smoke test
+        shell: bash
+        run: cli/target/release/${{ matrix.bin }} --version
+
+      # Currently a no-op: neither crate has a test module or a tests/ dir. It
+      # is here so that the first test anyone writes is run by CI rather than
+      # silently ignored until someone notices.
+      - name: Test
+        shell: bash
+        run: cargo test --manifest-path cli/Cargo.toml
+
+  # One runner: nothing here is platform-specific, unlike the CLI.
+  web:
+    name: Web
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+
+      # Cache bun's global download cache and the installed node_modules, keyed
+      # by the lockfile. A hit means install only has to verify the lockfile
+      # matches — no tarball downloads, no extractions — which both speeds up
+      # the job and removes the surface that produced the transient
+      # `Fail extracting tarball for "next"` flake. Mirrors the cargo cache in
+      # the build job above.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.bun/install/cache
+            web/node_modules
+          key: web-bun-${{ hashFiles('web/bun.lock') }}
+          restore-keys: web-bun-
+
+      # --frozen-lockfile, unlike the release workflow, which deliberately does
+      # not use it. Here a lockfile that disagrees with package.json is exactly
+      # the kind of thing a PR should fail on: the styled-components removal
+      # changed both, and a stale lock would have installed the packages it had
+      # just dropped.
+      #
+      # Retry loop: `bun install` occasionally fails mid-extraction on a
+      # transient registry/network error (`Fail extracting tarball for "next"`),
+      # which has nothing to do with the PR. `--frozen-lockfile` is safe to
+      # retry — it never mutates the lockfile — so a plain bash loop with linear
+      # backoff recovers without human intervention. Zero overhead on the
+      # success path (exits on attempt 1).
+      - name: Install
+        run: |
+          cd web
+          for attempt in 1 2 3; do
+            if bun install --frozen-lockfile; then exit 0; fi
+            echo "bun install attempt $attempt failed; retrying in $((attempt * 5))s" >&2
+            sleep $((attempt * 5))
+          done
+          exit 1
+
+      # No --max-warnings 0. The tree carries a handful of long-standing
+      # warnings that have nothing to do with any given PR, and failing on them
+      # would make this job permanently red for reasons its author cannot fix.
+      # Errors still fail the run.
+      - name: Lint
+        run: cd web && bun run lint
+
+      - name: Test
+        working-directory: web
+        run: bun test
+
+      # cloudflare-env.d.ts is generated from wrangler.jsonc and gitignored, so
+      # a fresh clone has no CloudflareEnv and `db/index.ts` fails to typecheck
+      # on its HYPERDRIVE binding. Working copies pass only because the file is
+      # left over from a previous run — meaning local and CI typechecks have
+      # been reading different inputs all along. Generate it here so CI checks
+      # what the repository actually contains. Offline: it reads wrangler.jsonc,
+      # no credentials involved.
+      - name: Generate Cloudflare env types
+        run: cd web && bunx wrangler types --include-runtime=false --env-interface=CloudflareEnv cloudflare-env.d.ts
+
+      - name: Typecheck
+        run: cd web && bunx tsc --noEmit
+
+      # The build needs no secrets — verified by building with no .env present
+      # and no DATABASE_URL set. Every page that touches the database is
+      # server-rendered on demand, and the leaderboard explicitly tolerates a
+      # missing DATABASE_URL. If that ever changes, this step is where it will
+      # surface first.
+      - name: Build
+        run: cd web && bun run build

@@ -1,0 +1,30 @@
+import { Suspense } from "react";
+import Link from "next/link";
+import PrivateProfileOwnerView from "./PrivateProfileOwnerView";
+
+function NotFoundContent() {
+  return (
+    <div className="flex min-h-screen flex-col bg-background pt-16">
+      <main className="mx-auto w-full max-w-[800px] flex-1 px-6 py-10">
+        <div className="py-20 text-center">
+          <h1 className="mb-2 text-2xl font-bold text-foreground">User Not Found</h1>
+          <p className="mb-6 text-muted-foreground">This user doesn&apos;t exist or hasn&apos;t submitted any data yet.</p>
+          <Link href="/leaderboard" className="inline-flex items-center rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground transition hover:opacity-90">
+            Back to Leaderboard
+          </Link>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// A private profile lands here for every reader, so the cached page cannot
+// tell it apart from a missing one. The owner view upgrades it in the browser
+// when the signed-in user is the one in the URL.
+export default function ProfileNotFound() {
+  return (
+    <Suspense fallback={<NotFoundContent />}>
+      <PrivateProfileOwnerView fallback={<NotFoundContent />} />
+    </Suspense>
+  );
+}

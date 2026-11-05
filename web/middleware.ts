@@ -1,0 +1,168 @@
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+// Routes that require authentication
+const PROTECTED_ROUTES = ["/settings"];
+
+/**
+ * Pages that render the same bytes for every reader, and the query parameters
+ * that actually change what each one renders.
+ *
+ * These are safe in a shared cache because none of them reads a cookie or a
+ * session on the server. Several render dynamically anyway, and Next marks
+ * *every* dynamic response `private, no-store`. That default is right in
+ * general and wrong here: it costs a full render and several queries on every
+ * view of pages nobody needs a private copy of.
+ *
+ * `/leaderboard` earned its place rather than being relabelled into it. It used
+ * to render "Your position" from the session, which genuinely made its HTML
+ * differ per reader — and Cloudflare keys on URL alone, so no response header
+ * could have made it vary on a cookie. It now ships the whole ranking and the
+ * client finds the viewer's own row in it, which removes the personalisation
+ * instead of hiding it, and has the better property besides: the card and the
+ * table are read from one array, so they cannot disagree.
+ */
+const SHARED_CACHE_ROUTES: ReadonlyArray<{
+  pattern: RegExp;
+  query: ReadonlySet<string>;
+}> = [
+  { pattern: /^\/$/, query: new Set() },
+  { pattern: /^\/docs$/, query: new Set() },
+  { pattern: /^\/terms$/, query: new Set() },
+  { pattern: /^\/privacy$/, query: new Set() },
+  // Renders a notice when a banned account is turned away at sign-in.
+  { pattern: /^\/shame$/, query: new Set(["error"]) },
+  { pattern: /^\/u\/[^/]+$/, query: new Set(["period"]) },
+  // The board no longer reads a cookie or a session: it ships the whole
+  // ranking and the client finds the viewer's own row in it, so the document
+  // is the same for everyone. Of the parameters kept here only `period`,
+  // `from`/`to` and a `client:`/`model:` search change what the server
+  // computes — `sortBy`, `page` and plain text are applied to rows the client
+  // already holds. They stay in the allowlist anyway because these links get
+  // shared, and they cost nothing: the client writes them with `replaceState`,
+  // which is not a navigation, so ordinary use never mints a cache entry for
+  // them. Only somebody opening a shared link does.
+  {
+    pattern: /^\/leaderboard$/,
+    query: new Set(["period", "from", "to", "sortBy", "page", "search"]),
+  },
+];
+
+/**
+ * How long the edge may answer without asking.
+ *
+ * Half the 60s `revalidate` on the data underneath, so the edge is never the
+ * thing deciding how old a page gets — at worst it repeats one data-cache
+ * generation, rather than adding a second window on top of it.
+ *
+ * The short stale window is the part that matters. A submission invalidates the
+ * origin's data cache immediately by tag, but nothing purges Cloudflare, so
+ * whatever is set here *is* how long a new number takes to appear. At
+ * `stale-while-revalidate=300` a rarely-visited profile could answer from a
+ * copy six minutes old; 60s bounds that to two. What it costs is that some
+ * requests wait for a regeneration instead of getting a stale copy instantly —
+ * and that regeneration is 40ms against a database 2ms away, which is not worth
+ * five minutes of staleness to avoid.
+ */
+const SHARED_CACHE_CONTROL =
+  "public, max-age=0, s-maxage=30, stale-while-revalidate=60";
+
+/**
+ * Next fetches the RSC payload for a client-side navigation from the same path,
+ * distinguished only by an `_rsc` query parameter and an `RSC` header.
+ *
+ * Normalising those away would hand a browser asking for flight data a full
+ * HTML document — which is not hypothetical: stripping `_rsc` from a cache key
+ * is exactly what once served React flight data as a profile page in
+ * production. Cloudflare keys on the whole query string, so `?_rsc=…` is
+ * already its own cache entry and needs no help from us; it only needs to be
+ * left alone.
+ */
+function isRscRequest(request: NextRequest): boolean {
+  return (
+    request.headers.has("RSC") || request.nextUrl.searchParams.has("_rsc")
+  );
+}
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (PROTECTED_ROUTES.some((route) => pathname.startsWith(route))) {
+    const sessionToken = request.cookies.get("tt_session")?.value;
+
+    if (!sessionToken) {
+      const loginUrl = new URL("/api/auth/github", request.url);
+      loginUrl.searchParams.set("returnTo", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Session exists, allow access.
+    // Note: We don't validate the session here to avoid database calls in
+    // middleware. The actual validation happens in the page/API route.
+    return NextResponse.next();
+  }
+
+  const route = SHARED_CACHE_ROUTES.find((entry) =>
+    entry.pattern.test(pathname),
+  );
+  if (!route) {
+    return NextResponse.next();
+  }
+
+  if (!isRscRequest(request)) {
+    // Cloudflare's cache key is the full URL, and customising it is an
+    // Enterprise feature — so on this plan every distinct query string is a
+    // distinct cache entry. A shared link carrying a utm tag, or anyone
+    // appending a counter, would otherwise split one page into unlimited
+    // copies and push the entries that matter out of the cache.
+    //
+    // Redirecting rather than silently ignoring the extras keeps one canonical
+    // URL per page, which is also what the cache, the logs and any share of
+    // that link want. 307 rather than 308: the normalisation is a policy this
+    // code owns, and a permanent redirect would be cached by browsers long
+    // after a future parameter became meaningful.
+    const canonical = canonicalUrl(request, route.query);
+    if (canonical) {
+      return NextResponse.redirect(canonical, 307);
+    }
+  }
+
+  const response = NextResponse.next();
+  response.headers.set("Cache-Control", SHARED_CACHE_CONTROL);
+  return response;
+}
+
+/** The URL this request should have used, or null when it already did. */
+function canonicalUrl(
+  request: NextRequest,
+  allowed: ReadonlySet<string>,
+): URL | null {
+  const { searchParams } = request.nextUrl;
+  const extras = [...searchParams.keys()].filter((key) => !allowed.has(key));
+  if (extras.length === 0) return null;
+
+  const url = new URL(request.nextUrl);
+  // Rebuilt from the allowlist rather than deleting the extras, so parameter
+  // order is fixed too — `?a=1&b=2` and `?b=2&a=1` are one cache entry, not two.
+  url.search = "";
+  for (const key of [...allowed].sort()) {
+    const value = searchParams.get(key);
+    if (value !== null) url.searchParams.set(key, value);
+  }
+  return url;
+}
+
+export const config = {
+  // Every path whose auth or caching is decided above. One absent from this
+  // list never reaches the function, however its conditions are written.
+  matcher: [
+    "/",
+    "/settings/:path*",
+    "/docs",
+    "/terms",
+    "/privacy",
+    "/shame",
+    "/leaderboard",
+    "/u/:username",
+  ],
+};

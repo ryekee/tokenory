@@ -1,0 +1,49 @@
+name: Tokenory
+options:
+  bundleIdPrefix: ee.ryek
+  deploymentTarget:
+    macOS: '14.0'
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    MACOSX_DEPLOYMENT_TARGET: '14.0'
+    CODE_SIGN_IDENTITY: '-'
+    CODE_SIGN_STYLE: Manual
+    ENABLE_APP_SANDBOX: NO
+    ENABLE_HARDENED_RUNTIME: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    GENERATE_INFOPLIST_FILE: NO
+    MARKETING_VERSION: '0.1.0'
+    CURRENT_PROJECT_VERSION: '1'
+targets:
+  Tokenory:
+    type: application
+    platform: macOS
+    sources:
+      - path: Tokenory
+    info:
+      path: Tokenory/Info.plist
+      properties:
+        CFBundleDisplayName: Tokenory
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHighResolutionCapable: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ee.ryek.tokenory
+        PRODUCT_NAME: Tokenory
+    postCompileScripts:
+      - name: Embed usage engine
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          PROFILE=debug
+          if [ "$CONFIGURATION" = Release ]; then PROFILE=release; fi
+          mkdir -p "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
+          cp "$SRCROOT/../cli/target/$PROFILE/tokenory" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/tokenory"
+          /usr/bin/codesign --force --sign - "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/tokenory"
+schemes:
+  Tokenory:
+    build:
+      targets:
+        Tokenory: all
