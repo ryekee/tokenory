@@ -413,6 +413,12 @@ impl PricingService {
         overrides
     }
 
+    /// Build a fresh service using the source caches and their normal TTLs.
+    /// Unlike get_or_init, this is not a process-wide immutable singleton.
+    pub async fn fetch_snapshot() -> Result<Self, String> {
+        Self::fetch_inner().await
+    }
+
     async fn fetch_inner() -> Result<Self, String> {
         let (litellm_result, openrouter_data, models_dev_result) = tokio::join!(
             litellm::fetch(),
@@ -674,7 +680,7 @@ impl PricingService {
     /// rejection must inspect this composed result, otherwise they can report
     /// an incomplete price while the real blocker is the donor row's unsafe
     /// model or price evidence.
-    pub(crate) fn resolve_for_usage_with_provider(
+    pub fn resolve_for_usage_with_provider(
         &self,
         model_id: &str,
         provider_id: Option<&str>,

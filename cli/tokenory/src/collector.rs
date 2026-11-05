@@ -236,9 +236,11 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
     })
 }
 pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
+    let snapshot=crate::pricing::active_snapshot(&db.connection)?;
     let tx = db.connection.transaction()?;
     for mut record in batch.records {
         let prior:Option<String>=tx.query_row("SELECT body FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",[&record.key],|r|r.get(0)).optional()?;
+        if let Some((id,p))=&snapshot {crate::pricing::assign(&mut record,id,p);}
         if let Some(prior) = prior {
             let old: UsageRecord = serde_json::from_str(&prior)?;
             if old.tokens == record.tokens
