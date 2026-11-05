@@ -28,11 +28,21 @@ fn codex_copy_preserves_identity_and_cumulative_deltas() {
         serde_json::json!({"timestamp":"2026-11-05T01:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"output_tokens":0,"cached_input_tokens":0,"reasoning_output_tokens":0,"total_tokens":100}}}}),
         serde_json::json!({"timestamp":"2026-11-05T01:02:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":150,"output_tokens":0,"cached_input_tokens":0,"reasoning_output_tokens":0,"total_tokens":150}}}}),
     ];
-    fs::write(&first, rows.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n")).unwrap();
+    fs::write(
+        &first,
+        rows.iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+    .unwrap();
     fs::copy(&first, &second).unwrap();
     let a = parse_codex_file(&first);
     let b = parse_codex_file(&second);
     assert_eq!(a.len(), 2);
     assert_eq!(a.iter().map(|m| m.tokens.total()).sum::<i64>(), 150);
-    assert_eq!(a.iter().map(|m| &m.dedup_key).collect::<Vec<_>>(), b.iter().map(|m| &m.dedup_key).collect::<Vec<_>>());
+    assert_eq!(
+        a.iter().map(|m| &m.dedup_key).collect::<Vec<_>>(),
+        b.iter().map(|m| &m.dedup_key).collect::<Vec<_>>()
+    );
 }

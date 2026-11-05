@@ -1,0 +1,77 @@
+use crate::usage::UsageRecord;
+use anyhow::{ensure, Context, Result};
+use rusqlite::{params, Connection};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
+
+pub struct Database {
+    pub connection: Connection,
+    pub directory: PathBuf,
+}
+impl Database {
+    pub fn open(directory: &Path) -> Result<Self> {
+        std::fs::create_dir_all(directory)?;
+        let connection = Connection::open(directory.join("tokenory.sqlite3"))?;
+        connection.busy_timeout(Duration::from_secs(5))?;
+        connection.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;")?;
+        let version: i64 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        ensure!(
+            version <= 1,
+            "database was created by a newer Tokenory version"
+        );
+        if version == 0 {
+            connection.execute_batch(include_str!("../migrations/001_initial.sql"))?;
+        }
+        Ok(Self {
+            connection,
+            directory: directory.to_owned(),
+        })
+    }
+    pub fn backup(&self, destination: &Path) -> Result<()> {
+        ensure!(!destination.exists(), "backup destination already exists");
+        if let Some(parent) = destination.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        self.connection
+            .backup(rusqlite::DatabaseName::Main, destination, None)
+            .context("create consistent SQLite backup")?;
+        Ok(())
+    }
+    pub fn backup_before(&self, action: &str) -> Result<PathBuf> {
+        let target = self.directory.join("backups").join(format!(
+            "{}-{action}.sqlite3",
+            chrono::Utc::now().format("%Y%m%dT%H%M%S%.9f")
+        ));
+        self.backup(&target)?;
+        Ok(target)
+    }
+}
+
+pub fn revision(connection: &Connection) -> Result<i64> {
+    Ok(
+        connection.query_row("SELECT value FROM meta WHERE key='revision'", [], |r| {
+            r.get(0)
+        })?,
+    )
+}
+pub fn advance_revision(connection: &Connection) -> Result<i64> {
+    connection.execute("UPDATE meta SET value=value+1 WHERE key='revision'", [])?;
+    revision(connection)
+}
+pub fn put_record(
+    connection: &Connection,
+    source: &str,
+    batch: &str,
+    r: &UsageRecord,
+) -> Result<bool> {
+    let body = serde_json::to_string(r)?;
+    let changed = connection.execute(
+        "INSERT INTO usage_records(source,batch_id,item_key,date,client,provider,model,input,output,cache_read,cache_write,reasoning,tokens,estimated_cost,source_cost,requests,body)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)
+         ON CONFLICT(source,batch_id,item_key) DO UPDATE SET date=excluded.date,client=excluded.client,provider=excluded.provider,model=excluded.model,input=excluded.input,output=excluded.output,cache_read=excluded.cache_read,cache_write=excluded.cache_write,reasoning=excluded.reasoning,tokens=excluded.tokens,estimated_cost=excluded.estimated_cost,source_cost=excluded.source_cost,requests=excluded.requests,body=excluded.body
+         WHERE usage_records.body != excluded.body",
+        params![source,batch,r.key,r.date,r.client,r.provider,r.model,r.tokens.input,r.tokens.output,r.tokens.cache_read,r.tokens.cache_write,r.tokens.reasoning,r.tokens.checked_total()?,r.estimated_cost_usd,r.source_cost_usd,r.requests,body])?;
+    Ok(changed != 0)
+}
