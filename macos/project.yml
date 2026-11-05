@@ -6,6 +6,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: '6.0'
+    ARCHS: $(NATIVE_ARCH_ACTUAL)
     MACOSX_DEPLOYMENT_TARGET: '15.0'
     CODE_SIGN_IDENTITY: '-'
     CODE_SIGN_STYLE: Manual

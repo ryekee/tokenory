@@ -182,7 +182,7 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
                     .format("%Y-%m-%d")
                     .to_string();
                 let r = UsageRecord {
-                    key: format!("{}:{}:{identity}", m.client, m.provider_id),
+                    key: format!("{}:{identity}", m.client),
                     client: m.client.clone(),
                     provider: m.provider_id.clone(),
                     model: m.model_id.clone(),

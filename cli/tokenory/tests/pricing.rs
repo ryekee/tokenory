@@ -46,6 +46,47 @@ fn snapshot(input: f64, output: f64) -> PriceSnapshot {
     }])
 }
 #[test]
+fn direct_openai_event_uses_full_request_context_tier_but_daily_uses_base_rates() {
+    let mut r = record();
+    r.provider = "openai".into();
+    r.model = "gpt-6-astra".into();
+    r.tokens = Tokens {
+        input: 300_000,
+        output: 10_000,
+        ..Default::default()
+    };
+    let mut p = snapshot(10., 50.);
+    let e = &mut p.entries[0];
+    e.provider = r.provider.clone();
+    e.model = r.model.clone();
+    e.matched_key = r.model.clone();
+    e.source = "LiteLLM".into();
+    e.rates.input_cost_per_token_above_272k_tokens = Some(20e-6);
+    e.rates.output_cost_per_token_above_272k_tokens = Some(75e-6);
+    let service = tokens_core::pricing::PricingService::new(
+        [(e.matched_key.clone(), e.rates.clone())]
+            .into_iter()
+            .collect(),
+        Default::default(),
+    );
+    let upstream = service.calculate_cost_with_provider(
+        &r.model,
+        Some(&r.provider),
+        &tokens_core::TokenBreakdown {
+            input: 300_000,
+            output: 10_000,
+            ..Default::default()
+        },
+    );
+    assert_eq!(estimate(&r, &p).cost.unwrap(), upstream);
+    assert!((estimate(&r, &p).cost.unwrap() - 6.75).abs() < 1e-12);
+    r.tokens.input = 272_000;
+    assert!((estimate(&r, &p).cost.unwrap() - 3.22).abs() < 1e-12);
+    r.tokens.input = 300_000;
+    r.metadata["granularity"] = "day".into();
+    assert!((estimate(&r, &p).cost.unwrap() - 3.5).abs() < 1e-12);
+}
+#[test]
 fn unknown_is_not_free_and_required_rates_must_exist() {
     let r = record();
     assert!(estimate(&r, &PriceSnapshot::new(vec![])).cost.is_none());

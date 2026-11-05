@@ -1,6 +1,10 @@
 import Foundation
 import Observation
 
+enum UsageDateRange: String, CaseIterable {
+    case today = "今日", week = "7 天", month = "30 天", all = "全部", custom = "自定义"
+}
+
 @MainActor @Observable
 final class UsageStore {
     static let shared = UsageStore()
@@ -10,6 +14,7 @@ final class UsageStore {
     var report: UsageReport?
     var catalog: UsageReport?
     var filter = UsageFilter()
+    var dateRange: UsageDateRange = .month
     var status: EngineStatus?
     var scanning = false
     var connected = false
@@ -25,8 +30,7 @@ final class UsageStore {
         let directory = directory ?? ProcessInfo.processInfo.environment["TOKENORY_DATA_DIR"].map { URL(fileURLWithPath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/Tokenory")
         dataDirectory = directory
         self.engine = engine ?? EngineClient(helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/tokenory"), directory: directory)
-        filter.from = Self.day(Date().addingTimeInterval(-29 * 86400))
-        filter.to = Self.day(Date())
+        updateDateRange()
     }
     static func day(_ date: Date) -> String {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = "yyyy-MM-dd"; return f.string(from: date)
@@ -42,11 +46,25 @@ final class UsageStore {
             catch { fail(error) }
         }
     }
-    func refresh() async {
+    func updateDateRange(now: Date = Date()) {
+        guard dateRange != .custom else { return }
+        let prior = filter
+        filter.to = dateRange == .all ? nil : Self.day(now)
+        switch dateRange {
+        case .today: filter.from = Self.day(now)
+        case .week: filter.from = Self.day(now.addingTimeInterval(-6 * 86400))
+        case .month: filter.from = Self.day(now.addingTimeInterval(-29 * 86400))
+        case .all: filter.from = nil
+        case .custom: break
+        }
+        if filter != prior { filter.offset = 0 }
+    }
+    func refresh(now: Date = Date()) async {
+        updateDateRange(now: now)
         refreshGeneration += 1; let generation = refreshGeneration; loading = true
         do {
             let dashboardFilter = try JSONValue.encode(filter)
-            let day = Self.day(Date()); let todayFilter = try JSONValue.encode(UsageFilter(from: day, to: day))
+            let day = Self.day(now); let todayFilter = try JSONValue.encode(UsageFilter(from: day, to: day))
             async let dashboard = engine.request("overview", payload: dashboardFilter)
             async let quick = engine.request("overview", payload: todayFilter)
             async let all = engine.request("overview")
@@ -59,6 +77,9 @@ final class UsageStore {
         if generation == refreshGeneration { loading = false }
     }
     func refreshToday(now: Date = Date()) async {
+        let prior = filter
+        updateDateRange(now: now)
+        if prior != filter { await refresh(now: now); return }
         let day = Self.day(now)
         do { today = try await engine.request("overview", payload: .encode(UsageFilter(from: day, to: day))).decode(UsageReport.self) }
         catch { fail(error) }

@@ -4,7 +4,6 @@ import Charts
 struct DashboardView: View {
     @Environment(UsageStore.self) private var store
     @State private var section = "总览"
-    @State private var range = "30 天"
     @State private var customStart = Date().addingTimeInterval(-29 * 86400)
     @State private var customEnd = Date()
     @State private var metric = "Tokens"
@@ -46,19 +45,16 @@ struct DashboardView: View {
         @Bindable var store = store
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Picker("日期", selection: $range) { ForEach(["今日", "7 天", "30 天", "全部", "自定义"], id: \.self) { Text($0) } }.labelsHidden().frame(width: 130)
-                    .onChange(of: range) { _, value in
+                Picker("日期", selection: $store.dateRange) { ForEach(UsageDateRange.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.labelsHidden().frame(width: 130)
+                    .onChange(of: store.dateRange) { _, value in
                         store.filter.offset = 0
-                        store.filter.to = value == "全部" ? nil : UsageStore.day(Date())
-                        switch value {
-                        case "今日": store.filter.from = UsageStore.day(Date())
-                        case "7 天": store.filter.from = UsageStore.day(Date().addingTimeInterval(-6 * 86400))
-                        case "30 天": store.filter.from = UsageStore.day(Date().addingTimeInterval(-29 * 86400))
-                        case "全部": store.filter.from = nil
-                        default: store.filter.from = UsageStore.day(customStart); store.filter.to = UsageStore.day(customEnd)
+                        if value == .custom {
+                            store.filter.from = UsageStore.day(customStart); store.filter.to = UsageStore.day(customEnd)
+                        } else {
+                            store.updateDateRange()
                         }
                     }
-                if range == "自定义" {
+                if store.dateRange == .custom {
                     DatePicker("起始", selection: $customStart, displayedComponents: .date).labelsHidden().onChange(of: customStart) { _, d in store.filter.from = UsageStore.day(d); store.filter.offset = 0 }
                     Text("—").foregroundStyle(.secondary)
                     DatePicker("结束", selection: $customEnd, displayedComponents: .date).labelsHidden().onChange(of: customEnd) { _, d in store.filter.to = UsageStore.day(d); store.filter.offset = 0 }
