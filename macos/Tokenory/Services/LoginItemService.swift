@@ -11,6 +11,6 @@ final class LoginItemService {
     }
     var enabled: Bool { status == .enabled || status == .requiresApproval }
     var statusText: String {
-        switch status { case .enabled: "已启用"; case .requiresApproval: "等待在系统设置中允许"; case .notRegistered: "未启用"; case .notFound: "请从安装目录启动应用"; @unknown default: "状态未知" }
+        switch status { case .enabled: L("login.enabled"); case .requiresApproval: L("login.approval"); case .notRegistered: L("login.disabled"); case .notFound: L("login.install"); @unknown default: L("login.unknown") }
     }
 }

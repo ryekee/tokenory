@@ -1,0 +1,2922 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "nav.overview": {
+      "comment": "Tokenory UI: nav.overview. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "总览"
+          }
+        }
+      }
+    },
+    "nav.details": {
+      "comment": "Tokenory UI: nav.details. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Records"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明细"
+          }
+        }
+      }
+    },
+    "nav.imports": {
+      "comment": "Tokenory UI: nav.imports. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入"
+          }
+        }
+      }
+    },
+    "nav.sources": {
+      "comment": "Tokenory UI: nav.sources. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sources"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源"
+          }
+        }
+      }
+    },
+    "language.title": {
+      "comment": "Tokenory UI: language.title. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语言"
+          }
+        }
+      }
+    },
+    "language.system": {
+      "comment": "Tokenory UI: language.system. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow System"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跟随系统"
+          }
+        }
+      }
+    },
+    "currency.title": {
+      "comment": "Tokenory UI: currency.title. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currency"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "货币"
+          }
+        }
+      }
+    },
+    "currency.usd": {
+      "comment": "Tokenory UI: currency.usd. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "US dollar (USD)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "美元（USD）"
+          }
+        }
+      }
+    },
+    "settings.title": {
+      "comment": "Tokenory UI: settings.title. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
+          }
+        }
+      }
+    },
+    "settings.general": {
+      "comment": "Tokenory UI: settings.general. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通用"
+          }
+        }
+      }
+    },
+    "settings.prices": {
+      "comment": "Tokenory UI: settings.prices. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pricing"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "价格"
+          }
+        }
+      }
+    },
+    "settings.collection": {
+      "comment": "Tokenory UI: settings.collection. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collection"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "采集"
+          }
+        }
+      }
+    },
+    "settings.data": {
+      "comment": "Tokenory UI: settings.data. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据"
+          }
+        }
+      }
+    },
+    "settings.login": {
+      "comment": "Tokenory UI: settings.login. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Tokenory at login"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录时启动 Tokenory"
+          }
+        }
+      }
+    },
+    "settings.open_login": {
+      "comment": "Tokenory UI: settings.open_login. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Login Items settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开系统登录项设置"
+          }
+        }
+      }
+    },
+    "usage.tokens": {
+      "comment": "Tokenory UI: usage.tokens. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tokens"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tokens"
+          }
+        }
+      }
+    },
+    "usage.trend": {
+      "comment": "Tokenory UI: usage.trend. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily usage"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每日用量"
+          }
+        }
+      }
+    },
+    "usage.metric": {
+      "comment": "Tokenory UI: usage.metric. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chart metric"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "趋势指标"
+          }
+        }
+      }
+    },
+    "usage.empty": {
+      "comment": "Tokenory UI: usage.empty. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No usage in this period"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此范围暂无记录"
+          }
+        }
+      }
+    },
+    "usage.loading": {
+      "comment": "Tokenory UI: usage.loading. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading usage…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取用量…"
+          }
+        }
+      }
+    },
+    "usage.loading_stats": {
+      "comment": "Tokenory UI: usage.loading_stats. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading statistics…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取统计…"
+          }
+        }
+      }
+    },
+    "usage.unpriced": {
+      "comment": "Tokenory UI: usage.unpriced. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ tokens without an estimate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ tokens 待计价"
+          }
+        }
+      }
+    },
+    "cost.estimate": {
+      "comment": "Tokenory UI: cost.estimate. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated cost"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "估算费用"
+          }
+        }
+      }
+    },
+    "cost.known": {
+      "comment": "Tokenory UI: cost.known. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Known cost estimate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已知费用估算"
+          }
+        }
+      }
+    },
+    "cost.unavailable": {
+      "comment": "Tokenory UI: cost.unavailable. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not priced"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待计价"
+          }
+        }
+      }
+    },
+    "cost.calculation": {
+      "comment": "Tokenory UI: cost.calculation. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calculation details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计价依据"
+          }
+        }
+      }
+    },
+    "range.today": {
+      "comment": "Tokenory UI: range.today. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日"
+          }
+        }
+      }
+    },
+    "range.week": {
+      "comment": "Tokenory UI: range.week. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last 7 days"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "近 7 天"
+          }
+        }
+      }
+    },
+    "range.month": {
+      "comment": "Tokenory UI: range.month. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last 30 days"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "近 30 天"
+          }
+        }
+      }
+    },
+    "range.all": {
+      "comment": "Tokenory UI: range.all. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All time"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部"
+          }
+        }
+      }
+    },
+    "range.custom": {
+      "comment": "Tokenory UI: range.custom. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义"
+          }
+        }
+      }
+    },
+    "field.date": {
+      "comment": "Tokenory UI: field.date. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Date"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日期"
+          }
+        }
+      }
+    },
+    "field.start": {
+      "comment": "Tokenory UI: field.start. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起始"
+          }
+        }
+      }
+    },
+    "field.end": {
+      "comment": "Tokenory UI: field.end. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束"
+          }
+        }
+      }
+    },
+    "field.tool": {
+      "comment": "Tokenory UI: field.tool. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tool"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具"
+          }
+        }
+      }
+    },
+    "field.model": {
+      "comment": "Tokenory UI: field.model. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型"
+          }
+        }
+      }
+    },
+    "field.provider": {
+      "comment": "Tokenory UI: field.provider. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provider"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提供方"
+          }
+        }
+      }
+    },
+    "field.source": {
+      "comment": "Tokenory UI: field.source. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源"
+          }
+        }
+      }
+    },
+    "field.tool_provider": {
+      "comment": "Tokenory UI: field.tool_provider. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tool / provider"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具 / 提供方"
+          }
+        }
+      }
+    },
+    "field.session": {
+      "comment": "Tokenory UI: field.session. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会话"
+          }
+        }
+      }
+    },
+    "field.date_basis": {
+      "comment": "Tokenory UI: field.date_basis. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Date basis"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日期口径"
+          }
+        }
+      }
+    },
+    "field.source_cost": {
+      "comment": "Tokenory UI: field.source_cost. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source cost"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源成本"
+          }
+        }
+      }
+    },
+    "filter.tools": {
+      "comment": "Tokenory UI: filter.tools. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All tools"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有工具"
+          }
+        }
+      }
+    },
+    "filter.providers": {
+      "comment": "Tokenory UI: filter.providers. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All providers"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有提供方"
+          }
+        }
+      }
+    },
+    "filter.models": {
+      "comment": "Tokenory UI: filter.models. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All models"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有模型"
+          }
+        }
+      }
+    },
+    "filter.sources": {
+      "comment": "Tokenory UI: filter.sources. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All sources"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有来源"
+          }
+        }
+      }
+    },
+    "source.local": {
+      "comment": "Tokenory UI: source.local. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local logs"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地日志"
+          }
+        }
+      }
+    },
+    "source.coverage": {
+      "comment": "Tokenory UI: source.coverage. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source coverage"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源覆盖"
+          }
+        }
+      }
+    },
+    "source.ok": {
+      "comment": "Tokenory UI: source.ok. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to date"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "采集正常"
+          }
+        }
+      }
+    },
+    "source.empty": {
+      "comment": "Tokenory UI: source.empty. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No logs found"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未发现日志"
+          }
+        }
+      }
+    },
+    "source.files": {
+      "comment": "Tokenory UI: source.files. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files: %lld · Records: %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件：%lld · 记录：%lld"
+          }
+        }
+      }
+    },
+    "source.counted": {
+      "comment": "Tokenory UI: source.counted. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Counted: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计入 %@"
+          }
+        }
+      }
+    },
+    "source.saved": {
+      "comment": "Tokenory UI: source.saved. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved: %@ tokens"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存 %@ tokens"
+          }
+        }
+      }
+    },
+    "status.updated": {
+      "comment": "Tokenory UI: status.updated. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to date"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已更新"
+          }
+        }
+      }
+    },
+    "status.stopped": {
+      "comment": "Tokenory UI: status.stopped. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collection stopped"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "采集已停止"
+          }
+        }
+      }
+    },
+    "status.scanning": {
+      "comment": "Tokenory UI: status.scanning. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collecting usage…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在采集…"
+          }
+        }
+      }
+    },
+    "status.partial": {
+      "comment": "Tokenory UI: status.partial. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some logs need a retry"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分日志待重试"
+          }
+        }
+      }
+    },
+    "status.waiting": {
+      "comment": "Tokenory UI: status.waiting. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for first scan"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待首次采集"
+          }
+        }
+      }
+    },
+    "action.scan": {
+      "comment": "Tokenory UI: action.scan. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan now"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即扫描"
+          }
+        }
+      }
+    },
+    "action.reconnect": {
+      "comment": "Tokenory UI: action.reconnect. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnect"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试连接"
+          }
+        }
+      }
+    },
+    "action.open_stats": {
+      "comment": "Tokenory UI: action.open_stats. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View statistics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看统计"
+          }
+        }
+      }
+    },
+    "action.quit": {
+      "comment": "Tokenory UI: action.quit. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit Tokenory"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出 Tokenory"
+          }
+        }
+      }
+    },
+    "action.done": {
+      "comment": "Tokenory UI: action.done. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        }
+      }
+    },
+    "action.cancel": {
+      "comment": "Tokenory UI: action.cancel. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
+    "action.previous": {
+      "comment": "Tokenory UI: action.previous. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上一页"
+          }
+        }
+      }
+    },
+    "action.next": {
+      "comment": "Tokenory UI: action.next. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一页"
+          }
+        }
+      }
+    },
+    "action.show_all": {
+      "comment": "Tokenory UI: action.show_all. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show all"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示全部"
+          }
+        }
+      }
+    },
+    "action.show_less": {
+      "comment": "Tokenory UI: action.show_less. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show less"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收起"
+          }
+        }
+      }
+    },
+    "action.dismiss_error": {
+      "comment": "Tokenory UI: action.dismiss_error. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss error"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭错误提示"
+          }
+        }
+      }
+    },
+    "action.record_details": {
+      "comment": "Tokenory UI: action.record_details. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View record details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看记录详情"
+          }
+        }
+      }
+    },
+    "error.operation": {
+      "comment": "Tokenory UI: error.operation. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This action could not be completed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作未完成。"
+          }
+        }
+      }
+    },
+    "error.details": {
+      "comment": "Tokenory UI: error.details. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详细信息"
+          }
+        }
+      }
+    },
+    "value.unavailable": {
+      "comment": "Tokenory UI: value.unavailable. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未提供"
+          }
+        }
+      }
+    },
+    "value.unknown_timezone": {
+      "comment": "Tokenory UI: value.unknown_timezone. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original date; source time zone unknown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源原始日期；时区未知"
+          }
+        }
+      }
+    },
+    "token.input": {
+      "comment": "Tokenory UI: token.input. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Input"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新输入"
+          }
+        }
+      }
+    },
+    "token.output": {
+      "comment": "Tokenory UI: token.output. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Output"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输出"
+          }
+        }
+      }
+    },
+    "token.cache_read": {
+      "comment": "Tokenory UI: token.cache_read. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache read"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存读取"
+          }
+        }
+      }
+    },
+    "token.cache_write": {
+      "comment": "Tokenory UI: token.cache_write. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache write"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存写入"
+          }
+        }
+      }
+    },
+    "token.reasoning": {
+      "comment": "Tokenory UI: token.reasoning. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reasoning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推理"
+          }
+        }
+      }
+    },
+    "record.daily_note": {
+      "comment": "Tokenory UI: record.daily_note. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily totals keep their original granularity."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日汇总保留原粒度"
+          }
+        }
+      }
+    },
+    "price.snapshot": {
+      "comment": "Tokenory UI: price.snapshot. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price snapshot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "价格快照"
+          }
+        }
+      }
+    },
+    "price.automatic": {
+      "comment": "Tokenory UI: price.automatic. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Official rates, applied automatically"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动使用官方费率"
+          }
+        }
+      }
+    },
+    "price.explanation": {
+      "comment": "Tokenory UI: price.explanation. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Costs use USD API rates. Estimates are not subscription charges or invoices. Refreshing rates affects new records; use Recalculate to update saved estimates."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "费用按官方美元 API 费率估算，不代表订阅支出或账单。刷新费率用于新记录；已有估算可重新计算。"
+          }
+        }
+      }
+    },
+    "price.refresh": {
+      "comment": "Tokenory UI: price.refresh. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh rates"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新费率"
+          }
+        }
+      }
+    },
+    "price.reestimate": {
+      "comment": "Tokenory UI: price.reestimate. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recalculate saved estimates…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新计算已有估算…"
+          }
+        }
+      }
+    },
+    "price.deepseek_schedule": {
+      "comment": "Tokenory UI: price.deepseek_schedule. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peak: Monday to Friday, 09:00 to 12:00 and 14:00 to 18:00 Beijing time, excluding Chinese public holidays. Other hours, weekends and holidays cost 50% less. Cache hits, cache misses and output are priced separately."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高峰时段为北京时间周一至周五 09:00 至 12:00、14:00 至 18:00，中国法定节假日除外。其他时段、周末和节假日按半价计算。缓存命中、未命中和输出分别计费。"
+          }
+        }
+      }
+    },
+    "price.official_page": {
+      "comment": "Tokenory UI: price.official_page. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DeepSeek official pricing"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DeepSeek 官方价格"
+          }
+        }
+      }
+    },
+    "price.rates": {
+      "comment": "Tokenory UI: price.rates. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current rates"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前费率"
+          }
+        }
+      }
+    },
+    "price.rate_units": {
+      "comment": "Tokenory UI: price.rate_units. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USD per million tokens. DeepSeek shows peak rates."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单位：美元 / 百万 tokens。DeepSeek 显示高峰价。"
+          }
+        }
+      }
+    },
+    "price.missing_reason": {
+      "comment": "Tokenory UI: price.missing_reason. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some records lack a verified rate, request time or model identity. They stay out of the cost total until they can be priced."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分记录缺少已核实的费率、请求时间或模型信息，暂不计入费用总额。"
+          }
+        }
+      }
+    },
+    "price.refreshed": {
+      "comment": "Tokenory UI: price.refreshed. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rates refreshed. Saved estimates are unchanged."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "费率已刷新，已有估算保持不变。"
+          }
+        }
+      }
+    },
+    "price.preview": {
+      "comment": "Tokenory UI: price.preview. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review recalculation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重估预览"
+          }
+        }
+      }
+    },
+    "price.preview_summary": {
+      "comment": "Tokenory UI: price.preview_summary. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Records: %lld · %@ → %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录：%lld 条 · %@ → %@"
+          }
+        }
+      }
+    },
+    "price.preview_unpriced": {
+      "comment": "Tokenory UI: price.preview_unpriced. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ tokens will remain unpriced. Previous price snapshots and source costs are kept."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍有 %@ tokens 待计价。旧价格快照和源成本会保留。"
+          }
+        }
+      }
+    },
+    "price.apply": {
+      "comment": "Tokenory UI: price.apply. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recalculate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认重估"
+          }
+        }
+      }
+    },
+    "price.applied": {
+      "comment": "Tokenory UI: price.applied. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved estimates recalculated."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重估已完成。"
+          }
+        }
+      }
+    },
+    "settings.interval": {
+      "comment": "Tokenory UI: settings.interval. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan interval"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描间隔"
+          }
+        }
+      }
+    },
+    "settings.timezone": {
+      "comment": "Tokenory UI: settings.timezone. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reporting time zone"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日期归档时区"
+          }
+        }
+      }
+    },
+    "settings.timezone_note": {
+      "comment": "Tokenory UI: settings.timezone_note. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local events use this time zone. Imports keep their original dates when the system time zone changes."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地记录按此时区归档。系统时区变化时，导入记录仍保留原日期。"
+          }
+        }
+      }
+    },
+    "settings.claude_paths": {
+      "comment": "Tokenory UI: settings.claude_paths. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Additional Claude Code folders"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code 额外目录"
+          }
+        }
+      }
+    },
+    "settings.codex_paths": {
+      "comment": "Tokenory UI: settings.codex_paths. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Additional Codex folders"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex 额外目录"
+          }
+        }
+      }
+    },
+    "settings.paths_note": {
+      "comment": "Tokenory UI: settings.paths_note. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One absolute path per line. Default folders are still scanned."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每行一个绝对路径；默认目录继续扫描。"
+          }
+        }
+      }
+    },
+    "settings.save": {
+      "comment": "Tokenory UI: settings.save. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save collection settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存采集设置"
+          }
+        }
+      }
+    },
+    "settings.saved": {
+      "comment": "Tokenory UI: settings.saved. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collection settings saved."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "采集设置已保存。"
+          }
+        }
+      }
+    },
+    "data.finder": {
+      "comment": "Tokenory UI: data.finder. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in Finder"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Finder 中显示"
+          }
+        }
+      }
+    },
+    "data.backup": {
+      "comment": "Tokenory UI: data.backup. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back up database…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建数据库备份…"
+          }
+        }
+      }
+    },
+    "data.backup_note": {
+      "comment": "Tokenory UI: data.backup_note. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backups include usage, imports, source choices and price snapshots. A backup is also saved before importing or recalculating."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份包含用量、导入批次、来源选择和价格快照。导入和重估前也会自动备份。"
+          }
+        }
+      }
+    },
+    "data.restore": {
+      "comment": "Tokenory UI: data.restore. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore database backup…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复数据库备份…"
+          }
+        }
+      }
+    },
+    "data.backed_up": {
+      "comment": "Tokenory UI: data.backed_up. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup saved."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份已保存。"
+          }
+        }
+      }
+    },
+    "data.restored": {
+      "comment": "Tokenory UI: data.restored. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup restored."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份已恢复。"
+          }
+        }
+      }
+    },
+    "login.enabled": {
+      "comment": "Tokenory UI: login.enabled. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enabled"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已启用"
+          }
+        }
+      }
+    },
+    "login.approval": {
+      "comment": "Tokenory UI: login.approval. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Tokenory in System Settings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待在系统设置中允许"
+          }
+        }
+      }
+    },
+    "login.disabled": {
+      "comment": "Tokenory UI: login.disabled. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未启用"
+          }
+        }
+      }
+    },
+    "login.install": {
+      "comment": "Tokenory UI: login.install. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the installed copy of Tokenory."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请从安装目录启动应用"
+          }
+        }
+      }
+    },
+    "login.unknown": {
+      "comment": "Tokenory UI: login.unknown. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状态未知"
+          }
+        }
+      }
+    },
+    "import.format": {
+      "comment": "Tokenory UI: import.format. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "格式"
+          }
+        }
+      }
+    },
+    "import.tokens_ci": {
+      "comment": "Tokenory UI: import.tokens_ci. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tokens.ci snapshot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tokens.ci 快照"
+          }
+        }
+      }
+    },
+    "import.choose": {
+      "comment": "Tokenory UI: import.choose. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose JSON file…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择 JSON 文件…"
+          }
+        }
+      }
+    },
+    "import.preview": {
+      "comment": "Tokenory UI: import.preview. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入预览"
+          }
+        }
+      }
+    },
+    "import.keep_dates": {
+      "comment": "Tokenory UI: import.keep_dates. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep original dates (source time zone unknown)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留来源原始日期（来源时区未知）"
+          }
+        }
+      }
+    },
+    "import.partial_dates": {
+      "comment": "Tokenory UI: import.partial_dates. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accept partial records for these dates: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接受这些日期的部分记录：%@"
+          }
+        }
+      }
+    },
+    "import.conflicts": {
+      "comment": "Tokenory UI: import.conflicts. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These dates already have records. Choose which source to count. Both copies are kept."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些日期已有记录，请选择计入总数的来源。两份数据都会保留。"
+          }
+        }
+      }
+    },
+    "import.keep_all": {
+      "comment": "Tokenory UI: import.keep_all. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep all existing"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部保留已有"
+          }
+        }
+      }
+    },
+    "import.replace_all": {
+      "comment": "Tokenory UI: import.replace_all. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use all imported"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部使用导入"
+          }
+        }
+      }
+    },
+    "import.compare": {
+      "comment": "Tokenory UI: import.compare. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing: %@ · Imported: %@ tokens"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有 %@ / 导入 %@ tokens"
+          }
+        }
+      }
+    },
+    "import.source": {
+      "comment": "Tokenory UI: import.source. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Counted source"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有效来源"
+          }
+        }
+      }
+    },
+    "import.select": {
+      "comment": "Tokenory UI: import.select. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a source"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择"
+          }
+        }
+      }
+    },
+    "import.existing": {
+      "comment": "Tokenory UI: import.existing. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有 · %@"
+          }
+        }
+      }
+    },
+    "import.incoming": {
+      "comment": "Tokenory UI: import.incoming. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This import"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次导入"
+          }
+        }
+      }
+    },
+    "import.apply": {
+      "comment": "Tokenory UI: import.apply. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认导入"
+          }
+        }
+      }
+    },
+    "import.batches": {
+      "comment": "Tokenory UI: import.batches. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import history"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入批次"
+          }
+        }
+      }
+    },
+    "import.active": {
+      "comment": "Tokenory UI: import.active. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导入"
+          }
+        }
+      }
+    },
+    "import.undone": {
+      "comment": "Tokenory UI: import.undone. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undone"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已撤销"
+          }
+        }
+      }
+    },
+    "import.undo": {
+      "comment": "Tokenory UI: import.undo. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销"
+          }
+        }
+      }
+    },
+    "import.no_batches": {
+      "comment": "Tokenory UI: import.no_batches. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No imports yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚无导入批次"
+          }
+        }
+      }
+    },
+    "import.duplicate": {
+      "comment": "Tokenory UI: import.duplicate. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file was already imported. Totals are unchanged."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件已导入，总数未增加。"
+          }
+        }
+      }
+    },
+    "import.complete": {
+      "comment": "Tokenory UI: import.complete. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported. Select All time in Overview to see the history."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入完成。在总览选择「全部」可查看历史。"
+          }
+        }
+      }
+    },
+    "import.summary": {
+      "comment": "Tokenory UI: import.summary. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Days: %lld · Daily totals: %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %lld 天 · %lld 条日汇总"
+          }
+        }
+      }
+    },
+    "import.batch_status": {
+      "comment": "Tokenory UI: import.batch_status. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ tokens · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ tokens · %@"
+          }
+        }
+      }
+    },
+    "export.json": {
+      "comment": "Tokenory UI: export.json. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export JSON…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出 JSON…"
+          }
+        }
+      }
+    },
+    "export.csv": {
+      "comment": "Tokenory UI: export.csv. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export CSV…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出 CSV…"
+          }
+        }
+      }
+    },
+    "export.note": {
+      "comment": "Tokenory UI: export.note. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exports counted records for the current filters, including sources and pricing details."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出当前筛选下的有效记录，包含来源与计价依据。"
+          }
+        }
+      }
+    },
+    "export.done": {
+      "comment": "Tokenory UI: export.done. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exported"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导出"
+          }
+        }
+      }
+    },
+    "panel.open": {
+      "comment": "Tokenory UI: panel.open. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开"
+          }
+        }
+      }
+    },
+    "panel.save": {
+      "comment": "Tokenory UI: panel.save. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存"
+          }
+        }
+      }
+    },
+    "error.missing_helper": {
+      "comment": "Tokenory UI: error.missing_helper. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The usage engine is missing. Reinstall Tokenory."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用内缺少用量引擎，请重新安装 Tokenory。"
+          }
+        }
+      }
+    },
+    "error.stopped": {
+      "comment": "Tokenory UI: error.stopped. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The usage engine stopped. Reconnect to continue."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用量引擎已停止，请重试连接。"
+          }
+        }
+      }
+    },
+    "error.busy": {
+      "comment": "Tokenory UI: error.busy. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine is still stopping. Try again shortly."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "引擎尚未停止，请稍后重试。"
+          }
+        }
+      }
+    },
+    "error.version": {
+      "comment": "Tokenory UI: error.version. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app and usage engine versions do not match."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用和用量引擎版本不兼容"
+          }
+        }
+      }
+    },
+    "error.protocol": {
+      "comment": "Tokenory UI: error.protocol. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine response has no result."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "引擎响应缺少结果"
+          }
+        }
+      }
+    },
+    "error.too_large": {
+      "comment": "Tokenory UI: error.too_large. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine response is too large."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "引擎响应过大"
+          }
+        }
+      }
+    },
+    "error.timeout": {
+      "comment": "Tokenory UI: error.timeout. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine timed out. Check collection status."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "引擎操作超时，请检查采集状态。"
+          }
+        }
+      }
+    },
+    "error.exit": {
+      "comment": "Tokenory UI: error.exit. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The usage engine exited (%lld).\n%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用量引擎退出（%lld）\n%@"
+          }
+        }
+      }
+    },
+    "usage.partial_days": {
+      "comment": "Count uses a locale-aware plural form. %lld is an integer.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld day has partial records"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld days have partial records"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 天只包含部分记录"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "usage.record_count": {
+      "comment": "Count uses a locale-aware plural form. %lld is an integer.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld record"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld records"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 条记录"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "settings.interval_seconds": {
+      "comment": "Count uses a locale-aware plural form. %lld is an integer.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld second"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld seconds"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 秒"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "price.missing_models": {
+      "comment": "Count uses a locale-aware plural form. %lld is an integer.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld model without a complete estimate"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld models without complete estimates"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 个模型尚未完整计价"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "settings.window": {
+      "extractionState": "manual",
+      "comment": "Settings window title.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tokenory Settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tokenory 设置"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

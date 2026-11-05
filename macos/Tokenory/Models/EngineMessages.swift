@@ -84,7 +84,7 @@ struct JSONLineFramer: Sendable {
     private var buffer = Data()
     mutating func append(_ data: Data) throws -> [Data] {
         buffer.append(data)
-        guard buffer.count <= 64 * 1024 * 1024 else { throw EngineError(code: "protocol", message: "引擎响应过大") }
+        guard buffer.count <= 64 * 1024 * 1024 else { throw EngineError(code: "protocol", message: L("error.too_large")) }
         var lines: [Data] = []
         while let end = buffer.firstIndex(of: 10) {
             let line = Data(buffer[..<end]); buffer.removeSubrange(...end)

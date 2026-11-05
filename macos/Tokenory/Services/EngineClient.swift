@@ -21,7 +21,7 @@ actor EngineClient {
     func start() throws {
         if process?.isRunning == true { return }
         let token = UUID(); generation = token; lastDiagnostic = ""
-        guard FileManager.default.isExecutableFile(atPath: helper.path) else { throw EngineError(code: "missingHelper", message: "应用内缺少用量引擎，请重新构建 Tokenory。") }
+        guard FileManager.default.isExecutableFile(atPath: helper.path) else { throw EngineError(code: "missingHelper", message: L("error.missing_helper")) }
         let child = Process(); let stdin = Pipe(); let stdout = Pipe(); let stderr = Pipe()
         child.executableURL = helper
         child.arguments = ["--data-dir", directory.path, "worker", "--stdio"]
@@ -49,7 +49,7 @@ actor EngineClient {
     }
 
     func request(_ operation: String, payload: JSONValue = .object([:])) async throws -> JSONValue {
-        guard process?.isRunning == true, let input else { throw EngineError(code: "stopped", message: "用量引擎已停止，请重试连接。") }
+        guard process?.isRunning == true, let input else { throw EngineError(code: "stopped", message: L("error.stopped")) }
         let id = UUID().uuidString
         var data = try JSONEncoder().encode(EngineRequest(id: id, operation: operation, payload: payload)); data.append(10)
         return try await withCheckedThrowingContinuation { continuation in
@@ -76,7 +76,7 @@ actor EngineClient {
 
     func restore(from file: URL) async throws {
         await stop()
-        guard process?.isRunning != true else { throw EngineError(code: "busy", message: "引擎尚未停止，请稍后重试。") }
+        guard process?.isRunning != true else { throw EngineError(code: "busy", message: L("error.busy")) }
         let child = Process(); let stderr = Pipe(); let stdout = Pipe()
         child.executableURL = helper
         child.arguments = ["--data-dir", directory.path, "restore", file.path]
@@ -96,11 +96,11 @@ actor EngineClient {
         guard token == generation else { return }
         do {
             let message = try JSONDecoder().decode(EngineEnvelope.self, from: data)
-            guard message.version == 1 else { throw EngineError(code: "version", message: "应用和用量引擎版本不兼容") }
+            guard message.version == 1 else { throw EngineError(code: "version", message: L("error.version")) }
             if let id = message.id, let continuation = pending.removeValue(forKey: id) {
                 if let error = message.error { continuation.resume(throwing: error) }
                 else if let result = message.result { continuation.resume(returning: result) }
-                else { continuation.resume(throwing: EngineError(code: "protocol", message: "引擎响应缺少结果")) }
+                else { continuation.resume(throwing: EngineError(code: "protocol", message: L("error.protocol"))) }
             } else if message.event != nil { eventSink.yield(message) }
         } catch { protocolFailed(error.localizedDescription, generation: token) }
     }
@@ -108,7 +108,7 @@ actor EngineClient {
         guard token == generation else { return }
         lastDiagnostic = String((lastDiagnostic + String(decoding: data, as: UTF8.self)).suffix(3000))
     }
-    private func expire(_ id: String) { pending.removeValue(forKey: id)?.resume(throwing: EngineError(code: "timeout", message: "引擎操作超时，请检查采集状态。")) }
+    private func expire(_ id: String) { pending.removeValue(forKey: id)?.resume(throwing: EngineError(code: "timeout", message: L("error.timeout"))) }
     private func protocolFailed(_ reason: String, generation token: UUID) {
         guard token == generation else { return }
         for continuation in pending.values { continuation.resume(throwing: EngineError(code: "protocol", message: reason)) }; pending.removeAll()
@@ -118,7 +118,7 @@ actor EngineClient {
     private func terminated(status: Int32, generation token: UUID) {
         guard token == generation else { return }
         input = nil; outputPipe?.fileHandleForReading.readabilityHandler = nil; errorPipe?.fileHandleForReading.readabilityHandler = nil
-        let reason = status == 0 ? "用量引擎已停止" : "用量引擎退出（\(status)）\n\(lastDiagnostic)"
+        let reason = status == 0 ? L("status.stopped") : LF("error.exit", status, lastDiagnostic)
         for continuation in pending.values { continuation.resume(throwing: EngineError(code: "stopped", message: reason)) }; pending.removeAll()
         eventSink.yield(EngineEnvelope(version: 1, id: nil, result: nil, error: nil, event: "stopped", payload: nil, message: reason, revision: nil))
     }

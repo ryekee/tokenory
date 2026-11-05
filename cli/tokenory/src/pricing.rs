@@ -13,6 +13,8 @@ use tokens_core::pricing::{
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PriceEntry {
+    #[serde(default)]
+    pub schedule: Option<String>,
     pub provider: String,
     pub model: String,
     pub matched_key: String,
@@ -36,11 +38,90 @@ impl PriceSnapshot {
         }
     }
     pub fn deepseek_reference() -> Self {
-        Self::new([("deepseek-flash",0.3,1.2,0.006),("deepseek-v4-pro",1.32,3.96,0.044)].into_iter().map(|(m,i,o,c)|PriceEntry{provider:"deepseek".into(),model:m.into(),matched_key:m.into(),source:"https://api-docs.deepseek.com/quick_start/pricing/ (verified 2026-11-05)".into(),assumption:"2026-11-05 fixed peak API equivalent; excludes off-peak and holiday discounts; not historical billing".into(),explicit_free:false,allow_fast:false,rates:ModelPricing{input_cost_per_token:Some(i/1e6),output_cost_per_token:Some(o/1e6),cache_read_input_token_cost:Some(c/1e6),..Default::default()}}).collect())
+        Self::new([
+            ("deepseek-flash", 0.3, 1.2, 0.006),
+            ("deepseek-v4-flash", 0.3, 1.2, 0.006),
+            ("deepseek-v4-flash-vision-exp", 0.3, 1.2, 0.006),
+            ("deepseek-v4-pro", 1.32, 3.96, 0.044),
+        ].into_iter().map(|(model, input, output, cache)| PriceEntry {
+            schedule: Some("deepseek-cn-2026-v1".into()),
+            provider: "deepseek".into(), model: model.into(), matched_key: model.into(),
+            source: "https://api-docs.deepseek.com/quick_start/pricing/".into(),
+            assumption: "Official USD rates verified 2026-11-05; Beijing peak/off-peak schedule and 2026 public holidays; current-rate estimate, not historical billing".into(),
+            explicit_free: false, allow_fast: false,
+            rates: ModelPricing { input_cost_per_token: Some(input / 1e6), output_cost_per_token: Some(output / 1e6), cache_read_input_token_cost: Some(cache / 1e6), ..Default::default() },
+        }).collect())
+    }
+    pub fn official_reference() -> Self {
+        let mut p = Self::deepseek_reference();
+        // Explicit published model IDs only. Provider matching is done before pricing.
+        for (model, input, output, cache) in [
+            ("claude-fable-5-1", 10., 50., 0.25),
+            ("claude-mythos-5-1", 10., 50., 0.25),
+            ("claude-fable-5", 10., 50., 1.),
+            ("claude-mythos-5", 10., 50., 1.),
+            ("claude-opus-5-5", 4., 20., 0.2),
+            ("claude-sonnet-5-5", 2., 10., 0.1),
+            ("claude-opus-5", 5., 25., 0.5),
+            ("claude-opus-4-8", 5., 25., 0.5),
+            ("claude-opus-4-7", 5., 25., 0.5),
+            ("claude-opus-4-6", 5., 25., 0.5),
+            ("claude-opus-4-5", 5., 25., 0.5),
+            ("claude-opus-4-1", 15., 75., 1.5),
+            ("claude-opus-4", 15., 75., 1.5),
+            ("claude-sonnet-5", 2., 10., 0.2),
+            ("claude-sonnet-4-6", 3., 15., 0.3),
+            ("claude-sonnet-4-5", 3., 15., 0.3),
+            ("claude-sonnet-4", 3., 15., 0.3),
+            ("claude-haiku-4-5", 1., 5., 0.1),
+            ("claude-haiku-4-5-20251001", 1., 5., 0.1),
+            ("claude-3-5-haiku-20241022", 0.8, 4., 0.08),
+        ] {
+            p.entries.push(PriceEntry { schedule: None, provider: "anthropic".into(), model: model.into(), matched_key: model.into(),
+                source: "https://platform.claude.com/docs/en/about-claude/pricing".into(),
+                assumption: "Official standard USD API rates verified 2026-11-05; current-rate estimate, not historical billing".into(),
+                explicit_free: false, allow_fast: false,
+                rates: ModelPricing { input_cost_per_token: Some(input/1e6), output_cost_per_token: Some(output/1e6), cache_read_input_token_cost: Some(cache/1e6), cache_creation_input_token_cost: Some(input*1.25/1e6), ..Default::default() },
+            });
+        }
+        for (model, input, output, cache, tiered) in [
+            ("gpt-6-astra", 10., 50., 1., true),
+            ("gpt-6.1-sol", 2., 10., 0.1, true),
+            ("gpt-6.1-terra", 1., 5., 0.05, true),
+            ("gpt-6-luna", 0.1, 0.5, 0.01, true),
+            ("gpt-6-sol", 2., 10., 0.2, true),
+            ("gpt-5.6-sol", 4., 20., 0.4, true),
+            ("gpt-5.6-terra", 2., 12., 0.2, true),
+            ("gpt-5.6-luna", 0.2, 1.2, 0.02, true),
+            ("gpt-5.5", 5., 30., 0.5, true),
+            ("gpt-5.4", 2.5, 15., 0.25, true),
+            ("gpt-5.4-mini", 0.75, 4.5, 0.075, false),
+            ("gpt-5.3-codex", 1.75, 14., 0.175, false),
+            ("gpt-5.2-codex", 1.75, 14., 0.175, false),
+            ("gpt-5.1-codex-mini", 0.25, 2., 0.025, false),
+        ] {
+            p.entries.push(PriceEntry { schedule: None, provider: "openai".into(), model: model.into(), matched_key: model.into(),
+                source: "https://developers.openai.com/api/docs/pricing".into(),
+                assumption: "Official standard USD API rates verified 2026-11-05; full-request long-context tiers; current-rate estimate, not historical billing".into(),
+                explicit_free: false, allow_fast: false,
+                rates: ModelPricing { input_cost_per_token: Some(input/1e6), output_cost_per_token: Some(output/1e6), cache_read_input_token_cost: Some(cache/1e6),
+                    input_cost_per_token_above_272k_tokens: tiered.then_some(input*2./1e6),
+                    output_cost_per_token_above_272k_tokens: tiered.then_some(output*1.5/1e6),
+                    cache_read_input_token_cost_above_272k_tokens: tiered.then_some(cache*2./1e6),
+                    ..Default::default() },
+            });
+        }
+        p
     }
     pub fn validate(&self) -> Result<()> {
         let mut seen = std::collections::HashSet::new();
         for e in &self.entries {
+            ensure!(
+                e.schedule.is_none()
+                    || (e.schedule.as_deref() == Some("deepseek-cn-2026-v1")
+                        && e.provider == "deepseek"),
+                "unsupported price schedule"
+            );
             ensure!(
                 !e.provider.is_empty()
                     && !e.model.is_empty()
@@ -96,9 +177,36 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
         return unknown("no verified price for this provider/model");
     };
     let speed = r.metadata["inferenceSpeed"]["speed"].as_str();
-    if matches!(speed, Some("fast" | "ultrafast")) && !e.allow_fast {
-        return unknown("speed-specific rate not verified");
-    }
+    let official_openai = e.source == "https://developers.openai.com/api/docs/pricing";
+    let official_anthropic = e.source == "https://platform.claude.com/docs/en/about-claude/pricing";
+    let speed_factor = match speed {
+        Some("fast")
+            if official_openai
+                && (r.model.starts_with("gpt-6")
+                    || r.model.starts_with("gpt-5.6-")
+                    || matches!(r.model.as_str(), "gpt-5.3-codex" | "gpt-5.4-mini")) =>
+        {
+            2.
+        }
+        Some("fast")
+            if official_anthropic
+                && matches!(
+                    r.model.as_str(),
+                    "claude-opus-4-8" | "claude-opus-5" | "claude-opus-5-5"
+                ) =>
+        {
+            2.
+        }
+        Some("ultrafast")
+            if official_openai && matches!(r.model.as_str(), "gpt-6-astra" | "gpt-6.1-sol") =>
+        {
+            6.
+        }
+        Some("fast" | "ultrafast") if !e.allow_fast => {
+            return unknown("speed-specific rate not verified")
+        }
+        _ => 1.,
+    };
     let t = &r.tokens;
     if !e.explicit_free {
         for (n, rate) in [
@@ -114,7 +222,7 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     }
     let daily = r.timestamp_ms.is_none() || r.metadata["granularity"].as_str() == Some("day");
     // A day aggregate cannot be used as one long-context request.
-    let rates = if daily {
+    let mut rates = if daily {
         ModelPricing {
             input_cost_per_token: e.rates.input_cost_per_token,
             output_cost_per_token: e.rates.output_cost_per_token,
@@ -125,6 +233,15 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     } else {
         e.rates.clone()
     };
+    let long_context = official_openai
+        && !daily
+        && t.input + t.cache_read + t.cache_write > 272_000
+        && rates.input_cost_per_token_above_272k_tokens.is_some();
+    if long_context {
+        rates.input_cost_per_token = rates.input_cost_per_token_above_272k_tokens;
+        rates.output_cost_per_token = rates.output_cost_per_token_above_272k_tokens;
+        rates.cache_read_input_token_cost = rates.cache_read_input_token_cost_above_272k_tokens;
+    }
     let ttl = r.metadata["cacheWrite1h"]
         .as_i64()
         .unwrap_or(0)
@@ -137,7 +254,15 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     } else {
         0.
     };
-    let cost = if daily {
+    let (factor, period) = if e.schedule.is_some() {
+        match deepseek_factor(r) {
+            Ok(value) => value,
+            Err(reason) => return unknown(reason),
+        }
+    } else {
+        (1., "fixed rate")
+    };
+    let cost = (if daily || official_openai {
         compute_cost(
             &rates,
             t.input,
@@ -150,7 +275,11 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
         compute_cost_for_snapshot(
             &rates,
             &e.matched_key,
-            &e.source,
+            if e.source == "https://developers.openai.com/api/docs/pricing" {
+                "LiteLLM"
+            } else {
+                &e.source
+            },
             Some(&r.provider),
             &tokens_core::TokenBreakdown {
                 input: t.input,
@@ -160,7 +289,9 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
                 reasoning: t.reasoning,
             },
         )
-    } + surcharge;
+    } + surcharge)
+        * factor
+        * speed_factor;
     if !cost.is_finite() || cost < 0. {
         return unknown("invalid calculated cost");
     }
@@ -170,9 +301,12 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     Estimate {
         cost: Some(cost),
         basis: format!(
-            "{}; {}; {}",
+            "{}; {}; {}; speed factor {}; long context {}; {}",
             e.source,
+            period,
             e.assumption,
+            speed_factor,
+            long_context,
             if daily {
                 "daily aggregate at base rates; no request tier reconstruction"
             } else {
@@ -181,6 +315,42 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
         ),
         reason: None,
     }
+}
+// Calendar version is part of each immutable snapshot. Weekend makeup workdays
+// remain off-peak: the provider explicitly prices every Saturday/Sunday off-peak.
+fn deepseek_factor(r: &UsageRecord) -> Result<(f64, &'static str), &'static str> {
+    use chrono::{Datelike, Timelike};
+    let timestamp = r
+        .timestamp_ms
+        .filter(|_| r.metadata["granularity"].as_str() != Some("day"));
+    let (date, hour) = if let Some(ms) = timestamp {
+        let dt = chrono::DateTime::from_timestamp_millis(ms)
+            .ok_or("invalid request timestamp")?
+            .with_timezone(&chrono_tz::Asia::Shanghai);
+        (dt.date_naive(), Some(dt.hour()))
+    } else {
+        if r.timezone.as_deref() != Some("Asia/Shanghai") {
+            return Err("DeepSeek peak/off-peak requires request time or a verified Beijing date");
+        }
+        (
+            crate::usage::validate_date(&r.date).map_err(|_| "invalid request date")?,
+            None,
+        )
+    };
+    let weekend = date.weekday().number_from_monday() >= 6;
+    let month_day = date.month() * 100 + date.day();
+    let holiday = date.year() == 2026
+        && matches!(month_day, 101..=103 | 215..=223 | 404..=406 | 501..=505 | 619..=621 | 925..=927 | 1001..=1007);
+    if weekend || holiday || hour.is_some_and(|h| !(9..12).contains(&h) && !(14..18).contains(&h)) {
+        return Ok((0.5, "off-peak (50%); Asia/Shanghai"));
+    }
+    if date.year() != 2026 {
+        return Err("DeepSeek public holiday calendar unavailable for this year");
+    }
+    if hour.is_none() {
+        return Err("DeepSeek daily aggregate has no peak/off-peak split");
+    }
+    Ok((1., "peak; Asia/Shanghai"))
 }
 pub fn save_snapshot(db: &mut Database, p: PriceSnapshot) -> Result<String> {
     p.validate()?;
@@ -216,8 +386,29 @@ pub fn active_snapshot(c: &rusqlite::Connection) -> Result<Option<(String, Price
         .transpose()
 }
 pub fn initialize(db: &mut Database) -> Result<()> {
-    if active_snapshot(&db.connection)?.is_none() {
-        save_snapshot(db, PriceSnapshot::deepseek_reference())?;
+    const VERSION: &str = "2026-11-05-official-v2";
+    let installed: Option<String> = db
+        .connection
+        .query_row(
+            "SELECT value FROM app_state WHERE key='officialCatalog'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if installed.as_deref() != Some(VERSION) {
+        let mut current = active_snapshot(&db.connection)?
+            .map(|(_, p)| p)
+            .unwrap_or_else(|| PriceSnapshot::new(vec![]));
+        let official = PriceSnapshot::official_reference();
+        for entry in official.entries {
+            current
+                .entries
+                .retain(|e| e.provider != entry.provider || e.model != entry.model);
+            current.entries.push(entry);
+        }
+        current.created_at = chrono::Utc::now().to_rfc3339();
+        save_snapshot(db, current)?;
+        db.connection.execute("INSERT INTO app_state(key,value) VALUES ('officialCatalog',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [VERSION])?;
     }
     Ok(())
 }
@@ -228,14 +419,7 @@ pub fn assign(r: &mut UsageRecord, id: &str, p: &PriceSnapshot) {
     r.price_snapshot_id = Some(id.into());
 }
 pub fn snapshot_from_service(db: &Database, service: &PricingService) -> Result<PriceSnapshot> {
-    let mut p = PriceSnapshot::deepseek_reference();
-    if let Some((_, old)) = active_snapshot(&db.connection)? {
-        for entry in old.entries.into_iter().filter(|e| e.source == "User") {
-            p.entries
-                .retain(|e| e.provider != entry.provider || e.model != entry.model);
-            p.entries.push(entry);
-        }
-    }
+    let mut p = PriceSnapshot::official_reference();
     let rows = {
         let mut stmt=db.connection.prepare("SELECT provider,model,sum(input),sum(output),sum(cache_read),sum(cache_write),sum(reasoning) FROM usage_records GROUP BY provider,model")?;
         let rows = stmt
@@ -268,7 +452,7 @@ pub fn snapshot_from_service(db: &Database, service: &PricingService) -> Result<
         if let Some(found) =
             service.resolve_for_usage_with_provider(&model, Some(&provider), &usage)
         {
-            p.entries.push(PriceEntry{provider,model,matched_key:found.matched_key,source:found.source,assumption:"current cached API reference; not historical billing; speed-specific rates unverified".into(),explicit_free:false,allow_fast:false,rates:found.pricing});
+            p.entries.push(PriceEntry{schedule:None,provider,model,matched_key:found.matched_key,source:found.source,assumption:"current cached API reference; not historical billing; speed-specific rates unverified".into(),explicit_free:false,allow_fast:false,rates:found.pricing});
         }
     }
     p.validate()?;
@@ -311,7 +495,13 @@ pub fn preview_reprice(db: &mut Database, filter: &Filter, id: &str) -> Result<R
         let count = rows.len();
         for detail in rows {
             let mut r = detail.record;
-            let prior = serde_json::to_string(&r)?;
+            // Compare the exact stored body at apply time. Re-serializing a parsed
+            // floating-point cost can change its last digit without a ledger edit.
+            let prior: String = db.connection.query_row(
+                "SELECT body FROM effective_usage WHERE source=?1 AND batch_id=?2 AND item_key=?3",
+                params![detail.source, detail.batch_id, r.key],
+                |row| row.get(0),
+            )?;
             if let Some(c) = r.estimated_cost_usd {
                 *before.get_or_insert(0.) += c;
             }

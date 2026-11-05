@@ -252,18 +252,6 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
             let p: Id = payload(v)?;
             Ok(serde_json::to_value(pricing::apply_reprice(db, &p.id)?)?)
         }
-        "savePrice" => {
-            let entry: pricing::PriceEntry = payload(v)?;
-            ensure!(entry.source == "User", "local prices must use source User");
-            let mut p = pricing::active_snapshot(&db.connection)?
-                .map(|(_, p)| p)
-                .unwrap_or_else(|| pricing::PriceSnapshot::new(vec![]));
-            p.created_at = chrono::Utc::now().to_rfc3339();
-            p.entries
-                .retain(|e| e.provider != entry.provider || e.model != entry.model);
-            p.entries.push(entry);
-            Ok(json!({"id":pricing::save_snapshot(db,p)?}))
-        }
         "backup" => {
             let p: FilePath = payload(v)?;
             db.backup(&p.path)?;
@@ -311,6 +299,7 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
     let mut price_task: Option<
         JoinHandle<(String, Result<tokens_core::pricing::PricingService, String>)>,
     > = None;
+    let mut next_price_refresh = Instant::now();
     let mut last_scan: Option<Value> = {
         use rusqlite::OptionalExtension;
         db.connection
@@ -349,8 +338,14 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
           match result {Ok(r)=>{last_scan=Some(serde_json::to_value(&r)?);send(json!({"version":1,"event":"scanFinished","payload":r}))?;if r.changed>0 {send(json!({"version":1,"event":"usageChanged","revision":r.revision}))?;}},Err(e)=>send(json!({"version":1,"event":"scanFailed","message":format!("{e:#}")}))?}
          },
          _=tokio::time::sleep_until(next_scan),if scan.is_none()=>{scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent)));send(json!({"version":1,"event":"scanStarted"}))?;},
+         _=tokio::time::sleep_until(next_price_refresh),if scan.is_none() && price_task.is_none()=>{
+          next_price_refresh=Instant::now()+Duration::from_secs(86400);
+          price_task=Some(tokio::spawn(async {(String::new(),tokens_core::pricing::PricingService::fetch_snapshot().await)}));
+         },
          result=async {match &mut price_task {Some(task)=>task.await,None=>std::future::pending().await}},if price_task.is_some()=>{
-          price_task=None;let(id,result)=result?;let result=result.map_err(|e|anyhow!(e)).and_then(|service|{ensure!(service.has_pricing_data(),"no upstream price dataset available; saved prices retained");let snapshot=pricing::snapshot_from_service(db,&service)?;Ok(json!({"id":pricing::save_snapshot(db,snapshot)?}))});reply(&id,result)?;
+          price_task=None;let(id,result)=result?;let result=result.map_err(|e|anyhow!(e)).and_then(|service|{ensure!(service.has_pricing_data(),"no upstream price dataset available; saved prices retained");let snapshot=pricing::snapshot_from_service(db,&service)?;Ok(json!({"id":pricing::save_snapshot(db,snapshot)?}))});
+          if id.is_empty() { match result { Ok(value)=>send(json!({"version":1,"event":"pricesUpdated","payload":value}))?, Err(error)=>send(json!({"version":1,"event":"priceRefreshFailed","message":format!("{error:#}")}))? } } else { reply(&id,result)?; }
+
          }
         }
     }

@@ -1,6 +1,8 @@
 name: Tokenory
 options:
   bundleIdPrefix: ee.ryek
+  developmentLanguage: en
+  knownRegions: [en, zh-Hans]
   deploymentTarget:
     macOS: '15.0'
 settings:
@@ -15,7 +17,10 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     GENERATE_INFOPLIST_FILE: NO
     MARKETING_VERSION: '0.1.0'
-    CURRENT_PROJECT_VERSION: '1'
+    CURRENT_PROJECT_VERSION: '2'
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    SWIFT_EMIT_LOC_STRINGS: NO
 targets:
   Tokenory:
     type: application
@@ -26,6 +31,8 @@ targets:
       path: Tokenory/Info.plist
       properties:
         CFBundleDisplayName: Tokenory
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, zh-Hans]
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
