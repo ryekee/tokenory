@@ -17,10 +17,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct TokenoryApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var store = UsageStore.shared
+    @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
     var body: some Scene {
-        MenuBarExtra("Tokenory", systemImage: "chart.bar.xaxis") { MenuBarView().environment(store) }.menuBarExtraStyle(.window)
-        Window("Tokenory", id: "dashboard") { DashboardView().environment(store) }.defaultSize(width: 1060, height: 740).defaultLaunchBehavior(ProcessInfo.processInfo.arguments.contains("--show-dashboard") ? .presented : .suppressed).commands { DashboardCommands() }
-        Settings { SettingsView().environment(store) }
+        MenuBarExtra { MenuBarView().environment(store).environment(\.locale, Localization.locale).id(language) } label: { Image("MenuBarIcon").accessibilityLabel("Tokenory") }.menuBarExtraStyle(.window)
+        Window("Tokenory", id: "dashboard") { DashboardView().environment(store).environment(\.locale, Localization.locale).environment(\.timeZone, TimeZone(identifier: "Asia/Shanghai")!).id(language) }.defaultSize(width: 1060, height: 740).defaultLaunchBehavior(ProcessInfo.processInfo.arguments.contains("--show-dashboard") ? .presented : .suppressed).commands { DashboardCommands() }
+        Settings { SettingsView().environment(store).environment(\.locale, Localization.locale) }
     }
 }
 
@@ -28,7 +29,7 @@ private struct DashboardCommands: Commands {
     @Environment(\.openWindow) private var openWindow
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("查看统计") { openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }.keyboardShortcut("o")
+            Button(L("action.open_stats")) { openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }.keyboardShortcut("o")
         }
     }
 }

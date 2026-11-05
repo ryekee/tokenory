@@ -14,4 +14,8 @@ else
 fi
 xcodegen generate --spec macos/project.yml
 xcodebuild -project macos/Tokenory.xcodeproj -scheme Tokenory -configuration "$CONFIGURATION" -derivedDataPath .build/xcode -destination 'platform=macOS' build
-printf '%s\n' "$ROOT_DIR/.build/xcode/Build/Products/$CONFIGURATION/Tokenory.app"
+APP_PATH="$ROOT_DIR/.build/xcode/Build/Products/$CONFIGURATION/Tokenory.app"
+# Xcode can skip its outer signature when only the embedded Rust helper changes.
+/usr/bin/codesign --force --sign - --options runtime "$APP_PATH"
+/usr/bin/codesign --verify --deep --strict "$APP_PATH"
+printf '%s\n' "$APP_PATH"

@@ -2,7 +2,8 @@ import Foundation
 import Observation
 
 enum UsageDateRange: String, CaseIterable {
-    case today = "今日", week = "7 天", month = "30 天", all = "全部", custom = "自定义"
+    case today, week, month, all, custom
+    var title: String { L("range." + rawValue) }
 }
 
 @MainActor @Observable
@@ -38,7 +39,7 @@ final class UsageStore {
     func start() {
         if eventTask == nil {
             eventTask = Task { [weak self, engine] in
-                for await event in await engine.events { guard let self else { return }; await consume(event) }
+                for await event in engine.events { guard let self else { return }; await consume(event) }
             }
         }
         Task {
@@ -110,18 +111,19 @@ final class UsageStore {
             do { status = try await engine.request("status").decode(EngineStatus.self) } catch { fail(error) }
             await refreshToday()
         case "usageChanged": await refresh()
+        case "pricesUpdated": await loadManagement()
         case "scanFailed": scanning = false; error = event.message
         case "stopped": connected = false; scanning = false; error = event.message
         default: break
         }
     }
     var statusText: String {
-        if !connected { return "采集已停止" }
-        if scanning { return "正在采集…" }
+        if !connected { return L("status.stopped") }
+        if scanning { return L("status.scanning") }
         if let scan = status?.lastScan {
-            if scan.sources.contains(where: { $0.status == "partial" }) { return "部分日志待重试" }
-            return "已更新 · \(String(format: "%.1f", Double(scan.durationMs) / 1000)) 秒"
+            if scan.sources.contains(where: { $0.status == "partial" }) { return L("status.partial") }
+            return L("status.updated")
         }
-        return "等待首次采集"
+        return L("status.waiting")
     }
 }
