@@ -18,6 +18,7 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Command {
+    Scan,
     Report {
         #[arg(long)]
         from: Option<String>,
@@ -86,6 +87,12 @@ fn main() -> Result<()> {
     };
     let mut db = Database::open(&directory)?;
     let value = match args.command {
+        Command::Scan => {
+            let config=tokenory::config::Config::load(&directory)?;
+            let mut cache=tokenory::collector::DiagnosticCache::persistent();
+            let batch=tokio::runtime::Runtime::new()?.block_on(tokenory::collector::collect_once(&config,&mut cache))?;
+            serde_json::to_value(tokenory::collector::persist(&mut db,batch)?)?
+        },
         Command::Report {
             from,
             to,

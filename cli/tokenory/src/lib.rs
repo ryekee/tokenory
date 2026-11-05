@@ -1,3 +1,5 @@
+pub mod collector;
+pub mod config;
 pub mod db;
 pub mod import;
 pub mod queries;
