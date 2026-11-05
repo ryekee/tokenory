@@ -1,0 +1,28 @@
+[package]
+name = "tokenory"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Local AI usage ledger for the Tokenory macOS app"
+
+[dependencies]
+tokens-core = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+rusqlite = { workspace = true, features = ["backup"] }
+tokio = { workspace = true, features = ["io-std", "io-util"] }
+clap = { workspace = true }
+sha2 = { workspace = true }
+fs2 = { workspace = true }
+dirs = { workspace = true }
+walkdir = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"

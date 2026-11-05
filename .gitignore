@@ -36,3 +36,13 @@ self-host/
 .env*.local
 __pycache__/
 tokens-export-*.json
+
+# Tokenory local tooling, build products and private data
+.tools/
+.build/
+.superpowers/
+macos/Tokenory.xcodeproj/
+macos/*.xcresult/
+*.xcuserstate
+**/xcuserdata/
+local-data/

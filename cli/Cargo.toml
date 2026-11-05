@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "tokens-core",
     "tokens-cli",
+    "tokenory",
 ]
 
 [workspace.package]
