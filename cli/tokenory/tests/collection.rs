@@ -7,6 +7,70 @@ use tokenory::{
     queries::{report, Filter},
 };
 #[tokio::test]
+async fn provider_correction_updates_one_event_across_scans_and_legacy_keys_merge() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let dir = home.path().join(".claude/projects/test");
+    fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("session.jsonl");
+    let first = json!({"type":"assistant","timestamp":"2026-11-05T01:00:00Z","message":{"id":"same-response","role":"assistant","model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":20}}});
+    let mut corrected = first.clone();
+    corrected["providerId"] = "bedrock".into();
+    let config = Config {
+        home_dir: home.path().into(),
+        ..Default::default()
+    };
+    let mut cache = DiagnosticCache::default();
+    let mut db = Database::open(data.path()).unwrap();
+    fs::write(&file, format!("{first}\n")).unwrap();
+    let batch = collect_once(&config, &mut cache).await.unwrap();
+    let mut legacy_first = batch.records[0].clone();
+    legacy_first.key = "claude:anthropic:message:same-response".into();
+    persist(&mut db, batch).unwrap();
+    fs::write(&file, format!("{first}\n{corrected}\n")).unwrap();
+    let batch = collect_once(&config, &mut cache).await.unwrap();
+    assert_eq!(batch.records.len(), 1);
+    assert_eq!(batch.records[0].provider, "bedrock");
+    let mut legacy_corrected = batch.records[0].clone();
+    legacy_corrected.key = "claude:bedrock:message:same-response".into();
+    persist(&mut db, batch).unwrap();
+    let r = report(&mut db, &Filter::default()).unwrap();
+    assert_eq!(r.summary.tokens, 120);
+    assert_eq!(r.summary.record_count, 1);
+    assert_eq!(r.providers[0].key, "bedrock");
+
+    // Simulate the pre-fix database, including a duplicate already persisted.
+    db.connection
+        .execute("DELETE FROM usage_records", [])
+        .unwrap();
+    tokenory::db::put_record(&db.connection, "local", "", &legacy_first).unwrap();
+    tokenory::db::put_record(&db.connection, "local", "", &legacy_corrected).unwrap();
+    db.connection
+        .execute_batch("PRAGMA user_version=2;")
+        .unwrap();
+    let backup = data.path().join("legacy.sqlite3");
+    db.backup(&backup).unwrap();
+    drop(db);
+    let mut db = Database::open(data.path()).unwrap();
+    assert_eq!(
+        report(&mut db, &Filter::default()).unwrap().summary.tokens,
+        120
+    );
+    let scan = persist(&mut db, collect_once(&config, &mut cache).await.unwrap()).unwrap();
+    assert_eq!(scan.added, 0);
+    assert_eq!(scan.changed, 0);
+    assert_eq!(
+        report(&mut db, &Filter::default()).unwrap().providers[0].key,
+        "bedrock"
+    );
+    // A version-2 backup follows the same migration path on restore.
+    db.restore(&backup).unwrap();
+    assert_eq!(
+        report(&mut db, &Filter::default()).unwrap().summary.tokens,
+        120
+    );
+}
+#[tokio::test]
 async fn stream_update_partial_write_and_deleted_log_preserve_history() {
     let home = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();

@@ -18,7 +18,7 @@ impl Database {
         connection.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;")?;
         let version: i64 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(
-            version <= 2,
+            version <= 3,
             "database was created by a newer Tokenory version"
         );
         if version == 0 {
@@ -27,10 +27,57 @@ impl Database {
         if version < 2 {
             connection.execute_batch(include_str!("../migrations/002_pricing.sql"))?;
         }
-        Ok(Self {
+        let mut db = Self {
             connection,
             directory: directory.to_owned(),
-        })
+        };
+        if version < 3 {
+            if version > 0 {
+                db.backup_before("schema-3")?;
+            }
+            db.migrate_local_keys()?;
+        }
+        Ok(db)
+    }
+    fn migrate_local_keys(&mut self) -> Result<()> {
+        let tx = self.connection.transaction()?;
+        let rows = {
+            let mut stmt = tx.prepare("SELECT body FROM usage_records WHERE source='local' AND batch_id='' ORDER BY rowid")?;
+            let rows = stmt
+                .query_map([], |r| r.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            rows
+        };
+        let mut merged = std::collections::BTreeMap::<String, UsageRecord>::new();
+        for body in rows {
+            let mut record: UsageRecord = serde_json::from_str(&body)?;
+            let prefix = format!("{}:{}:", record.client, record.provider);
+            let Some(identity) = record.key.strip_prefix(&prefix) else {
+                continue;
+            };
+            let key = format!("{}:{identity}", record.client);
+            tx.execute(
+                "DELETE FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",
+                [&record.key],
+            )?;
+            record.key = key.clone();
+            // Later rows contain the corrected provider; preserve the first
+            // observation's date, just as a normal streaming update does.
+            if let Some(first) = merged.get(&key) {
+                record.date = first.date.clone();
+                record.timezone = first.timezone.clone();
+            }
+            merged.insert(key, record);
+        }
+        for record in merged.values() {
+            put_record(&tx, "local", "", record)?;
+        }
+        if !merged.is_empty() {
+            advance_revision(&tx)?;
+        }
+        tx.execute_batch("PRAGMA user_version=3;")?;
+        tx.commit()?;
+        Ok(())
     }
     pub fn backup(&self, destination: &Path) -> Result<()> {
         ensure!(!destination.exists(), "backup destination already exists");
@@ -51,7 +98,7 @@ impl Database {
         ensure!(integrity == "ok", "backup integrity check failed");
         let version: i64 = source.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(
-            (1..=2).contains(&version),
+            (1..=3).contains(&version),
             "unsupported backup schema version"
         );
         {
@@ -85,6 +132,9 @@ impl Database {
         if version == 1 {
             self.connection
                 .execute_batch(include_str!("../migrations/002_pricing.sql"))?;
+        }
+        if version < 3 {
+            self.migrate_local_keys()?;
         }
         advance_revision(&self.connection)?;
         Ok(())

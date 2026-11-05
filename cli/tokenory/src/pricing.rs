@@ -6,7 +6,10 @@ use crate::{
 use anyhow::{ensure, Context, Result};
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use tokens_core::pricing::{lookup::compute_cost, ModelPricing, PricingService};
+use tokens_core::pricing::{
+    lookup::{compute_cost, compute_cost_for_snapshot},
+    ModelPricing, PricingService,
+};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PriceEntry {
@@ -134,14 +137,30 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     } else {
         0.
     };
-    let cost = compute_cost(
-        &rates,
-        t.input,
-        t.output,
-        t.cache_read,
-        t.cache_write,
-        t.reasoning,
-    ) + surcharge;
+    let cost = if daily {
+        compute_cost(
+            &rates,
+            t.input,
+            t.output,
+            t.cache_read,
+            t.cache_write,
+            t.reasoning,
+        )
+    } else {
+        compute_cost_for_snapshot(
+            &rates,
+            &e.matched_key,
+            &e.source,
+            Some(&r.provider),
+            &tokens_core::TokenBreakdown {
+                input: t.input,
+                output: t.output,
+                cache_read: t.cache_read,
+                cache_write: t.cache_write,
+                reasoning: t.reasoning,
+            },
+        )
+    } + surcharge;
     if !cost.is_finite() || cost < 0. {
         return unknown("invalid calculated cost");
     }

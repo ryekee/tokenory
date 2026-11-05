@@ -2182,6 +2182,28 @@ fn compute_xai_full_request_200k_cost(result: &LookupResult, usage: &TokenBreakd
     )
 }
 
+/// Calculate an already-resolved immutable price snapshot with the same
+/// provider-specific request tiers as live lookup. This does not resolve or
+/// certify a model match; callers retain responsibility for that evidence.
+pub fn compute_cost_for_snapshot(
+    pricing: &ModelPricing,
+    matched_key: &str,
+    source: &str,
+    provider_id: Option<&str>,
+    usage: &TokenBreakdown,
+) -> f64 {
+    compute_cost_for_lookup(
+        &LookupResult {
+            pricing: pricing.clone(),
+            matched_key: matched_key.into(),
+            source: source.into(),
+            evidence: ResolutionEvidence::deterministic(ResolutionKind::Custom),
+        },
+        provider_id,
+        usage,
+    )
+}
+
 fn compute_cost_for_lookup(
     result: &LookupResult,
     provider_id: Option<&str>,
