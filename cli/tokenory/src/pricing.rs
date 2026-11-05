@@ -220,9 +220,13 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
             }
         }
     }
-    let daily = r.timestamp_ms.is_none() || r.metadata["granularity"].as_str() == Some("day");
-    // A day aggregate cannot be used as one long-context request.
-    let mut rates = if daily {
+    let aggregate = r.timestamp_ms.is_none()
+        || matches!(
+            r.metadata["granularity"].as_str(),
+            Some("day" | "sourceRecord")
+        );
+    // A daily or session aggregate is not one long-context request.
+    let mut rates = if aggregate {
         ModelPricing {
             input_cost_per_token: e.rates.input_cost_per_token,
             output_cost_per_token: e.rates.output_cost_per_token,
@@ -234,7 +238,7 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
         e.rates.clone()
     };
     let long_context = official_openai
-        && !daily
+        && !aggregate
         && t.input + t.cache_read + t.cache_write > 272_000
         && rates.input_cost_per_token_above_272k_tokens.is_some();
     if long_context {
@@ -262,7 +266,7 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     } else {
         (1., "fixed rate")
     };
-    let cost = (if daily || official_openai {
+    let cost = (if aggregate || official_openai {
         compute_cost(
             &rates,
             t.input,
@@ -307,8 +311,8 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
             e.assumption,
             speed_factor,
             long_context,
-            if daily {
-                "daily aggregate at base rates; no request tier reconstruction"
+            if aggregate {
+                "aggregate at base rates; no request tier reconstruction"
             } else {
                 "event usage; upstream context tiers and observed cache TTL"
             }
@@ -320,9 +324,12 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
 // remain off-peak: the provider explicitly prices every Saturday/Sunday off-peak.
 fn deepseek_factor(r: &UsageRecord) -> Result<(f64, &'static str), &'static str> {
     use chrono::{Datelike, Timelike};
-    let timestamp = r
-        .timestamp_ms
-        .filter(|_| r.metadata["granularity"].as_str() != Some("day"));
+    let timestamp = r.timestamp_ms.filter(|_| {
+        !matches!(
+            r.metadata["granularity"].as_str(),
+            Some("day" | "sourceRecord")
+        )
+    });
     let (date, hour) = if let Some(ms) = timestamp {
         let dt = chrono::DateTime::from_timestamp_millis(ms)
             .ok_or("invalid request timestamp")?

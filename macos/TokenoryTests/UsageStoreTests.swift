@@ -25,6 +25,11 @@ final class UsageStoreTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(100))
             }
             XCTAssertEqual(store.report?.summary.tokens, 1000)
+            await store.loadManagement()
+            XCTAssertEqual(store.clients.count, 42)
+            XCTAssertEqual(store.clients.first { $0.id == "paseo" }?.collectsAs, ["claude", "codex"])
+            XCTAssertEqual(store.clients.first { $0.id == "orca" }?.collectsAs, ["micode"])
+            XCTAssertTrue(store.clients.first { $0.id == "gemini" }?.supportsExtraPaths == true)
             await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-05T01:00:00Z")!)
             XCTAssertEqual(store.today?.summary.tokens, 1000)
             await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)

@@ -13,7 +13,7 @@ struct MenuBarView: View {
                 if !report.clients.isEmpty {
                     Divider()
                     ForEach(report.clients) { group in
-                        HStack { Text(clientName(group.key)); Spacer(); Text(compactTokens(group.summary.tokens)).monospacedDigit().foregroundStyle(.secondary) }
+                        HStack { BrandLabel(name: group.key, kind: .tool, title: clientName(group.key)); Spacer(); Text(compactTokens(group.summary.tokens)).monospacedDigit().foregroundStyle(.secondary) }
                     }
                 }
             } else { ProgressView(L("usage.loading")).frame(maxWidth: .infinity, minHeight: 60) }

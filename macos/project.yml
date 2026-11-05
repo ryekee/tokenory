@@ -14,6 +14,8 @@ settings:
     CODE_SIGN_STYLE: Manual
     ENABLE_APP_SANDBOX: NO
     ENABLE_HARDENED_RUNTIME: YES
+    # Ad-hoc hardened apps cannot load Xcode's separate unsigned-team debug dylib.
+    ENABLE_DEBUG_DYLIB: NO
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     GENERATE_INFOPLIST_FILE: NO
     MARKETING_VERSION: '0.1.0'

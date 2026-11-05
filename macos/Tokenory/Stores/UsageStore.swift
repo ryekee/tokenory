@@ -13,6 +13,7 @@ final class UsageStore {
     let dataDirectory: URL
     var today: UsageReport?
     var report: UsageReport?
+    var reportFilter: UsageFilter?
     var catalog: UsageReport?
     var filter = UsageFilter()
     var dateRange: UsageDateRange = .month
@@ -23,7 +24,9 @@ final class UsageStore {
     var error: String?
     var sources: JSONValue = .null
     var prices: JSONValue = .null
+    var priceProviders: [PriceProviderGroup] = []
     var settings: EngineSettings?
+    var clients: [ClientInfo] = []
     private var eventTask: Task<Void, Never>?
     private var refreshGeneration = 0
 
@@ -64,7 +67,8 @@ final class UsageStore {
         updateDateRange(now: now)
         refreshGeneration += 1; let generation = refreshGeneration; loading = true
         do {
-            let dashboardFilter = try JSONValue.encode(filter)
+            let queryFilter = filter
+            let dashboardFilter = try JSONValue.encode(queryFilter)
             let day = Self.day(now); let todayFilter = try JSONValue.encode(UsageFilter(from: day, to: day))
             async let dashboard = engine.request("overview", payload: dashboardFilter)
             async let quick = engine.request("overview", payload: todayFilter)
@@ -72,7 +76,7 @@ final class UsageStore {
             async let engineStatus = engine.request("status")
             let results = try await (dashboard, quick, all, engineStatus)
             guard generation == refreshGeneration else { return }
-            report = try results.0.decode(UsageReport.self); today = try results.1.decode(UsageReport.self); catalog = try results.2.decode(UsageReport.self)
+            report = try results.0.decode(UsageReport.self); reportFilter = queryFilter; today = try results.1.decode(UsageReport.self); catalog = try results.2.decode(UsageReport.self)
             status = try results.3.decode(EngineStatus.self); scanning = status?.scanning ?? false; connected = true
         } catch { if generation == refreshGeneration { fail(error) } }
         if generation == refreshGeneration { loading = false }
@@ -93,7 +97,11 @@ final class UsageStore {
     func loadManagement() async {
         do {
             async let s = engine.request("sources"); async let p = engine.request("prices"); async let c = engine.request("settings")
-            let values = try await (s, p, c); sources = values.0; prices = values.1; settings = try values.2.decode(EngineSettings.self)
+            let values = try await (s, p, c)
+            let catalog = try values.1.decode(PriceCatalogResponse.self)
+            clients = try values.0["clients"].decode([ClientInfo].self)
+            sources = values.0; prices = values.1; settings = try values.2.decode(EngineSettings.self)
+            priceProviders = PriceProviderGroup.make(catalog.current?.snapshot.entries ?? [])
         } catch { fail(error) }
     }
     @discardableResult

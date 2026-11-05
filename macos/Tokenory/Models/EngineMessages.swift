@@ -52,7 +52,7 @@ struct EngineError: Decodable, Error, LocalizedError, Sendable {
 struct EngineRequest: Encodable { let version = 1; let id: String; let operation: String; let payload: JSONValue }
 struct UsageFilter: Codable, Sendable, Equatable {
     var from: String?; var to: String?; var client: String?; var provider: String?; var model: String?; var source: String?
-    var offset = 0; var limit = 200
+    var offset = 0; var limit = 50
 }
 struct TokenBreakdown: Codable, Sendable { let input: Int64; let output: Int64; let cacheRead: Int64; let cacheWrite: Int64; let reasoning: Int64 }
 struct UsageSummary: Decodable, Sendable {
@@ -69,7 +69,9 @@ struct UsageDetail: Decodable, Identifiable, Sendable {
 }
 struct UsageReport: Decodable, Sendable {
     let revision: Int64; let summary: UsageSummary; let daily: [UsageGroup]; let clients: [UsageGroup]; let providers: [UsageGroup]; let models: [UsageGroup]; let details: [UsageDetail]
+    let hourly: HourlyUsage?
 }
+struct HourlyUsage: Decodable, Sendable { let buckets: [UsageGroup]; let unallocated: UsageSummary }
 struct SourceStatus: Decodable, Sendable { let client: String; let status: String; let files: Int; let records: Int; let errors: [String] }
 struct ScanResult: Decodable, Sendable { let startedAt: String; let durationMs: Int; let changed: Int; let revision: Int64; let sources: [SourceStatus] }
 struct EngineStatus: Decodable, Sendable { let scanning: Bool; let lastScan: ScanResult?; let dataDirectory: String; let revision: Int64; let refreshingPrices: Bool }
@@ -93,3 +95,5 @@ struct JSONLineFramer: Sendable {
         return lines
     }
 }
+
+struct ClientInfo: Decodable, Identifiable, Sendable { let id: String; let name: String; let supportsExtraPaths: Bool; let collectsAs: [String] }

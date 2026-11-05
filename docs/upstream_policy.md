@@ -1,4 +1,6 @@
-# Upstream Policy
+# Upstream Policy (inherited)
+
+This document describes the original missuo/tokens fork of Tokscale. It is retained as upstream history. Tokenory is a separate local macOS implementation. Its current scope and sync policy are in [Tokenory upstream notes](local/upstream.md) and the [README](../README.md).
 
 Tokens is a fork of [Tokscale](https://github.com/junhoyeo/tokscale) and keeps
 taking from it. This document says what we take, what we refuse, and what has to

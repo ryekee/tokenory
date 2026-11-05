@@ -1,5 +1,9 @@
 # 实施与验收状态
 
+2026-11-06 更新：42 个客户端入口已接通，Rust workspace **2,515 通过、0 失败、4 忽略**，Clippy `-D warnings` 通过，原生 **13 项 XCTest 通过**，并单独复查了原生读取 42 项客户端目录的真实 helper 协议。此次验证使用独立数据库；在本机日志中实际发现 Claude、Codex、Cline、Copilot 和 MiMo Code 用量。其余客户端的格式支持不等于逐个真实安装验收。详细边界见 [多客户端验证](client-compatibility.md)。
+
+## 2026-11-05 首版验收记录
+
 更新：2026-11-05。**首版本机应用已实现、安装并迁移真实历史；长期系统行为仍待观察。** 安装位置：`~/Applications/Tokenory.app`，版本 0.1.0。本机 Apple Silicon / macOS 27.2，最低 macOS 15。
 
 | 项目 | 验证结果 |

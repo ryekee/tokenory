@@ -2,34 +2,70 @@ import AppKit
 import SwiftUI
 import ServiceManagement
 
+private enum SettingsSection: String, CaseIterable {
+    case general, prices, collection, data
+    var title: String { L("settings." + rawValue) }
+    var icon: String {
+        switch self {
+        case .general: "gearshape"
+        case .prices: "dollarsign.circle"
+        case .collection: "arrow.triangle.2.circlepath"
+        case .data: "externaldrive"
+        }
+    }
+
+}
+
 struct SettingsView: View {
     @Environment(UsageStore.self) private var store
-    @State private var tab = "general"
+    @Environment(\.colorScheme) private var scheme
+    @State private var ratesExpanded = true
+    @State private var tab: SettingsSection = .general
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
     @State private var login = LoginItemService()
     @State private var interval = 60
-    @State private var claudePaths = ""
-    @State private var codexPaths = ""
+    @State private var scanPaths: [String: String] = [:]
+    @State private var selectedClient = "claude"
     @State private var busy = false
     @State private var notice: String?
     @State private var preview: RepricePreview?
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Picker(L("settings.title"), selection: $tab) { Text(L("settings.general")).tag("general"); Text(L("settings.prices")).tag("prices"); Text(L("settings.collection")).tag("collection"); Text(L("settings.data")).tag("data") }.labelsHidden().pickerStyle(.segmented)
-            ErrorBanner()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if tab == "general" { generalSettings }
-                    else if tab == "prices" { priceSettings }
-                    else if tab == "collection" { collectionSettings }
-                    else { dataSettings }
-                    if let notice { Text(notice).font(.callout).foregroundStyle(.secondary) }
-                }.padding(.vertical, 8)
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                WorkspaceTabs(items: SettingsSection.allCases.map { WorkspaceTab(id: $0, title: $0.title, icon: $0.icon) }, selection: $tab)
+                Spacer()
+            }.frame(width: 164).background(.regularMaterial)
+            Divider()
+            VStack(alignment: .leading, spacing: 0) {
+                Text(tab.title).font(.system(size: 22, weight: .semibold))
+                    .padding(.horizontal, 24).padding(.top, 22).padding(.bottom, 18)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ErrorBanner()
+                        switch tab {
+                        case .general: generalSettings
+                        case .prices: priceSettings
+                        case .collection: collectionSettings
+                        case .data: dataSettings
+                        }
+                        if let notice {
+                            Label(notice, systemImage: "checkmark.circle")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                    }.padding(.horizontal, 24).padding(.bottom, 24)
+                        .id(tab).transition(.opacity)
+                }
             }
-        }.padding(24).frame(width: 680, height: 580).navigationTitle(L("settings.window"))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(WorkspaceStyle.canvas(scheme))
+        }
+        .frame(width: 880, height: 610).navigationTitle(L("settings.window"))
+            .toolbar(removing: .title)
+            .disclosureGroupStyle(WorkspaceDisclosureStyle())
+            .onChange(of: tab) { _, _ in notice = nil }
             .task {
                 await store.loadManagement(); login.refresh()
-                if let s = store.settings { interval = s.intervalSeconds; claudePaths = (s.extraScanPaths["claude"] ?? []).joined(separator: "\n"); codexPaths = (s.extraScanPaths["codex"] ?? []).joined(separator: "\n") }
+                if let s = store.settings { interval = s.intervalSeconds; scanPaths = s.extraScanPaths.mapValues { $0.joined(separator: "\n") } }
             }
             .sheet(isPresented: Binding(get: { preview != nil }, set: { if !$0 { preview = nil } })) {
                 if let p = preview {
@@ -43,79 +79,146 @@ struct SettingsView: View {
             }
     }
     private var generalSettings: some View {
-        Form {
-            Picker(L("language.title"), selection: $language) {
-                ForEach(AppLanguage.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
-            }
-            LabeledContent(L("currency.title"), value: L("currency.usd"))
-            Toggle(L("settings.login"), isOn: Binding(get: { login.enabled }, set: { value in do { try login.setEnabled(value) } catch { store.fail(error) } }))
-            if login.status == .requiresApproval { Button(L("settings.open_login")) { SMAppService.openSystemSettingsLoginItems() } }
-        }.formStyle(.grouped)
-    }
-    private var priceSettings: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(L("price.automatic")).font(.headline)
-            Text(L("price.explanation")).foregroundStyle(.secondary)
-            HStack {
-                Button(L("price.refresh")) { refreshPrices() }.disabled(busy)
-                Button(L("price.reestimate")) { reprice() }.disabled(busy || store.prices["current"]["id"].string == nil)
-                if busy { ProgressView().controlSize(.small) }
-            }
-            Divider()
-            Text("DeepSeek").font(.headline)
-            Text(L("price.deepseek_schedule")).font(.callout).foregroundStyle(.secondary)
-            Link(L("price.official_page"), destination: URL(string: "https://api-docs.deepseek.com/quick_start/pricing/")!)
-            DisclosureGroup(L("price.rates")) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(L("price.rate_units")).font(.caption).foregroundStyle(.secondary)
-                    Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 10) {
-                        GridRow { Text(L("field.model")); Text(L("token.input")); Text(L("token.cache_read")); Text(L("token.output")) }.font(.caption).foregroundStyle(.secondary)
-                        ForEach(store.prices["current"]["snapshot"]["entries"].array, id: \.self) { entry in
-                            GridRow {
-                                Text(entry["model"].string ?? "").lineLimit(1).truncationMode(.middle).help(entry["source"].string ?? "")
-                                Text(rate(entry, "input_cost_per_token"))
-                                Text(rate(entry, "cache_read_input_token_cost"))
-                                Text(rate(entry, "output_cost_per_token"))
-                            }.font(.caption).monospacedDigit()
-                        }
-                    }
-                }.padding(.top, 12)
-            }
-            DisclosureGroup(LF("price.missing_models", store.prices["missing"].array.count)) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(L("price.missing_reason")).font(.caption).foregroundStyle(.secondary)
-                    ForEach(store.prices["missing"].array, id: \.self) { missing in
-                        HStack { Text(missing["model"].string ?? ""); Spacer(); Text(compactTokens(missing["tokens"].int ?? 0)).monospacedDigit() }
-                    }
-                }.padding(.top, 12)
+        WorkspacePanel {
+            VStack(spacing: 16) {
+                HStack {
+                    Text(L("language.title"))
+                    Spacer()
+                    Picker(L("language.title"), selection: $language) {
+                        ForEach(AppLanguage.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
+                    }.labelsHidden().fixedSize().frame(width: 180, alignment: .trailing)
+                }
+                Divider()
+                HStack {
+                    Text(L("currency.title"))
+                    Spacer()
+                    Text(L("currency.usd")).foregroundStyle(.secondary).frame(width: 180, alignment: .trailing)
+                }
+                Divider()
+                HStack {
+                    Text(L("settings.login"))
+                    Spacer()
+                    Toggle(L("settings.login"), isOn: Binding(get: { login.enabled }, set: { value in do { try login.setEnabled(value) } catch { store.fail(error) } }))
+                        .labelsHidden().toggleStyle(.switch).controlSize(.small).fixedSize().frame(width: 180, alignment: .trailing)
+                }
+                if login.status == .requiresApproval {
+                    Button(L("settings.open_login")) { SMAppService.openSystemSettingsLoginItems() }
+                }
             }
         }
     }
-    private func rate(_ entry: JSONValue, _ key: String) -> String {
-        guard let value = entry["rates"][key].double else { return L("value.unavailable") }
-        return usd(value * 1_000_000, detailed: true)
+    private var priceSettings: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(L("price.automatic")).font(.headline)
+                    Text(L("price.explanation")).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Button(L("price.refresh")) { refreshPrices() }.disabled(busy)
+                        Button(L("price.reestimate")) { reprice() }.disabled(busy || store.prices["current"]["id"].string == nil)
+                        if busy { ProgressView().controlSize(.small) }
+                    }.padding(.top, 2)
+                }
+            }
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 16) {
+                    DisclosureGroup(L("price.rates"), isExpanded: $ratesExpanded) {
+                        PriceCatalogView(providers: store.priceProviders)
+                    }
+                    Divider()
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(L("price.deepseek_schedule")).font(.callout).foregroundStyle(.secondary)
+                            Link(L("price.official_page"), destination: URL(string: "https://api-docs.deepseek.com/quick_start/pricing/")!)
+                        }.padding(.top, 12)
+                    } label: { BrandLabel(name: "deepseek", kind: .provider, title: "DeepSeek") }
+                    Divider()
+                    DisclosureGroup(LF("price.missing_models", store.prices["missing"].array.count)) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(L("price.missing_reason")).font(.caption).foregroundStyle(.secondary)
+                            ForEach(store.prices["missing"].array, id: \.self) { missing in
+                                HStack {
+                                    BrandLabel(name: missing["model"].string ?? "", kind: .model).lineLimit(1).truncationMode(.middle)
+                                    Spacer()
+                                    Text(compactTokens(missing["tokens"].int ?? 0)).monospacedDigit()
+                                }.font(.callout)
+                            }
+                        }.padding(.top, 12)
+                    }
+                }
+            }
+        }
     }
     private var collectionSettings: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack { Text(L("settings.interval")); Stepper(LF("settings.interval_seconds", interval), value: $interval, in: 15...86400, step: 15) }
-            LabeledContent(L("settings.timezone"), value: store.settings?.timezone ?? "Asia/Shanghai")
-            Text(L("settings.timezone_note")).font(.caption).foregroundStyle(.secondary)
-            Text(L("settings.claude_paths")).font(.headline)
-            TextEditor(text: $claudePaths).font(.system(.body, design: .monospaced)).frame(height: 60).border(.quaternary)
-            Text(L("settings.codex_paths")).font(.headline)
-            TextEditor(text: $codexPaths).font(.system(.body, design: .monospaced)).frame(height: 60).border(.quaternary)
-            Text(L("settings.paths_note")).font(.caption).foregroundStyle(.secondary)
-            Button(L("settings.save")) { saveSettings() }
-
+        VStack(alignment: .leading, spacing: 14) {
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text(L("settings.interval"))
+                        Spacer()
+                        Stepper(LF("settings.interval_seconds", interval), value: $interval, in: 15...86400, step: 15)
+                            .fixedSize()
+                    }
+                    Divider()
+                    HStack {
+                        Text(L("settings.timezone"))
+                        Spacer()
+                        Text(store.settings?.timezone ?? "Asia/Shanghai").foregroundStyle(.secondary)
+                    }
+                    Text(L("settings.timezone_note")).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 12) {
+                    Picker(L("field.tool"), selection: $selectedClient) {
+                        ForEach(store.clients.filter(\.supportsExtraPaths)) { client in
+                            Text(client.name).tag(client.id)
+                        }
+                    }
+                    pathEditor(L("settings.extra_paths"), tool: selectedClient, text: Binding(
+                        get: { scanPaths[selectedClient] ?? "" },
+                        set: { scanPaths[selectedClient] = $0 }
+                    ))
+                    Text(L("settings.paths_note")).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                Spacer()
+                Button(L("settings.save")) { saveSettings() }.buttonStyle(.borderedProminent)
+            }
+        }
+    }
+    private func pathEditor(_ title: String, tool: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            BrandLabel(name: tool, kind: .tool, title: title).font(.callout).fontWeight(.medium)
+            TextEditor(text: text)
+                .font(.system(size: 12, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .padding(8).frame(height: 70)
+                .background(WorkspaceStyle.canvas(scheme), in: RoundedRectangle(cornerRadius: WorkspaceStyle.fieldRadius))
+                .accessibilityLabel(title)
         }
     }
     private var dataSettings: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(store.dataDirectory.path).font(.callout).textSelection(.enabled)
-            Button(L("data.finder")) { NSWorkspace.shared.open(store.dataDirectory) }
-            Button(L("data.backup")) { backup() }.disabled(busy)
-            Text(L("data.backup_note")).foregroundStyle(.secondary)
-            Button(L("data.restore")) { restore() }.disabled(busy)
+        VStack(alignment: .leading, spacing: 14) {
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label(L("data.location"), systemImage: "folder").font(.headline)
+                    Text(store.dataDirectory.path).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(L("data.finder")) { NSWorkspace.shared.open(store.dataDirectory) }
+                }
+            }
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(L("data.backups")).font(.headline)
+                    Text(L("data.backup_note")).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Button(L("data.backup")) { backup() }.disabled(busy)
+                        Button(L("data.restore")) { restore() }.disabled(busy)
+                    }
+                }
+            }
         }
     }
     private func refreshPrices() {
@@ -133,7 +236,9 @@ struct SettingsView: View {
     private func saveSettings() {
         guard var settings = store.settings else { return }
         settings.intervalSeconds = interval
-        settings.extraScanPaths = ["claude": claudePaths.split(separator: "\n").map(String.init), "codex": codexPaths.split(separator: "\n").map(String.init)]
+        settings.extraScanPaths = scanPaths.mapValues { text in
+            text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        }.filter { !$0.value.isEmpty }
         Task { do { _ = try await store.perform("updateSettings", payload: try .encode(settings)); notice = L("settings.saved"); await store.loadManagement() } catch { store.fail(error) } }
     }
     private func backup() {

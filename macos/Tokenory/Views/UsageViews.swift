@@ -1,10 +1,28 @@
 import SwiftUI
 
-func compactTokens(_ value: Int64) -> String { value.formatted(.number.notation(.compactName).precision(.fractionLength(0...2)).locale(Localization.locale)) }
-func usd(_ value: Double?, detailed: Bool = false) -> String {
-    value.map { $0.formatted(.currency(code: "USD").precision(.fractionLength(detailed ? 2...6 : 2...2)).locale(Localization.locale)) } ?? L("cost.unavailable")
+func compactTokens(_ value: Int64, locale: Locale = Localization.locale) -> String {
+    // Compact notation suppresses grouping in Chinese (1740.69万). Keep the
+    // familiar units while formatting their numeric part with comma separators.
+    let units: [(Double, String)] = locale.identifier.hasPrefix("zh")
+        ? [(1e12, "万亿"), (1e8, "亿"), (1e4, "万")]
+        : [(1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K")]
+    let unit = units.first { Double(value) >= $0.0 } ?? (1, "")
+    return (Double(value) / unit.0).formatted(.number.precision(.fractionLength(0...2)).locale(Locale(identifier: "en_US"))) + unit.1
 }
-func clientName(_ value: String) -> String { ["claude": "Claude Code", "codex": "Codex", "micode": "MiCode", "copilot": "Copilot", "cline": "Cline"][value] ?? value }
+func usd(_ value: Double?) -> String {
+    value.map { "$" + $0.formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "en_US"))) } ?? L("cost.unavailable")
+}
+func clientName(_ value: String) -> String {
+    ["amp": "Amp", "antigravity": "Antigravity", "antigravity-cli": "Antigravity CLI",
+     "claude": "Claude Code", "cline": "Cline", "codebuddy": "CodeBuddy", "codebuff": "Codebuff",
+     "codex": "Codex", "commandcode": "Command Code", "copilot": "Copilot", "crush": "Crush", "cursor": "Cursor",
+     "devin-cli": "Devin CLI", "devin-desktop": "Devin Desktop", "droid": "Droid", "fx": "Fx",
+     "gemini": "Gemini CLI", "goose": "Goose", "grok": "Grok Build", "hermes": "Hermes Agent",
+     "jcode": "Jcode", "junie": "Junie", "kilocode": "Kilo", "kilo": "Kilo CLI", "kimi": "Kimi", "kiro": "Kiro",
+     "micode": "MiMo Code", "mux": "Mux", "openclaw": "OpenClaw", "opencode": "OpenCode", "opencodereview": "OpenCodeReview",
+     "pi": "Pi", "qwen": "Qwen", "reasonix": "Reasonix", "roocode": "Roo Code", "paseo": "Paseo", "orca": "Orca",
+     "trae": "Trae", "warp": "Warp", "workbuddy": "WorkBuddy", "zcode": "ZCode", "zed": "Zed Agent"][value] ?? value
+}
 
 struct SummaryView: View {
     let summary: UsageSummary
@@ -31,33 +49,6 @@ struct SummaryView: View {
             Text(title).font(.subheadline).foregroundStyle(.secondary)
             Text(value).font(.system(size: compact ? 25 : 30, weight: .semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
         }.accessibilityElement(children: .combine)
-    }
-}
-struct UsageGroupList: View {
-    let title: String
-    let groups: [UsageGroup]
-    var isClient = false
-    @State private var expanded = false
-    private var visible: [UsageGroup] { expanded ? groups : Array(groups.prefix(8)) }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(.headline).padding(.bottom, 12)
-            ForEach(visible) { group in
-                HStack(spacing: 12) {
-                    Text(isClient ? clientName(group.key) : group.key).lineLimit(1).truncationMode(.middle).help(group.key)
-                    Spacer(minLength: 8)
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text(compactTokens(group.summary.tokens)).monospacedDigit()
-                        Text(usd(group.summary.knownEstimatedCostUsd)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                }.padding(.vertical, 10)
-                Divider()
-            }
-            if groups.count > 8 {
-                Button(L(expanded ? "action.show_less" : "action.show_all")) { expanded.toggle() }.buttonStyle(.link).padding(.top, 12)
-            }
-            if groups.isEmpty { Text(L("usage.empty")).foregroundStyle(.secondary).padding(.vertical, 20) }
-        }.frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }
 struct ErrorBanner: View {

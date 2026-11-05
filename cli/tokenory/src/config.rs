@@ -36,9 +36,12 @@ impl Config {
             .parse::<chrono_tz::Tz>()
             .context("invalid IANA timezone")?;
         for (client, paths) in &self.extra_scan_paths {
+            let id = tokens_core::ClientId::from_str(client)
+                .filter(|c| crate::clients::CLIENTS.contains(c))
+                .with_context(|| format!("unsupported scanner: {client}"))?;
             ensure!(
-                matches!(client.as_str(), "claude" | "codex"),
-                "unsupported scanner: {client}"
+                crate::clients::supports_extra_paths(id),
+                "{client} uses its standard database location; extra scan paths are not supported"
             );
             for p in paths {
                 ensure!(p.is_absolute(), "scan paths must be absolute");
@@ -62,19 +65,5 @@ impl Config {
         std::fs::write(&temp, serde_json::to_vec_pretty(self)?)?;
         std::fs::rename(temp, directory.join("settings.json"))?;
         Ok(())
-    }
-    pub fn roots(&self, client: &str) -> Vec<PathBuf> {
-        let mut roots = match client {
-            "claude" => vec![self.home_dir.join(".claude/projects")],
-            "codex" => vec![
-                self.home_dir.join(".codex/sessions"),
-                self.home_dir.join(".codex/archived_sessions"),
-            ],
-            _ => vec![],
-        };
-        if let Some(extra) = self.extra_scan_paths.get(client) {
-            roots.extend(extra.clone());
-        }
-        roots
     }
 }

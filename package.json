@@ -2,7 +2,7 @@
   "name": "tokens-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "Token Usage Leaderboard - The Kardashev Scale for AI Devs",
+  "description": "Local macOS AI usage ledger, built on missuo/tokens with a native menu bar app and SQLite history",
   "type": "module",
   "workspaces": [
     "packages/*",

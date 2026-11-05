@@ -2373,50 +2373,30 @@ fn scan_all_clients_with_env_strategy_inner(
         }
     }
 
-    if enabled.contains(&ClientId::RooCode) {
-        let local_path = ClientId::RooCode
+    for (client, extension) in [
+        (ClientId::RooCode, "rooveterinaryinc.roo-cline"),
+        (ClientId::KiloCode, "kilocode.kilo-code"),
+    ] {
+        if !enabled.contains(&client) {
+            continue;
+        }
+        let local_path = client
             .data()
             .resolve_path_with_env_strategy(home_dir, use_env_roots);
-        push_unique_scan_task(
-            &mut tasks,
-            &mut seen_scan_roots,
-            ClientId::RooCode,
-            local_path,
-        );
-
-        let server_path = format!(
-            "{}/.vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
-            home_dir
-        );
-        push_unique_scan_task(
-            &mut tasks,
-            &mut seen_scan_roots,
-            ClientId::RooCode,
-            server_path,
-        );
-    }
-
-    if enabled.contains(&ClientId::KiloCode) {
-        let local_path = ClientId::KiloCode
-            .data()
-            .resolve_path_with_env_strategy(home_dir, use_env_roots);
-        push_unique_scan_task(
-            &mut tasks,
-            &mut seen_scan_roots,
-            ClientId::KiloCode,
-            local_path,
-        );
-
-        let server_path = format!(
-            "{}/.vscode-server/data/User/globalStorage/kilocode.kilo-code/tasks",
-            home_dir
-        );
-        push_unique_scan_task(
-            &mut tasks,
-            &mut seen_scan_roots,
-            ClientId::KiloCode,
-            server_path,
-        );
+        push_unique_scan_task(&mut tasks, &mut seen_scan_roots, client, local_path);
+        // The registry's Linux path does not cover native VS Code on macOS.
+        for root in ["Library/Application Support/Code", ".vscode-server/data"] {
+            push_unique_scan_task(
+                &mut tasks,
+                &mut seen_scan_roots,
+                client,
+                PathBuf::from(home_dir)
+                    .join(root)
+                    .join("User/globalStorage")
+                    .join(extension)
+                    .join("tasks"),
+            );
+        }
     }
 
     if enabled.contains(&ClientId::Cline) {

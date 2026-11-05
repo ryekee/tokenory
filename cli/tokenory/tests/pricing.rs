@@ -359,3 +359,35 @@ fn reprice_checks_original_body_without_float_reserialization_false_conflict() {
             < 1e-12
     );
 }
+
+#[test]
+fn session_totals_do_not_trigger_request_context_tiers_or_hourly_discounts() {
+    let mut r = record();
+    r.provider = "openai".into();
+    r.model = "gpt-6-astra".into();
+    r.tokens = Tokens {
+        input: 300_000,
+        output: 10_000,
+        ..Default::default()
+    };
+    r.metadata = serde_json::json!({"granularity":"sourceRecord"});
+    let p = PriceSnapshot::official_reference();
+    let aggregate = estimate(&r, &p).cost.unwrap();
+    r.metadata["granularity"] = "day".into();
+    assert_eq!(estimate(&r, &p).cost, Some(aggregate));
+    r.metadata["granularity"] = "event".into();
+    assert!(estimate(&r, &p).cost.unwrap() > aggregate);
+
+    r.provider = "deepseek".into();
+    r.model = "deepseek-flash".into();
+    r.timestamp_ms = Some(
+        chrono::DateTime::parse_from_rfc3339("2026-11-06T01:00:00+08:00")
+            .unwrap()
+            .timestamp_millis(),
+    );
+    r.date = "2026-11-06".into();
+    r.metadata["granularity"] = "sourceRecord".into();
+    let aggregate = estimate(&r, &p).cost;
+    r.metadata["granularity"] = "day".into();
+    assert_eq!(estimate(&r, &p).cost, aggregate);
+}
