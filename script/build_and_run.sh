@@ -4,7 +4,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:-run}"
 case "$MODE" in run|--debug|--logs|--telemetry|--verify) ;; *) echo 'usage: build_and_run.sh [--debug|--logs|--telemetry|--verify]' >&2; exit 2 ;; esac
 if pgrep -x Tokenory >/dev/null; then
-  osascript -e 'tell application id "ee.ryek.tokenory" to quit'
+  pkill -TERM -x Tokenory
+  for _ in {1..25}; do
+    if ! pgrep -x Tokenory >/dev/null; then break; fi
+    sleep 0.2
+  done
 fi
 "$ROOT_DIR/script/build.sh"
 APP_BUNDLE="$ROOT_DIR/.build/xcode/Build/Products/${TOKENORY_CONFIGURATION:-Debug}/Tokenory.app"

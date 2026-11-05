@@ -42,6 +42,14 @@ pub struct ScanResult {
     pub started_at: String,
     pub duration_ms: u64,
     pub changed: usize,
+    #[serde(default)]
+    pub added: usize,
+    #[serde(default)]
+    pub updated: usize,
+    #[serde(default)]
+    pub unchanged: usize,
+    #[serde(default)]
+    pub rejected: Option<usize>,
     pub revision: i64,
     pub sources: Vec<SourceStatus>,
 }
@@ -216,6 +224,15 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
                 }
             }
         }
+        // Logs can change while the parser is working. Recheck changed files
+        // before accepting a cumulative source snapshot.
+        for source in &mut sources {
+            let after = diagnose(config, &source.client, cache);
+            if after.status == "partial" {
+                source.status = after.status;
+                source.errors.extend(after.errors);
+            }
+        }
         // A damaged cumulative log can change later deltas. Preserve that source's
         // entire previous snapshot until the log becomes parseable again.
         records.retain(|r| {
@@ -230,17 +247,28 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
             started_at,
             duration_ms: start.elapsed().as_millis() as u64,
             changed: 0,
+            added: 0,
+            updated: 0,
+            unchanged: 0,
+            rejected: if sources.iter().any(|s| s.status == "partial") {
+                None
+            } else {
+                Some(0)
+            },
             revision: 0,
             sources,
         },
     })
 }
 pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
-    let snapshot=crate::pricing::active_snapshot(&db.connection)?;
+    let snapshot = crate::pricing::active_snapshot(&db.connection)?;
     let tx = db.connection.transaction()?;
     for mut record in batch.records {
         let prior:Option<String>=tx.query_row("SELECT body FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",[&record.key],|r|r.get(0)).optional()?;
-        if let Some((id,p))=&snapshot {crate::pricing::assign(&mut record,id,p);}
+        let is_new = prior.is_none();
+        if let Some((id, p)) = &snapshot {
+            crate::pricing::assign(&mut record, id, p);
+        }
         if let Some(prior) = prior {
             let old: UsageRecord = serde_json::from_str(&prior)?;
             if old.tokens == record.tokens
@@ -258,6 +286,13 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
         }
         if put_record(&tx, "local", "", &record)? {
             batch.result.changed += 1;
+            if is_new {
+                batch.result.added += 1;
+            } else {
+                batch.result.updated += 1;
+            }
+        } else {
+            batch.result.unchanged += 1;
         }
         tx.execute("INSERT OR IGNORE INTO coverage_choices(date,client,source,batch_id) VALUES (?1,?2,'local','')",params![record.date,record.client])?;
     }

@@ -2,11 +2,11 @@ name: Tokenory
 options:
   bundleIdPrefix: ee.ryek
   deploymentTarget:
-    macOS: '14.0'
+    macOS: '15.0'
 settings:
   base:
     SWIFT_VERSION: '6.0'
-    MACOSX_DEPLOYMENT_TARGET: '14.0'
+    MACOSX_DEPLOYMENT_TARGET: '15.0'
     CODE_SIGN_IDENTITY: '-'
     CODE_SIGN_STYLE: Manual
     ENABLE_APP_SANDBOX: NO
@@ -25,6 +25,8 @@ targets:
       path: Tokenory/Info.plist
       properties:
         CFBundleDisplayName: Tokenory
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHighResolutionCapable: true
@@ -42,8 +44,22 @@ targets:
           mkdir -p "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
           cp "$SRCROOT/../cli/target/$PROFILE/tokenory" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/tokenory"
           /usr/bin/codesign --force --sign - "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/tokenory"
+  TokenoryTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [TokenoryTests]
+    dependencies:
+      - target: Tokenory
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   Tokenory:
     build:
       targets:
         Tokenory: all
+
+    test:
+      targets: [TokenoryTests]
+      environmentVariables:
+        TOKENORY_TESTING: "1"

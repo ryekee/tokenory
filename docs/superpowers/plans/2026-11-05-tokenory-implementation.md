@@ -1,16 +1,16 @@
 # Tokenory macOS 菜单栏应用实施计划
 
-> **For agentic workers:** 按任务逐项执行；执行技能使用 `superpowers:executing-plans`，若用户明确选择代理协作，则使用 `superpowers:subagent-driven-development`。步骤以 `- [ ]` 跟踪。本文件只规划，所有未勾选项目均未实施。
+> **For agentic workers:** 按任务逐项执行；执行技能使用 `superpowers:executing-plans`，若用户明确选择代理协作，则使用 `superpowers:subagent-driven-development`。步骤以 `- [ ]` 跟踪。任务勾选与验收以 [实施状态](../../local/acceptance.md) 为准；未完成的现场验收不按构建结果推断。
 
 **Goal:** 建立自用的 macOS 菜单栏应用，持续保存可取得的各工具 token 数据，按模型 API 单价估算成本，在菜单栏快速查看今日用量，并在原生窗口查询历史与新增用量。
 
 **Architecture:** Fork `missuo/tokens`，复用 Rust 日志解析、去重和定价能力，新增 SQLite 持久化。原生 SwiftUI 应用通过 `Process` 启动 App bundle 内的 Rust worker，以标准输入/输出的 JSON Lines 通信；worker 独占采集调度及写入，菜单栏和详情窗口共用同一份查询结果。应用负责 worker 生命周期，数据库是长期记录。
 
-**Tech Stack:** Swift / SwiftUI `MenuBarExtra` / Swift Charts / 少量 AppKit / `SMAppService.mainApp`；Rust / Tokio / rusqlite；Xcode 工程由 XcodeGen 配置生成。建议最低 macOS 14，首个验证目标是本机 macOS 27.2；依赖按锁定上游兼容性固定版本，不追逐 latest。
+**Tech Stack:** Swift / SwiftUI `MenuBarExtra` / Swift Charts / 少量 AppKit / `SMAppService.mainApp`；Rust / Tokio / rusqlite；Xcode 工程由 XcodeGen 配置生成。实现最低 macOS 15（使用原生窗口启动策略），首个验证目标是本机 macOS 27.2；依赖按锁定上游兼容性固定版本，不追逐 latest。
 
 **Spec:** [2026-11-02 预研原文](../../research/2026-11-02-tokens-local.md)。原文作为历史依据不改写；**2026-11-05 用户将交付目标改为 macOS menubar，本计划的原生应用方案覆盖原预研中的网页、HTTP 服务和独立 launchd 部署方案。** API 估算成本、历史留存、去重及 DeepSeek 官方 API 首版范围继续有效。应用暂名 **Tokenory**，内部 CLI 为 `tokenory`。
 
-日期：2026-11-05。状态：待实施，已按 macOS 菜单栏目标修订。目录目前只有规划文档，尚无产品代码。
+日期：2026-11-05。状态：功能已实现，正在最终检查、安装及历史迁移验收。详见 [实施状态](../../local/acceptance.md)。
 
 ## 1. 交付目标与范围
 
@@ -347,7 +347,7 @@ cargo clippy --manifest-path cli/Cargo.toml --all-targets -- -D warnings
 xcodebuild -project macos/Tokenory.xcodeproj -scheme Tokenory -destination 'platform=macOS' test
 ```
 
-`script/build.sh` 是 Rust helper 与原生 App 的联合构建入口；scheme `Tokenory` 包含单元测试与 UI 测试。需要启动验证时使用 `./script/build_and_run.sh`，按 macOS Build 技能约定保持一个入口。若上游基线自身失败，记录命令、失败测试和与本次改动的关系；不能笼统宣称“全部通过”。依赖安装、fixture 路径与运行方法跟随各任务进入仓库说明。
+`script/build.sh` 是 Rust helper 与原生 App 的联合构建入口；scheme `Tokenory` 包含原生单元/真实 helper 集成测试；UI 交互按当前工具约束通过 CUA 实测。需要启动验证时使用 `./script/build_and_run.sh`，按 macOS Build 技能约定保持一个入口。若上游基线自身失败，记录命令、失败测试和与本次改动的关系；不能笼统宣称“全部通过”。依赖安装、fixture 路径与运行方法跟随各任务进入仓库说明。
 
 首版发布检查：
 

@@ -88,3 +88,35 @@ async fn cumulative_codex_and_archived_copy_count_once() {
         150
     );
 }
+
+#[tokio::test]
+async fn deepseek_anthropic_usage_is_one_event_per_response_not_per_observation() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let dir = home.path().join(".claude/projects/test");
+    fs::create_dir_all(&dir).unwrap();
+    let row = |id: &str| {
+        json!({"type":"assistant","timestamp":"2026-11-05T01:00:00Z","message":{"id":id,"role":"assistant","model":"deepseek-flash","usage":{"input_tokens":400,"output_tokens":200,"cache_read_input_tokens":600,"cache_creation_input_tokens":0}}}).to_string()+"\n"
+    };
+    fs::write(
+        dir.join("a.jsonl"),
+        row("response-a") + &row("response-a") + &row("response-b"),
+    )
+    .unwrap();
+    let config = Config {
+        home_dir: home.path().into(),
+        ..Default::default()
+    };
+    let mut cache = DiagnosticCache::default();
+    let mut db = Database::open(data.path()).unwrap();
+    tokenory::pricing::initialize(&mut db).unwrap();
+    persist(&mut db, collect_once(&config, &mut cache).await.unwrap()).unwrap();
+    let r = report(&mut db, &Filter::default()).unwrap();
+    assert_eq!(r.summary.record_count, 2);
+    assert_eq!(r.summary.tokens, 2400);
+    assert_eq!(r.summary.token_breakdown.input, 800);
+    assert_eq!(r.summary.token_breakdown.cache_read, 1200);
+    assert_eq!(r.summary.token_breakdown.output, 400);
+    assert_eq!(r.providers[0].key, "deepseek");
+    assert!((r.summary.known_estimated_cost_usd.unwrap() - 0.0007272).abs() < 1e-12);
+}
