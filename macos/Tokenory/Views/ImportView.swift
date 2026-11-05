@@ -47,6 +47,7 @@ struct ImportView: View {
                                 }
                                 ForEach(preview.conflicts) { conflict in
                                     HStack {
+                                        BrandIcon(name: conflict.client, kind: .tool)
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text("\(conflict.date) · \(clientName(conflict.client))")
                                             Text(LF("import.compare", compactTokens(conflict.existingTokens), compactTokens(conflict.incomingTokens))).font(.caption).foregroundStyle(.secondary)
@@ -112,19 +113,31 @@ struct SourcesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if let scan = store.status?.lastScan {
-                    ForEach(scan.sources, id: \.client) { source in
-                        GroupBox(clientName(source.client)) {
+                    ForEach(scan.sources.filter { $0.status != "unavailable" }, id: \.client) { source in
+                        GroupBox {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(source.status == "ok" ? L("source.ok") : source.status == "partial" ? L("status.partial") : L("source.empty"))
                                 Text(LF("source.files", source.files, source.records)).font(.caption).foregroundStyle(.secondary)
                                 ForEach(source.errors, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
                             }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                        }
+                        } label: { BrandLabel(name: source.client, kind: .tool, title: clientName(source.client)) }
                     }
+                }
+                DisclosureGroup(LF("source.supported_clients", store.clients.count)) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(L("source.local_inputs")).font(.callout).foregroundStyle(.secondary)
+                        LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 12) {
+                            ForEach(store.clients) { client in
+                                BrandLabel(name: client.id, kind: .tool, title: client.name)
+                            }
+                        }
+                        Text(L("source.wrapper_clients")).font(.caption).foregroundStyle(.secondary)
+                    }.padding(.top, 12)
                 }
                 Text(L("source.coverage")).font(.headline)
                 ForEach(store.sources["coverage"].array, id: \.self) { source in
                     HStack {
+                        BrandIcon(name: source["client"].string ?? "", kind: .tool)
                         VStack(alignment: .leading, spacing: 4) {
                             Text("\(clientName(source["client"].string ?? "")) · \(source["source"].string ?? "")")
                             Text(Localization.dateRange(source["from"].string ?? "", source["to"].string ?? "")).font(.caption).foregroundStyle(.secondary)

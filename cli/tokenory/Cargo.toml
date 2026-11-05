@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "Local AI usage ledger for the Tokenory macOS app"
+repository = "https://github.com/ryekee/tokenory"
+readme = "../../README.md"
 
 [dependencies]
 tokens-core = { workspace = true }

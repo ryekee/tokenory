@@ -115,7 +115,7 @@ pub fn sources(db: &Database) -> Result<Value> {
             Ok(json!({"id":id.to_string(),"active":active,"createdAt":created,"preview":v["view"]}))
         })
         .collect::<Result<Vec<_>>>()?;
-    Ok(json!({"coverage":coverage,"batches":batches}))
+    Ok(json!({"coverage":coverage,"batches":batches,"clients":crate::clients::catalog()}))
 }
 pub fn prices(db: &Database) -> Result<Value> {
     let mut stmt=db.connection.prepare("SELECT provider,model,sum(tokens) FROM effective_usage WHERE estimated_cost IS NULL GROUP BY provider,model ORDER BY sum(tokens) DESC")?;

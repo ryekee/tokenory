@@ -17,6 +17,12 @@ enum Localization {
         if language != .system { return language.rawValue }
         return Bundle.preferredLocalizations(from: ["en", "zh-Hans"], forPreferences: Locale.preferredLanguages).first ?? "en"
     }
+    static var reportingCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        return calendar
+    }
     static var locale: Locale { Locale(identifier: identifier) }
     static func string(_ key: String, language: String? = nil) -> String {
         let selected = language ?? identifier
@@ -35,6 +41,12 @@ enum Localization {
         guard let date = date(value) else { return value }
         let f = DateFormatter(); f.locale = locale; f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateStyle = .medium
         return f.string(from: date)
+    }
+    static func month(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale; formatter.timeZone = reportingCalendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate("yMMMM")
+        return formatter.string(from: date)
     }
     static func dateRange(_ from: String, _ to: String) -> String {
         guard let start = date(from), let end = date(to) else { return "\(from) / \(to)" }

@@ -68,10 +68,17 @@ pub struct Report {
     pub revision: i64,
     pub summary: Summary,
     pub daily: Vec<Group>,
+    pub hourly: Option<HourlyReport>,
     pub clients: Vec<Group>,
     pub providers: Vec<Group>,
     pub models: Vec<Group>,
     pub details: Vec<Detail>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HourlyReport {
+    pub buckets: Vec<Group>,
+    pub unallocated: Summary,
 }
 const WHERE_SQL:&str=" WHERE (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) AND (?3 IS NULL OR client=?3) AND (?4 IS NULL OR provider=?4) AND (?5 IS NULL OR model=?5) AND (?6 IS NULL OR source=?6)";
 const SUMMARY_SQL:&str="coalesce(sum(tokens),0),coalesce(sum(input),0),coalesce(sum(output),0),coalesce(sum(cache_read),0),coalesce(sum(cache_write),0),coalesce(sum(reasoning),0),sum(estimated_cost),coalesce(sum(CASE WHEN estimated_cost IS NULL THEN tokens ELSE 0 END),0),count(*),count(DISTINCT date),sum(requests),count(DISTINCT CASE WHEN json_extract(body, '$.metadata.partialDay')=1 THEN date END)";
@@ -121,6 +128,30 @@ fn grouped(c: &Connection, f: &Filter, column: &str) -> Result<Vec<Group>> {
         )?
         .collect::<rusqlite::Result<_>>()?)
 }
+fn hourly(c: &Connection, f: &Filter) -> Result<Option<HourlyReport>> {
+    if f.from.is_none() || f.from != f.to {
+        return Ok(None);
+    }
+    // Imported daily totals cannot be reconstructed as hourly activity. Only
+    // timestamps that belong to the selected Beijing reporting day qualify.
+    let timestamp = "json_extract(body, '$.timestampMs') / 1000.0";
+    let timed = format!("coalesce(json_extract(body, '$.metadata.granularity') NOT IN ('day', 'sourceRecord'), 1) AND coalesce(strftime('%Y-%m-%d', {timestamp}, 'unixepoch', '+8 hours') = date, 0)");
+    let key =
+        format!("strftime('%Y-%m-%dT%H:00:00', {timestamp}, 'unixepoch', '+8 hours') || '+08:00'");
+    let buckets = c.prepare(&format!("SELECT {key} AS hour, {SUMMARY_SQL} FROM effective_usage{WHERE_SQL} AND ({timed}) GROUP BY hour ORDER BY hour"))?
+        .query_map(params![f.from, f.to, f.client, f.provider, f.model, f.source], |r| {
+            Ok(Group { key: r.get(0)?, summary: read_summary(r, 1)? })
+        })?.collect::<rusqlite::Result<Vec<_>>>()?;
+    let unallocated = c.query_row(
+        &format!("SELECT {SUMMARY_SQL} FROM effective_usage{WHERE_SQL} AND NOT ({timed})"),
+        params![f.from, f.to, f.client, f.provider, f.model, f.source],
+        |r| read_summary(r, 0),
+    )?;
+    Ok(Some(HourlyReport {
+        buckets,
+        unallocated,
+    }))
+}
 pub fn report(db: &mut Database, f: &Filter) -> Result<Report> {
     f.validate()?;
     let tx = db.connection.transaction()?;
@@ -168,6 +199,7 @@ pub fn report(db: &mut Database, f: &Filter) -> Result<Report> {
         revision: revision(&tx)?,
         summary,
         daily: grouped(&tx, f, "date")?,
+        hourly: hourly(&tx, f)?,
         clients: grouped(&tx, f, "client")?,
         providers: grouped(&tx, f, "provider")?,
         models: grouped(&tx, f, "model")?,
