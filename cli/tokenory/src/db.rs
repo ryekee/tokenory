@@ -18,11 +18,14 @@ impl Database {
         connection.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;")?;
         let version: i64 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(
-            version <= 1,
+            version <= 2,
             "database was created by a newer Tokenory version"
         );
         if version == 0 {
             connection.execute_batch(include_str!("../migrations/001_initial.sql"))?;
+        }
+        if version < 2 {
+            connection.execute_batch(include_str!("../migrations/002_pricing.sql"))?;
         }
         Ok(Self {
             connection,

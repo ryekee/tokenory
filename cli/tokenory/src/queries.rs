@@ -128,7 +128,7 @@ pub fn report(db: &mut Database, f: &Filter) -> Result<Report> {
         |r| read_summary(r, 0),
     )?;
     let rows = {
-        let mut stmt=tx.prepare(&format!("SELECT source,batch_id,body FROM effective_usage{WHERE_SQL} ORDER BY date DESC,item_key LIMIT ?7 OFFSET ?8"))?;
+        let mut stmt=tx.prepare(&format!("SELECT source,batch_id,body FROM effective_usage{WHERE_SQL} ORDER BY date DESC,client,source,batch_id,item_key LIMIT ?7 OFFSET ?8"))?;
         let rows = stmt
             .query_map(
                 params![

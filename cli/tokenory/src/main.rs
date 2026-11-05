@@ -86,13 +86,15 @@ fn main() -> Result<()> {
         Some(f)
     };
     let mut db = Database::open(&directory)?;
+    if !matches!(args.command,Command::Report {..}|Command::Backup {..}) {tokenory::pricing::initialize(&mut db)?;}
     let value = match args.command {
         Command::Scan => {
-            let config=tokenory::config::Config::load(&directory)?;
-            let mut cache=tokenory::collector::DiagnosticCache::persistent();
-            let batch=tokio::runtime::Runtime::new()?.block_on(tokenory::collector::collect_once(&config,&mut cache))?;
-            serde_json::to_value(tokenory::collector::persist(&mut db,batch)?)?
-        },
+            let config = tokenory::config::Config::load(&directory)?;
+            let mut cache = tokenory::collector::DiagnosticCache::persistent();
+            let batch = tokio::runtime::Runtime::new()?
+                .block_on(tokenory::collector::collect_once(&config, &mut cache))?;
+            serde_json::to_value(tokenory::collector::persist(&mut db, batch)?)?
+        }
         Command::Report {
             from,
             to,
