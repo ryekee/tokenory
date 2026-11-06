@@ -47,6 +47,40 @@ fn snapshot(input: f64, output: f64) -> PriceSnapshot {
     }])
 }
 #[test]
+fn codex_review_reference_matches_export_and_is_scoped_to_codex() {
+    let p = PriceSnapshot::bundled_reference();
+    let mut r = record();
+    r.client = "codex".into();
+    r.model = "codex-auto-review".into();
+    r.provider = "openai".into();
+    r.tokens = Tokens {
+        input: 202_135,
+        cache_read: 641_280,
+        output: 1_813,
+        reasoning: 1_565,
+        cache_write: 0,
+    };
+    let local = estimate("local", &r, &p);
+    assert!((local.cost.unwrap() - 0.07652815).abs() < 1e-12);
+    assert!(local.basis.contains("tokens.ci"));
+    r.metadata["inferenceSpeed"] = serde_json::json!({"speed":"fast"});
+    assert!(estimate("local", &r, &p).cost.is_none());
+    r.metadata = serde_json::json!({});
+    r.client = "claude".into();
+    assert!(estimate("local", &r, &p).cost.is_none());
+    r.client = "codex".into();
+    r.provider = "reseller".into();
+    assert!(estimate("local", &r, &p).cost.is_none());
+    r.provider = "unknown".into();
+    assert!(estimate("local", &r, &p).cost.is_none());
+    assert!((estimate("tokens-ci", &r, &p).cost.unwrap() - 0.07652815).abs() < 1e-12);
+    r.source_cost_usd = Some(0.12);
+    assert_eq!(estimate("tokens-ci", &r, &p).cost, Some(0.12));
+    assert!(estimate("tokens-ci", &r, &PriceSnapshot::new(vec![]))
+        .cost
+        .is_none());
+}
+#[test]
 fn direct_openai_event_uses_full_request_context_tier_but_daily_uses_base_rates() {
     let mut r = record();
     r.provider = "openai".into();
@@ -79,46 +113,48 @@ fn direct_openai_event_uses_full_request_context_tier_but_daily_uses_base_rates(
             ..Default::default()
         },
     );
-    assert_eq!(estimate(&r, &p).cost.unwrap(), upstream);
-    assert!((estimate(&r, &p).cost.unwrap() - 6.75).abs() < 1e-12);
+    assert_eq!(estimate("local", &r, &p).cost.unwrap(), upstream);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 6.75).abs() < 1e-12);
     r.tokens.input = 272_000;
-    assert!((estimate(&r, &p).cost.unwrap() - 3.22).abs() < 1e-12);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 3.22).abs() < 1e-12);
     r.tokens.input = 300_000;
     r.metadata["granularity"] = "day".into();
-    assert!((estimate(&r, &p).cost.unwrap() - 3.5).abs() < 1e-12);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 3.5).abs() < 1e-12);
 }
 #[test]
 fn unknown_is_not_free_and_required_rates_must_exist() {
     let r = record();
-    assert!(estimate(&r, &PriceSnapshot::new(vec![])).cost.is_none());
+    assert!(estimate("local", &r, &PriceSnapshot::new(vec![]))
+        .cost
+        .is_none());
     let mut p = snapshot(0., 0.);
-    assert!(estimate(&r, &p).cost.is_none());
+    assert!(estimate("local", &r, &p).cost.is_none());
     p.entries[0].explicit_free = true;
-    assert_eq!(estimate(&r, &p).cost, Some(0.));
+    assert_eq!(estimate("local", &r, &p).cost, Some(0.));
     let mut r = r;
     r.tokens.cache_read = 1;
-    assert!(estimate(&r, &snapshot(2., 8.)).cost.is_none());
+    assert!(estimate("local", &r, &snapshot(2., 8.)).cost.is_none());
 }
 #[test]
 fn rates_ttl_speed_and_daily_granularity_are_explicit() {
     let mut r = record();
     let mut p = snapshot(2., 8.);
-    assert!((estimate(&r, &p).cost.unwrap() - 0.006).abs() < 1e-12);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 0.006).abs() < 1e-12);
     p.entries[0].rates.cache_creation_input_token_cost = Some(2.5e-6);
     r.tokens.cache_write = 100;
     r.metadata["cacheWrite1h"] = 100.into();
-    assert!((estimate(&r, &p).cost.unwrap() - 0.0064).abs() < 1e-12);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 0.0064).abs() < 1e-12);
     r.metadata["inferenceSpeed"] = serde_json::json!({"speed":"fast","source":"reported"});
-    assert!(estimate(&r, &p).cost.is_none());
+    assert!(estimate("local", &r, &p).cost.is_none());
     r.metadata = serde_json::json!({"granularity":"day"});
     r.tokens = Tokens {
         input: 1_000_000,
         ..Default::default()
     };
     p.entries[0].rates.input_cost_per_token_above_200k_tokens = Some(4e-6);
-    assert!((estimate(&r, &p).cost.unwrap() - 2.).abs() < 1e-12);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 2.).abs() < 1e-12);
     r.metadata["granularity"] = "event".into();
-    assert!(estimate(&r, &p).cost.unwrap() > 2.);
+    assert!(estimate("local", &r, &p).cost.unwrap() > 2.);
 }
 #[test]
 fn refresh_does_not_reprice_until_confirmed_and_stale_preview_is_rejected() {
@@ -177,7 +213,7 @@ fn deepseek_official_peak_prices_hit_miss_output_separately() {
         reasoning: 50,
         ..Default::default()
     };
-    let e = estimate(&r, &PriceSnapshot::deepseek_reference());
+    let e = estimate("local", &r, &PriceSnapshot::deepseek_reference());
     assert!((e.cost.unwrap() - 0.0003636).abs() < 1e-12);
     assert!(e.basis.contains("peak"));
 }
@@ -213,25 +249,25 @@ fn deepseek_schedule_boundaries_weekends_holidays_and_aliases() {
                 .timestamp_millis(),
         );
         assert!(
-            (estimate(&r, &p).cost.unwrap() - 1.506 * factor).abs() < 1e-10,
+            (estimate("local", &r, &p).cost.unwrap() - 1.506 * factor).abs() < 1e-10,
             "{time}"
         );
     }
     r.timestamp_ms = None;
     r.date = "2026-11-05".into();
-    assert!(estimate(&r, &p).cost.is_none());
+    assert!(estimate("local", &r, &p).cost.is_none());
     r.date = "2026-10-01".into();
-    assert_eq!(estimate(&r, &p).cost, Some(0.753));
+    assert_eq!(estimate("local", &r, &p).cost, Some(0.753));
     r.timezone = None;
-    assert!(estimate(&r, &p).cost.is_none());
+    assert!(estimate("local", &r, &p).cost.is_none());
     r.timestamp_ms = Some(
         chrono::DateTime::parse_from_rfc3339("2027-11-05T10:00:00+08:00")
             .unwrap()
             .timestamp_millis(),
     );
-    assert!(estimate(&r, &p).cost.is_none());
+    assert!(estimate("local", &r, &p).cost.is_none());
     r.provider = "reseller".into();
-    assert!(estimate(&r, &p).cost.is_none());
+    assert!(estimate("local", &r, &p).cost.is_none());
 }
 #[test]
 fn legacy_snapshots_keep_their_original_fixed_rate() {
@@ -247,12 +283,12 @@ fn legacy_snapshots_keep_their_original_fixed_rate() {
         input: 1_000_000,
         ..Default::default()
     };
-    assert_eq!(estimate(&r, &p).cost, Some(0.3));
+    assert_eq!(estimate("local", &r, &p).cost, Some(0.3));
 }
 
 #[test]
 fn bundled_official_prices_work_offline_with_context_speed_and_cache() {
-    let p = PriceSnapshot::official_reference();
+    let p = PriceSnapshot::bundled_reference();
     p.validate().unwrap();
     let mut r = record();
     r.provider = "openai".into();
@@ -263,11 +299,11 @@ fn bundled_official_prices_work_offline_with_context_speed_and_cache() {
         cache_read: 20_000,
         ..Default::default()
     };
-    assert!((estimate(&r, &p).cost.unwrap() - 1.274).abs() < 1e-10);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 1.274).abs() < 1e-10);
     r.metadata["inferenceSpeed"] = serde_json::json!({"speed":"fast"});
-    assert!((estimate(&r, &p).cost.unwrap() - 2.548).abs() < 1e-10);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 2.548).abs() < 1e-10);
     r.metadata["granularity"] = "day".into();
-    assert!((estimate(&r, &p).cost.unwrap() - 1.324).abs() < 1e-10);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 1.324).abs() < 1e-10);
     r.metadata = serde_json::json!({"granularity":"event","cacheWrite1h":100});
     r.provider = "anthropic".into();
     r.model = "claude-opus-4-8".into();
@@ -277,9 +313,9 @@ fn bundled_official_prices_work_offline_with_context_speed_and_cache() {
         cache_write: 100,
         ..Default::default()
     };
-    assert!((estimate(&r, &p).cost.unwrap() - 0.0185).abs() < 1e-10);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 0.0185).abs() < 1e-10);
     r.metadata["inferenceSpeed"] = serde_json::json!({"speed":"fast"});
-    assert!((estimate(&r, &p).cost.unwrap() - 0.037).abs() < 1e-10);
+    assert!((estimate("local", &r, &p).cost.unwrap() - 0.037).abs() < 1e-10);
 }
 
 #[test]
@@ -371,12 +407,12 @@ fn session_totals_do_not_trigger_request_context_tiers_or_hourly_discounts() {
         ..Default::default()
     };
     r.metadata = serde_json::json!({"granularity":"sourceRecord"});
-    let p = PriceSnapshot::official_reference();
-    let aggregate = estimate(&r, &p).cost.unwrap();
+    let p = PriceSnapshot::bundled_reference();
+    let aggregate = estimate("local", &r, &p).cost.unwrap();
     r.metadata["granularity"] = "day".into();
-    assert_eq!(estimate(&r, &p).cost, Some(aggregate));
+    assert_eq!(estimate("local", &r, &p).cost, Some(aggregate));
     r.metadata["granularity"] = "event".into();
-    assert!(estimate(&r, &p).cost.unwrap() > aggregate);
+    assert!(estimate("local", &r, &p).cost.unwrap() > aggregate);
 
     r.provider = "deepseek".into();
     r.model = "deepseek-flash".into();
@@ -387,7 +423,7 @@ fn session_totals_do_not_trigger_request_context_tiers_or_hourly_discounts() {
     );
     r.date = "2026-11-06".into();
     r.metadata["granularity"] = "sourceRecord".into();
-    let aggregate = estimate(&r, &p).cost;
+    let aggregate = estimate("local", &r, &p).cost;
     r.metadata["granularity"] = "day".into();
-    assert_eq!(estimate(&r, &p).cost, aggregate);
+    assert_eq!(estimate("local", &r, &p).cost, aggregate);
 }

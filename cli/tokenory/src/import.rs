@@ -146,11 +146,16 @@ pub fn preview_import(
     bytes: &[u8],
     timezone: Option<String>,
 ) -> Result<ImportPreview> {
-    let records = match source {
+    let mut records = match source {
         "cc-switch" => cc_switch::parse(bytes, timezone.clone())?,
         "tokens-ci" => tokens_ci::parse(bytes, timezone.clone())?,
         _ => bail!("unsupported import source: {source}"),
     };
+    if let Some((id, prices)) = crate::pricing::active_snapshot(&db.connection)? {
+        for record in &mut records {
+            crate::pricing::assign(source, record, &id, &prices);
+        }
+    }
     preview_records(db, source, bytes, records, timezone)
 }
 pub fn preview_records(
@@ -220,10 +225,15 @@ pub fn preview_records(
             previous,
         });
     }
-    let tokens = records.iter().try_fold(0_i64, |a, r| {
-        a.checked_add(r.tokens.checked_total()?)
-            .ok_or_else(|| anyhow::anyhow!("token total overflow"))
-    })?;
+    let mut tokens = 0_i64;
+    let mut unpriced_tokens = 0;
+    for r in &records {
+        let count = r.tokens.checked_total()?;
+        tokens = tokens.checked_add(count).context("token total overflow")?;
+        if r.estimated_cost_usd.is_none() {
+            unpriced_tokens += count;
+        }
+    }
     let mut view = ImportPreview {
         id: String::new(),
         source: source.into(),
@@ -237,7 +247,7 @@ pub fn preview_records(
             .collect::<BTreeSet<_>>()
             .len(),
         tokens,
-        unpriced_tokens: tokens,
+        unpriced_tokens,
         source_timezone: timezone,
         conflicts,
         partial_dates: records
