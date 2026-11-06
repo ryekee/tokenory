@@ -1,6 +1,6 @@
 # 使用与维护
 
-Tokenory 是 macOS 15+ 的本地菜单栏应用。首个构建用于本机 Apple Silicon，自签名运行；未进行 Developer ID 公证或 App Store 发布。
+Tokenory 是 macOS 15+ 的本地菜单栏应用。Apple Silicon 下载版使用 Shenzhen Hiko Technology Co., Ltd. 的 Developer ID 签名，并附有 Apple 公证票据。从 ZIP 解压后，将 App 拖入「应用程序」即可使用。[下载最新版本](https://github.com/ryekee/tokenory/releases/latest)
 
 ## 日常使用
 

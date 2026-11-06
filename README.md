@@ -40,7 +40,11 @@ Tokenory 是 `missuo/tokens` 的本地实现分支。它复用上游的日志发
 
 接入范围、路径、缓存生成方式和验证边界见 [来源说明](docs/local/sources.md)。支持解析格式不代表已在 42 个真实客户端上逐一验收。
 
-## 构建与运行
+## 安装
+
+下载版适用于运行 macOS 15 或更高版本的 Apple Silicon Mac。解压 ZIP 后，将 `Tokenory.app` 拖入「应用程序」。App 使用 Shenzhen Hiko Technology Co., Ltd. 的 Developer ID 签名，并附有 Apple 公证票据。[下载最新版本](https://github.com/ryekee/tokenory/releases/latest)
+
+## 从源码构建与运行
 
 需要 macOS 15+、Xcode、[XcodeGen](https://github.com/yonaskolb/XcodeGen) 和 `rust-toolchain.toml` 指定的 Rust。当前验证平台是 Apple Silicon。项目内 `.tools/cargo` / `.tools/rustup` 也受支持。
 
@@ -58,7 +62,7 @@ cd tokenory
 TOKENORY_CONFIGURATION=Release ./script/build.sh
 ```
 
-Debug 产物为 `.build/xcode/Build/Products/Debug/Tokenory.app`，Release 产物在同级 `Release` 目录。App 已包含 Rust helper，日常运行无需另装 CLI。登录启动默认关闭，可在设置中开启。当前为本机 ad-hoc 签名，尚未提供公证安装包。
+Debug 产物为 `.build/xcode/Build/Products/Debug/Tokenory.app`，Release 产物在同级 `Release` 目录。本机构建使用 ad-hoc 签名。App 已包含 Rust helper，登录启动可在设置中开启。
 
 ## 本分支与上游
 
