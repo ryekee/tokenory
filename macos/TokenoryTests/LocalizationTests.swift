@@ -9,7 +9,7 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(Localization.format("usage.record_count", [Int64(1)], language: "en"), "1 record")
         XCTAssertEqual(Localization.format("usage.record_count", [Int64(2)], language: "en"), "2 records")
         XCTAssertEqual(Localization.format("usage.record_count", [Int64(2)], language: "zh-Hans"), "2 条记录")
-        XCTAssertEqual(Localization.format("usage.unpriced", ["2.5M"], language: "en"), "2.5M tokens without an estimate")
+        XCTAssertEqual(Localization.format("usage.unpriced", ["2.5M"], language: "en"), "Total includes 2.5M unpriced tokens")
     }
     @MainActor
     func testReportingDateKeepsBeijingBoundary() {

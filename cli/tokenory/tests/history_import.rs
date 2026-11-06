@@ -21,6 +21,47 @@ fn import(db: &mut Database, rows: serde_json::Value) -> String {
         .batch_id
 }
 #[test]
+fn tokens_ci_review_import_counts_all_tokens_and_keeps_the_source_estimate() {
+    let t = tempfile::tempdir().unwrap();
+    let mut db = Database::open(t.path()).unwrap();
+    tokenory::pricing::initialize(&mut db).unwrap();
+    let buckets = json!({"input":100,"output":0,"cacheRead":0,"cacheWrite":0,"reasoning":0});
+    let cell = |cost| json!({"tokens":50,"input":50,"output":0,"cacheRead":0,"cacheWrite":0,"reasoning":0,"cost":cost,"messages":1});
+    let export = json!({
+        "stats":{"totalTokens":100,"inputTokens":100,"outputTokens":0,"cacheReadTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"activeDays":1},
+        "modelUsage":[{"model":"codex-auto-review","tokens":50},{"model":"unknown-model","tokens":50}],
+        "updatedAt":"2026-11-04T12:00:00Z","contributions":[{"date":"2026-11-03","totals":{"tokens":100},
+            "tokenBreakdown":buckets,"clients":[{"client":"codex","tokens":buckets,"models":{
+                "codex-auto-review":cell(0.12),"unknown-model":cell(0.)
+            }}]}]
+    });
+    let p = preview_import(
+        &mut db,
+        "tokens-ci",
+        &serde_json::to_vec(&export).unwrap(),
+        Some("Asia/Shanghai".into()),
+    )
+    .unwrap();
+    assert_eq!((p.tokens, p.unpriced_tokens), (100, 50));
+    apply_import(&mut db, &p.id, &ApplyOptions::default()).unwrap();
+    let report = report(&mut db, &Filter::default()).unwrap();
+    assert_eq!(
+        (report.summary.tokens, report.summary.unpriced_tokens),
+        (100, 50)
+    );
+    assert_eq!(report.summary.cost_status, "partial");
+    assert_eq!(report.summary.known_estimated_cost_usd, Some(0.12));
+    let review = &report
+        .details
+        .iter()
+        .find(|d| d.record.model == "codex-auto-review")
+        .unwrap()
+        .record;
+    assert_eq!(review.provider, "unknown");
+    assert_eq!(review.source_cost_usd, Some(0.12));
+    assert!(review.price_snapshot_id.is_some());
+}
+#[test]
 fn duplicate_import_does_not_add_usage() {
     let t = tempfile::tempdir().unwrap();
     let mut db = Database::open(t.path()).unwrap();

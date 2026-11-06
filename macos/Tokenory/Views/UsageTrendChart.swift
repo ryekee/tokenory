@@ -49,7 +49,8 @@ struct UsageTrendChart: View {
     }
 
     private func plot(_ trend: UsageTrend, selected: UsageTrendPoint?) -> some View {
-        Chart {
+        let ticks = trend.axisPoints
+        return Chart {
             ForEach(trend.points) { point in
                 if let tokens = point.tokens {
                     RectangleMark(xStart: .value("Time", point.start.addingTimeInterval(point.duration * 0.16)),
@@ -85,23 +86,13 @@ struct UsageTrendChart: View {
         .chartXScale(domain: trend.domain)
         .chartYScale(domain: 0...1)
         .chartXAxis {
-            if trend.hourly {
-                AxisMarks(values: stride(from: 0, to: trend.points.count, by: 4).map { trend.points[$0].start }) { value in
-                    AxisValueLabel {
-                        if let date = value.as(Date.self) { Text(hour(date)).font(.system(size: 10)).monospacedDigit() }
+            // The automatic date-axis preset leads with the label after each tick.
+            AxisMarks(preset: .aligned, position: .bottom, values: ticks.map(\.center)) { value in
+                AxisValueLabel(centered: false, collisionResolution: .greedy) {
+                    if let point = ticks.first(where: { $0.center == value.as(Date.self) }) {
+                        Text(trend.hourly ? hour(point.start) : point.start.formatted(axisDateFormat))
+                            .font(.system(size: 10)).monospacedDigit()
                     }
-                }
-            } else if trend.points.count <= 7 {
-                AxisMarks(values: trend.points.map(\.center)) { value in
-                    AxisValueLabel {
-                        if let date = value.as(Date.self) {
-                            Text(date.formatted(axisDateFormat))
-                        }
-                    }
-                }
-            } else {
-                AxisMarks(values: .automatic(desiredCount: 5)) { _ in
-                    AxisValueLabel(format: axisDateFormat)
                 }
             }
         }

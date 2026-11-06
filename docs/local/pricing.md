@@ -1,6 +1,6 @@
 # 估算口径
 
-费用统一使用各家的官方美元费率，不通过汇率换算，也不要求用户填写价格。Tokenory 保存源成本和独立的 API 估算；缺少计价证据时估算为 null，不显示为免费。
+费用以美元估算，优先使用官方 API 费率。`codex-auto-review` 使用下述 tokens.ci 参考口径。源成本单独保存。未计价 tokens 已包含在用量总数中，只有费用小计不含这些记录。
 
 ## 官方费率
 
@@ -10,6 +10,12 @@
 - [OpenAI 官方价格](https://developers.openai.com/api/docs/pricing)；其 Markdown 版本含标准、长上下文和速度档位完整表。
 - [Anthropic 官方价格](https://platform.claude.com/docs/en/about-claude/pricing)
 - [GPT-5.2-Codex](https://developers.openai.com/api/docs/models/gpt-5.2-codex) 和 [GPT-5.1-Codex Mini](https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini) 的旧模型价格来自各自官方页面。
+
+## Codex 自动审批
+
+在 Codex 的 `codex-auto-review` 记录上，tokens.ci 导出已有正金额时保留该项估算；没有正金额的导出记录和本地 OpenAI Codex 记录，按每百万 tokens **输入 $0.25、缓存读取 $0.03、输出（含推理）$2.00** 估算。导出未提供供应商时仍保留 `unknown`。这条规则不套用到其他模型、工具或转售商。
+
+该公式逐条复现了 117 条有效日汇总（2026-05-27 至 2026-11-01）。这是已观察到的 tokens.ci 估算口径，不是 OpenAI 官方 API 价格，也不保证与 tokens.ci 未来版本相同。[上游计价代码](https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/cli/tokens-core/src/pricing/mod.rs)也区分了估算和可用于提交的权威费率。[OpenAI 说明](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan)：使用 ChatGPT 账户登录时，自动审批安全检查免费。Tokenory 展示的是等价用量估算，不是订阅扣费。
 
 ## DeepSeek 时段
 

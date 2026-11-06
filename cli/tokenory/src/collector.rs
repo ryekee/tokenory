@@ -379,7 +379,7 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
         let prior:Option<String>=tx.query_row("SELECT body FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",[&record.key],|r|r.get(0)).optional()?;
         let is_new = prior.is_none();
         if let Some((id, p)) = &snapshot {
-            crate::pricing::assign(&mut record, id, p);
+            crate::pricing::assign("local", &mut record, id, p);
         }
         if let Some(prior) = prior {
             let old: UsageRecord = serde_json::from_str(&prior)?;

@@ -21,6 +21,12 @@ struct UsageTrend {
     let costMaximum: Double
     let hasPricedUsage: Bool
 
+    var axisPoints: [UsageTrendPoint] {
+        if hourly { return stride(from: 0, to: points.count, by: 4).map { points[$0] } }
+        guard points.count > 7 else { return points }
+        return (0...4).map { points[$0 * (points.count - 1) / 4] }
+    }
+
     init(report: UsageReport, filter: UsageFilter, now: Date = Date()) {
         hourly = report.hourly != nil
         unallocatedTokens = report.hourly?.unallocated.tokens ?? 0

@@ -386,13 +386,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ tokens without an estimate"
+            "value": "Total includes %@ unpriced tokens"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ tokens 待计价"
+            "value": "总量已含 %@ 个待计价 tokens"
           }
         }
       }
@@ -1464,13 +1464,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Official rates, applied automatically"
+            "value": "Automatic cost estimates"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "自动使用官方费率"
+            "value": "自动估算费用"
           }
         }
       }
@@ -1482,13 +1482,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Costs use USD API rates. Estimates are not subscription charges or invoices. Refreshing rates affects new records; use Recalculate to update saved estimates."
+            "value": "Estimates use USD API rates. For codex-auto-review, Tokenory uses a tokens.ci reference estimate. Neither represents your bill. Recalculate to update saved estimates."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "费用按官方美元 API 费率估算，不代表订阅支出或账单。刷新费率用于新记录；已有估算可重新计算。"
+            "value": "费用按美元 API 费率估算；codex-auto-review 使用 tokens.ci 参考估算。估算不代表实际账单。更新历史记录请使用「重新计算已有估算」。"
           }
         }
       }

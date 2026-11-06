@@ -10,6 +10,9 @@ use tokens_core::pricing::{
     lookup::{compute_cost, compute_cost_for_snapshot},
     ModelPricing, PricingService,
 };
+const AUTO_REVIEW: &str = "codex-auto-review";
+const TOKENS_CI_REFERENCE: &str = "tokens.ci export reference";
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PriceEntry {
@@ -52,7 +55,7 @@ impl PriceSnapshot {
             rates: ModelPricing { input_cost_per_token: Some(input / 1e6), output_cost_per_token: Some(output / 1e6), cache_read_input_token_cost: Some(cache / 1e6), ..Default::default() },
         }).collect())
     }
-    pub fn official_reference() -> Self {
+    pub fn bundled_reference() -> Self {
         let mut p = Self::deepseek_reference();
         // Explicit published model IDs only. Provider matching is done before pricing.
         for (model, input, output, cache) in [
@@ -111,6 +114,19 @@ impl PriceSnapshot {
                     ..Default::default() },
             });
         }
+        // Reproduces exported Codex review costs; this routing label has no published API tariff.
+        p.entries.push(PriceEntry {
+            schedule: None, provider: "openai".into(), model: AUTO_REVIEW.into(), matched_key: AUTO_REVIEW.into(),
+            source: TOKENS_CI_REFERENCE.into(),
+            assumption: "USD reference rates reproduced from tokens.ci exports (2026-11-06); not an OpenAI tariff or charge".into(),
+            explicit_free: false, allow_fast: false,
+            rates: ModelPricing {
+                input_cost_per_token: Some(0.25e-6),
+                cache_read_input_token_cost: Some(0.03e-6),
+                output_cost_per_token: Some(2e-6),
+                ..Default::default()
+            },
+        });
         p
     }
     pub fn validate(&self) -> Result<()> {
@@ -160,7 +176,7 @@ pub struct Estimate {
     pub basis: String,
     pub reason: Option<String>,
 }
-pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
+pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     let unknown = |reason: &str| Estimate {
         cost: None,
         basis: String::new(),
@@ -169,13 +185,29 @@ pub fn estimate(r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     if r.metadata["modelAttributionConflicted"].as_bool() == Some(true) {
         return unknown("conflicting model identity");
     }
-    let Some(e) = p
-        .entries
-        .iter()
-        .find(|e| e.model == r.model && e.provider == r.provider)
-    else {
+    let review_export = source == "tokens-ci"
+        && r.client == "codex"
+        && r.model == AUTO_REVIEW
+        && r.provider == "unknown";
+    let Some(e) = p.entries.iter().find(|e| {
+        if e.source == TOKENS_CI_REFERENCE {
+            return e.model == r.model
+                && r.client == "codex"
+                && (review_export || (source == "local" && e.provider == r.provider));
+        }
+        e.model == r.model && e.provider == r.provider
+    }) else {
         return unknown("no verified price for this provider/model");
     };
+    if review_export && e.source == TOKENS_CI_REFERENCE {
+        if let Some(cost) = r.source_cost_usd.filter(|cost| *cost > 0.) {
+            return Estimate {
+                cost: Some(cost),
+                basis: "tokens.ci exported model estimate (USD); not an OpenAI charge".into(),
+                reason: None,
+            };
+        }
+    }
     let speed = r.metadata["inferenceSpeed"]["speed"].as_str();
     let official_openai = e.source == "https://developers.openai.com/api/docs/pricing";
     let official_anthropic = e.source == "https://platform.claude.com/docs/en/about-claude/pricing";
@@ -393,7 +425,7 @@ pub fn active_snapshot(c: &rusqlite::Connection) -> Result<Option<(String, Price
         .transpose()
 }
 pub fn initialize(db: &mut Database) -> Result<()> {
-    const VERSION: &str = "2026-11-05-official-v2";
+    const VERSION: &str = "2026-11-06-codex-review-v1";
     let installed: Option<String> = db
         .connection
         .query_row(
@@ -406,8 +438,7 @@ pub fn initialize(db: &mut Database) -> Result<()> {
         let mut current = active_snapshot(&db.connection)?
             .map(|(_, p)| p)
             .unwrap_or_else(|| PriceSnapshot::new(vec![]));
-        let official = PriceSnapshot::official_reference();
-        for entry in official.entries {
+        for entry in PriceSnapshot::bundled_reference().entries {
             current
                 .entries
                 .retain(|e| e.provider != entry.provider || e.model != entry.model);
@@ -419,14 +450,14 @@ pub fn initialize(db: &mut Database) -> Result<()> {
     }
     Ok(())
 }
-pub fn assign(r: &mut UsageRecord, id: &str, p: &PriceSnapshot) {
-    let e = estimate(r, p);
+pub fn assign(source: &str, r: &mut UsageRecord, id: &str, p: &PriceSnapshot) {
+    let e = estimate(source, r, p);
     r.estimated_cost_usd = e.cost;
     r.cost_basis = Some(e.reason.unwrap_or(e.basis));
     r.price_snapshot_id = Some(id.into());
 }
 pub fn snapshot_from_service(db: &Database, service: &PricingService) -> Result<PriceSnapshot> {
-    let mut p = PriceSnapshot::official_reference();
+    let mut p = PriceSnapshot::bundled_reference();
     let rows = {
         let mut stmt=db.connection.prepare("SELECT provider,model,sum(input),sum(output),sum(cache_read),sum(cache_write),sum(reasoning) FROM usage_records GROUP BY provider,model")?;
         let rows = stmt
@@ -512,7 +543,7 @@ pub fn preview_reprice(db: &mut Database, filter: &Filter, id: &str) -> Result<R
             if let Some(c) = r.estimated_cost_usd {
                 *before.get_or_insert(0.) += c;
             }
-            assign(&mut r, id, &snapshot);
+            assign(&detail.source, &mut r, id, &snapshot);
             if let Some(c) = r.estimated_cost_usd {
                 *after.get_or_insert(0.) += c;
             } else {
