@@ -4,7 +4,10 @@ Tokenory fork 自 https://github.com/missuo/tokens，固定基线 `c2f3857c32847
 
 - origin: https://github.com/ryekee/tokenory
 - upstream: https://github.com/missuo/tokens
-- 默认分支 `main` 展示本地实现；开发分支：`codex/macos-menubar`
+- `main` 为默认分支，维护 Tokenory macOS 应用；本地 `main` 跟踪 `origin/main`。
+- 新功能按需从 `main` 创建短期 `codex/` 分支，合并后删除。原 `codex/macos-menubar` 已合并到 `main`。
+- `updates` 是应用更新清单的发布分支，由发布脚本维护；不合并到 `main`，不删除。
+- 旧 Web/CLI 部署分支 `deploy/self-hosted` 已归档为标签 `archive/deploy-self-hosted-2026-11-08`（`f3767c9629d5361697c6393d5bcf70047bb4779b`）。如需恢复：`git switch -c deploy/self-hosted archive/deploy-self-hosted-2026-11-08`。
 - 首版 Rust 为 1.99.1；Xcode 27.2，目标 macOS 15+。当前只验本机 arm64。
 - `./script/build.sh` 联合构建 Rust 与 SwiftUI；`./script/build_and_run.sh` 构建并打开 App。
 - 如项目存在 `.tools/cargo`，脚本自动使用项目内工具链；否则使用 PATH 中的 cargo。
