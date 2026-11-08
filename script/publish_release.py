@@ -84,7 +84,10 @@ def main():
     asset = next((a for a in release['assets'] if a['name'] == archive.name), None)
     if asset is None or asset.get('digest') != expected_digest:
         raise ValueError('Remote archive is missing or has a different SHA256; do not overwrite a published binary')
-    feed.write_bytes(finalize_feed(feed.read_bytes(), asset, version, build))
+    # Keep the Release attachment compatible with v0.1.3 (no API Accept header).
+    # New clients use this separately generated API feed from the stable raw branch.
+    api_feed = finalize_feed(feed.read_bytes(), asset, version, build)
+    (folder / "appcast-api.xml").write_bytes(api_feed)
     sums = folder / 'SHA256SUMS.txt'
     sums.write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in [archive, feed]))
     if release['draft']:
@@ -102,7 +105,7 @@ def main():
     refs = api(f'git/matching-refs/heads/{FEED_BRANCH}')
     ref = next((r for r in refs if r['ref'] == f'refs/heads/{FEED_BRANCH}'), None)
     parent = ref['object']['sha'] if ref else None
-    tree_args = {'tree': [{'path': 'appcast.xml', 'mode': '100644', 'type': 'blob', 'content': feed.read_text()}]}
+    tree_args = {'tree': [{'path': 'appcast.xml', 'mode': '100644', 'type': 'blob', 'content': api_feed.decode('utf-8')}]}
     if parent:
         tree_args['base_tree'] = api(f'git/commits/{parent}')['tree']['sha']
     tree = api('git/trees', tree_args)
