@@ -1,14 +1,16 @@
 # macOS 发布
 
-更新源固定为 `https://github.com/ryekee/tokenory/releases/latest/download/appcast.xml`。
-每个正式 Release 必须包含同一次打包生成的 ZIP、`appcast.xml`、`SHA256SUMS.txt`，再设置为 latest。不要单独替换 ZIP，否则 Sparkle 签名会失效。
+更新源固定为 `https://raw.githubusercontent.com/ryekee/tokenory/updates/appcast.xml`。
+每个正式 Release 必须包含同一次打包生成的 ZIP、`appcast.xml`、`SHA256SUMS.txt`，再设置为 latest。发布脚本同步生成 `updates` 分支的清单；该分支只用于发布，不手工编辑。不要单独替换 ZIP，否则 Sparkle 签名会失效。
+
+清单中的安装包 URL 使用匿名 GitHub Release Asset API，App 发送 `Accept: application/octet-stream`。这避开了 GitHub 网页下载重定向的 504 路径，不需要 GitHub 登录或 token。更新包仍由 Sparkle 的 EdDSA 和 Developer ID 校验。
 
 1. 在 `macos/project.yml` 递增 `MARKETING_VERSION` 和 `CURRENT_PROJECT_VERSION`。Sparkle 按 build 号比较版本，build 必须递增。
 2. 通过 `script/build.sh` 和 Xcode 的 Tokenory test scheme 验证改动，提交源码。
 3. 编写更新说明，运行 `./script/package_release.sh /absolute/path/release-notes.md`。
 4. 脚本构建 Release，按从内到外的顺序签名 Sparkle 组件、Rust helper 和主 App，提交公证，附加票据，重新打包，再生成带 EdDSA 更新包签名的 appcast。
-5. 确认源码已推送，使用 `gh release create` 发布三个文件，通过 `--target` 指定构建所用的提交，`--notes-file` 指定说明，`--latest` 标记正式版。
-6. 回下载验证 SHA256、`codesign --verify --deep --strict`、`stapler validate` 和 Gatekeeper；确认 latest 的 `appcast.xml` 能公开读取。
+5. 确认源码已推送，运行 `./script/publish_release.py .build/releases/vVERSION --target FULL_COMMIT_SHA`。脚本先上传 ZIP 到草稿，核对远端 SHA256，将清单指向该资产的 API URL，上传清单与校验值，再正式发布并更新 `updates` 分支。可重试同一版本；已发布 ZIP 不会被覆盖。
+6. 回下载验证 SHA256、`codesign --verify --deep --strict`、`stapler validate` 和 Gatekeeper；确认固定 raw 清单能匿名读取且与 Release 的清单相同。
 
 默认签名身份为 Hiko Developer ID，公证使用钥匙串 profile `Hiko-notray`。可以通过 `TOKENORY_SIGNING_IDENTITY` 和 `TOKENORY_NOTARY_PROFILE` 指定已有配置。
 
