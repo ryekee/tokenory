@@ -3402,162 +3402,114 @@
         }
       }
     },
-    "update.available": {
+    "update.automatic": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tokenory %@ is available"
+            "value": "Automatically check for updates"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tokenory %@ 已发布"
+            "value": "自动检查更新"
           }
         }
       }
     },
-    "update.download_note": {
+    "update.frequency": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You have version %@. Open GitHub to view release notes and download the update."
+            "value": "Check frequency"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "当前版本为 %@。前往 GitHub 查看更新说明并下载新版。"
+            "value": "检查频率"
           }
         }
       }
     },
-    "update.open_release": {
+    "update.interval_1": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "View Release"
+            "value": "Every hour"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "查看新版本"
+            "value": "每小时"
           }
         }
       }
     },
-    "update.up_to_date": {
+    "update.interval_6": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tokenory is up to date"
+            "value": "Every 6 hours"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tokenory 已是最新版本"
+            "value": "每 6 小时"
           }
         }
       }
     },
-    "update.failed": {
+    "update.interval_12": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Could not check for updates"
+            "value": "Every 12 hours"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法检查更新"
+            "value": "每 12 小时"
           }
         }
       }
     },
-    "update.no_release": {
+    "update.interval_24": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No published release was found. Try again later."
+            "value": "Daily"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "暂未找到已发布版本，请稍后重试。"
+            "value": "每天"
           }
         }
       }
     },
-    "update.rate_limited": {
+    "update.interval_168": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "GitHub is limiting requests. Try again later."
+            "value": "Weekly"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "GitHub 请求受限，请稍后重试。"
-          }
-        }
-      }
-    },
-    "update.http_error": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub returned HTTP %ld. Try again later."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub 返回 HTTP %ld，请稍后重试。"
-          }
-        }
-      }
-    },
-    "update.invalid_release": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The release information or version number is invalid."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "版本信息或版本号无效。"
-          }
-        }
-      }
-    },
-    "update.ok": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OK"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "好"
+            "value": "每周"
           }
         }
       }

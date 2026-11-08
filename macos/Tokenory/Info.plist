@@ -31,5 +31,17 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableSystemProfiling</key>
+	<false/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/ryekee/tokenory/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>RY7yf0+Hmmt5t4CaNLRZ0yxE/IyZ2cfkL9nZxt9G/0g=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>

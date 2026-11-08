@@ -23,6 +23,7 @@ struct SettingsView: View {
     @State private var tab: SettingsSection = .general
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
     @State private var login = LoginItemService()
+    @ObservedObject private var updates = UpdateChecker.shared
     @State private var interval = 60
     @State private var scanPaths: [String: String] = [:]
     @State private var selectedClient = "claude"
@@ -103,11 +104,35 @@ struct SettingsView: View {
                 }
                 Divider()
                 HStack {
-                    Text(LF("update.current", UpdateChecker.shared.currentVersion)).foregroundStyle(.secondary)
+                    Text(LF("update.current", updates.currentVersion)).foregroundStyle(.secondary)
                     Spacer()
-                    if UpdateChecker.shared.isChecking { ProgressView().controlSize(.small) }
-                    Button(L("update.check")) { Task { await UpdateChecker.shared.check() } }
-                        .disabled(UpdateChecker.shared.isChecking)
+                    Button(L("update.check")) { updates.check() }
+                        .disabled(!updates.canCheckForUpdates)
+                }
+                HStack {
+                    Text(L("update.automatic"))
+                    Spacer()
+                    Toggle(L("update.automatic"), isOn: Binding(
+                        get: { updates.automaticallyChecksForUpdates },
+                        set: { updates.setAutomaticChecks($0) }
+                    )).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                }
+                if updates.automaticallyChecksForUpdates {
+                    HStack {
+                        Text(L("update.frequency"))
+                        Spacer()
+                        Picker(L("update.frequency"), selection: Binding(
+                            get: { updates.checkIntervalHours },
+                            set: { updates.setIntervalHours($0) }
+                        )) {
+                            ForEach(UpdateChecker.intervalHours, id: \.self) { hours in
+                                Text(L("update.interval_\(hours)")).tag(hours)
+                            }
+                        }.labelsHidden().fixedSize()
+                    }
+                }
+                if let error = updates.startupError {
+                    Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled)
                 }
                 if login.status == .requiresApproval {
                     Button(L("settings.open_login")) { SMAppService.openSystemSettingsLoginItems() }

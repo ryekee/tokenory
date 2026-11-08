@@ -5,7 +5,14 @@ options:
   knownRegions: [en, zh-Hans]
   deploymentTarget:
     macOS: '15.0'
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.1
 settings:
+  configs:
+    Debug:
+      ENABLE_HARDENED_RUNTIME: NO
   base:
     SWIFT_VERSION: '6.0'
     ARCHS: $(NATIVE_ARCH_ACTUAL)
@@ -18,8 +25,8 @@ settings:
     ENABLE_DEBUG_DYLIB: NO
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     GENERATE_INFOPLIST_FILE: NO
-    MARKETING_VERSION: '0.1.2'
-    CURRENT_PROJECT_VERSION: '4'
+    MARKETING_VERSION: '0.1.3'
+    CURRENT_PROJECT_VERSION: '5'
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     SWIFT_EMIT_LOC_STRINGS: NO
@@ -27,6 +34,8 @@ targets:
   Tokenory:
     type: application
     platform: macOS
+    dependencies:
+      - package: Sparkle
     sources:
       - path: Tokenory
     info:
@@ -40,6 +49,12 @@ targets:
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHighResolutionCapable: true
+        SUFeedURL: https://github.com/ryekee/tokenory/releases/latest/download/appcast.xml
+        SUPublicEDKey: RY7yf0+Hmmt5t4CaNLRZ0yxE/IyZ2cfkL9nZxt9G/0g=
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
+        SUAllowsAutomaticUpdates: false
+        SUEnableSystemProfiling: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ee.ryek.tokenory
