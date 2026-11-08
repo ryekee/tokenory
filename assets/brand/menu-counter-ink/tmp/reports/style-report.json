@@ -1,0 +1,54 @@
+{
+  "mode": "icon-spec-authoring",
+  "layout": "delivery",
+  "spec": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/menu-counter-ink/tmp/work/spec.json",
+  "work_spec": "tmp/work/spec.json",
+  "name": "MenuCounterInk",
+  "canvas": 18,
+  "target_platforms": [
+    "macOS"
+  ],
+  "deliverable_type": "source-package",
+  "source_reference": "menu-counter-ink.origin.svg — the selected orange counter artwork.",
+  "brief": "An 18 point menu bar drawing of the last two wheels in 648 to 649. A single template ink and open counters that inherit the menu bar foreground.",
+  "renderer": "@resvg/resvg-js",
+  "generated_files": [
+    "menu-counter-ink.preview.svg",
+    "menu-counter-ink.preview.png",
+    "menu-counter-ink.svg",
+    "menu-counter-ink.png",
+    "layers/01-case-and-fixed-drum.svg",
+    "layers/02-moving-units.svg",
+    "tmp/README.md",
+    "tmp/reports/style-report.json",
+    "tmp/reports/package-verification.json",
+    "tmp/reports/reference-diff.png",
+    "tmp/reports/reference-overlay.png",
+    "tmp/reports/reference-side-by-side.png",
+    "tmp/reports/visual-review.json"
+  ],
+  "generated_directories": [
+    "tmp/reports",
+    "layers",
+    "tmp"
+  ],
+  "preview_svg": "menu-counter-ink.preview.svg",
+  "preview_png": "menu-counter-ink.preview.png",
+  "app_svg": "menu-counter-ink.svg",
+  "app_png": "menu-counter-ink.png",
+  "layers": [
+    "layers/01-case-and-fixed-drum.svg",
+    "layers/02-moving-units.svg"
+  ],
+  "apple_adapter": null,
+  "preview_background_layers": [],
+  "icon_composer_layer_decisions": [],
+  "background_mode": "spec",
+  "warnings": [],
+  "claims": [
+    "spec-driven reusable cross-platform icon source package",
+    "semantic source layers retained",
+    "rounded preview PNG rendered by @resvg/resvg-js",
+    "unrounded app/source canvas outputs retained separately from preview masking"
+  ]
+}

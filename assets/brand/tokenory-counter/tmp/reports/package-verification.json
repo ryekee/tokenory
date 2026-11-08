@@ -1,0 +1,91 @@
+{
+  "status": "ok",
+  "out": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/tokenory-counter",
+  "style_report": "tmp/reports/style-report.json",
+  "reports_dir": "tmp/reports",
+  "target_platforms": [
+    "macOS"
+  ],
+  "canvas": {
+    "width": 1024,
+    "height": 1024
+  },
+  "preview_svg": "tokenory-counter.preview.svg",
+  "preview_png": {
+    "width": 1024,
+    "height": 1024,
+    "visible_pixels": 1006147,
+    "visible_bounds": {
+      "min_x": 0,
+      "min_y": 0,
+      "max_x": 1023,
+      "max_y": 1023
+    }
+  },
+  "app_svg": "tokenory-counter.svg",
+  "app_png": {
+    "width": 1024,
+    "height": 1024,
+    "visible_pixels": 1048576,
+    "visible_bounds": {
+      "min_x": 0,
+      "min_y": 0,
+      "max_x": 1023,
+      "max_y": 1023
+    }
+  },
+  "generic_assets": {
+    "layers": [
+      "layers/01-paper-field.svg",
+      "layers/02-counter-hardware.svg",
+      "layers/03-vermilion-casting.svg",
+      "layers/04-number-wheels.svg",
+      "layers/05-stamped-numerals.svg"
+    ]
+  },
+  "apple_adapter": null,
+  "generated_files_manifest_validation": {
+    "status": "valid",
+    "files": [
+      "tokenory-counter.preview.svg",
+      "tokenory-counter.preview.png",
+      "tokenory-counter.svg",
+      "tokenory-counter.png",
+      "layers/01-paper-field.svg",
+      "layers/02-counter-hardware.svg",
+      "layers/03-vermilion-casting.svg",
+      "layers/04-number-wheels.svg",
+      "layers/05-stamped-numerals.svg",
+      "tmp/README.md",
+      "tmp/reports/style-report.json",
+      "tmp/reports/package-verification.json",
+      "tmp/reports/reference-diff.png",
+      "tmp/reports/reference-overlay.png",
+      "tmp/reports/reference-side-by-side.png",
+      "tmp/reports/visual-review.json"
+    ],
+    "problems": []
+  },
+  "visual_review": {
+    "decision": "accepted",
+    "reviewer": "Codex (design review)",
+    "reviewer_type": "main-agent",
+    "evidence": [
+      "tmp/work/tilt-comparison.png",
+      "tokenory-counter.origin.svg",
+      "tokenory-counter.preview.png",
+      "tokenory-counter.png",
+      "tmp/work/preview-64.png",
+      "tmp/work/preview-32.png"
+    ],
+    "notes": "Inspected the front and tilted comparison, both final 1024 px renders and the small proofs. All four instrument layers share one rigid -7 degree transform about (512, 512). Removing this transform reproduces the centred front elevation exactly. The window has 51 px clearance on each side and 60 px above and below in the instrument's coordinate system."
+  },
+  "outcome": {
+    "pixel_status": "not_required",
+    "route_status": "generic_assets_ready",
+    "review_required": false
+  },
+  "reference_comparison": null,
+  "warnings": [],
+  "failures": []
+}

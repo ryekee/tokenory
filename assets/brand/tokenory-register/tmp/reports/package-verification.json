@@ -1,0 +1,88 @@
+{
+  "status": "ok",
+  "out": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/tokenory-register",
+  "style_report": "tmp/reports/style-report.json",
+  "reports_dir": "tmp/reports",
+  "target_platforms": [
+    "macOS"
+  ],
+  "canvas": {
+    "width": 1024,
+    "height": 1024
+  },
+  "preview_svg": "tokenory-register.preview.svg",
+  "preview_png": {
+    "width": 1024,
+    "height": 1024,
+    "visible_pixels": 1006147,
+    "visible_bounds": {
+      "min_x": 0,
+      "min_y": 0,
+      "max_x": 1023,
+      "max_y": 1023
+    }
+  },
+  "app_svg": "tokenory-register.svg",
+  "app_png": {
+    "width": 1024,
+    "height": 1024,
+    "visible_pixels": 1048576,
+    "visible_bounds": {
+      "min_x": 0,
+      "min_y": 0,
+      "max_x": 1023,
+      "max_y": 1023
+    }
+  },
+  "generic_assets": {
+    "layers": [
+      "layers/01-spindle-well.svg",
+      "layers/02-number-drums.svg",
+      "layers/03-printed-numerals.svg",
+      "layers/04-enamel-housing.svg"
+    ]
+  },
+  "apple_adapter": null,
+  "generated_files_manifest_validation": {
+    "status": "valid",
+    "files": [
+      "tokenory-register.preview.svg",
+      "tokenory-register.preview.png",
+      "tokenory-register.svg",
+      "tokenory-register.png",
+      "layers/01-spindle-well.svg",
+      "layers/02-number-drums.svg",
+      "layers/03-printed-numerals.svg",
+      "layers/04-enamel-housing.svg",
+      "tmp/README.md",
+      "tmp/reports/style-report.json",
+      "tmp/reports/package-verification.json",
+      "tmp/reports/reference-diff.png",
+      "tmp/reports/reference-overlay.png",
+      "tmp/reports/reference-side-by-side.png",
+      "tmp/reports/visual-review.json"
+    ],
+    "problems": []
+  },
+  "visual_review": {
+    "decision": "accepted",
+    "reviewer": "Codex (design review)",
+    "reviewer_type": "main-agent",
+    "evidence": [
+      "tokenory-register.preview.png",
+      "tokenory-register.png",
+      "tmp/work/preview-64.png",
+      "tmp/work/source-64.png",
+      "tmp/work/preview-32.png"
+    ],
+    "notes": "Inspected both 1024 px masters and the small proofs. Enamel rails reach the top and bottom edges and drums reach the sides. The complete 128 is visible at 32 px. The lower lip occludes the incoming 9. The three foreground layers share the same -7 degree rotation. The previous illustration supplies the numeral paths only; the new crop is intentionally different."
+  },
+  "outcome": {
+    "pixel_status": "not_required",
+    "route_status": "generic_assets_ready",
+    "review_required": false
+  },
+  "reference_comparison": null,
+  "warnings": [],
+  "failures": []
+}

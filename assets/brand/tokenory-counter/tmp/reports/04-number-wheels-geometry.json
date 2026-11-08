@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "input": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/tokenory-counter/layers/04-number-wheels.svg",
+  "status": "review_recommended",
+  "canvas": {
+    "width": 1024,
+    "height": 1024,
+    "viewBox": "0 0 1024 1024"
+  },
+  "parameters": {
+    "micro_segment_threshold_px": 2,
+    "high_line_ratio": 0.7,
+    "max_command_count": 140,
+    "fragment_gap_px": 1.5,
+    "flatten_tolerance_px": 0.5
+  },
+  "path_count": 0,
+  "paths": [],
+  "warnings": [
+    {
+      "code": "no_path_elements_found",
+      "severity": "medium",
+      "message": "no SVG path elements were found"
+    }
+  ],
+  "recommended_methods": [],
+  "semantic_note": "This is a geometry audit, not approval or repair. Use it to choose a route, then regenerate from the JSON spec and run verify."
+}

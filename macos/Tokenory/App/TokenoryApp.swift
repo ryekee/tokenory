@@ -42,7 +42,11 @@ struct TokenoryApp: App {
     @State private var store = UsageStore.shared
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
     var body: some Scene {
-        MenuBarExtra { MenuBarView().environment(store).environment(\.locale, Localization.locale).focusEffectDisabled().id(language) } label: { Image("MenuBarIcon").accessibilityLabel("Tokenory") }.menuBarExtraStyle(.window)
+        MenuBarExtra { MenuBarView().environment(store).environment(\.locale, Localization.locale).focusEffectDisabled().id(language) } label: {
+            Image("MenuBarIcon")
+                .renderingMode(.original)
+                .accessibilityLabel("Tokenory")
+        }.menuBarExtraStyle(.window)
         Window("Tokenory", id: "dashboard") { DashboardView().environment(store).environment(\.locale, Localization.locale).environment(\.timeZone, TimeZone(identifier: "Asia/Shanghai")!).focusEffectDisabled().id(language) }.defaultSize(width: 1060, height: 740).defaultLaunchBehavior(ProcessInfo.processInfo.arguments.contains("--show-dashboard") ? .presented : .suppressed).commands { DashboardCommands() }
         Settings { SettingsView().environment(store).environment(\.locale, Localization.locale).focusEffectDisabled() }.windowResizability(.contentSize)
     }

@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "input": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/tokenory-counter/layers/02-counter-hardware.svg",
+  "status": "ok",
+  "canvas": {
+    "width": 1024,
+    "height": 1024,
+    "viewBox": "0 0 1024 1024"
+  },
+  "parameters": {
+    "micro_segment_threshold_px": 2,
+    "high_line_ratio": 0.7,
+    "max_command_count": 140,
+    "fragment_gap_px": 1.5,
+    "flatten_tolerance_px": 0.5
+  },
+  "path_count": 2,
+  "paths": [
+    {
+      "index": 0,
+      "fill": "#20282A",
+      "class_name": "Path",
+      "child_count": 1,
+      "command_counts": {
+        "M": 1,
+        "Q": 4,
+        "H": 2,
+        "L": 1,
+        "Z": 1
+      },
+      "command_count": 9,
+      "drawing_command_count": 7,
+      "line_command_count": 3,
+      "curve_command_count": 4,
+      "line_command_ratio": 0.4286,
+      "path_length_px": 535.1176,
+      "flattened_segment_count": 28,
+      "micro_segment_count": 0,
+      "micro_segment_ratio": 0,
+      "shortest_segment_px": 4.1723,
+      "bounds": {
+        "min_x": 304.8519,
+        "min_y": 175,
+        "max_x": 517.1481,
+        "max_y": 252,
+        "width": 212.2963,
+        "height": 77
+      }
+    },
+    {
+      "index": 1,
+      "fill": "url(#cap-crown)",
+      "class_name": "Path",
+      "child_count": 1,
+      "command_counts": {
+        "M": 1,
+        "Q": 4,
+        "H": 2,
+        "L": 1,
+        "Z": 1
+      },
+      "command_count": 9,
+      "drawing_command_count": 7,
+      "line_command_count": 3,
+      "curve_command_count": 4,
+      "line_command_ratio": 0.4286,
+      "path_length_px": 492.7869,
+      "flattened_segment_count": 20,
+      "micro_segment_count": 0,
+      "micro_segment_ratio": 0,
+      "shortest_segment_px": 6.0111,
+      "bounds": {
+        "min_x": 305.6087,
+        "min_y": 174,
+        "max_x": 516.3913,
+        "max_y": 228,
+        "width": 210.7826,
+        "height": 54
+      }
+    }
+  ],
+  "warnings": [],
+  "recommended_methods": [],
+  "semantic_note": "This is a geometry audit, not approval or repair. Use it to choose a route, then regenerate from the JSON spec and run verify."
+}

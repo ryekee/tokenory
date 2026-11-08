@@ -1,0 +1,65 @@
+{
+  "mode": "icon-spec-authoring",
+  "layout": "delivery",
+  "spec": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/tokenory-register/tmp/work/spec.json",
+  "work_spec": "tmp/work/spec.json",
+  "name": "TokenoryRegister",
+  "canvas": 1024,
+  "target_platforms": [
+    "macOS"
+  ],
+  "deliverable_type": "source-package",
+  "source_reference": "tokenory-register.origin.svg — previous Tokenory illustration, source of the numeral outlines and palette. New full-bleed composition.",
+  "brief": "An edge-to-edge section of a three-drum mechanical counter. The orange shell and reels occupy the full tile. A seven-degree tilt is shared by the readout and the lips of the instrument.",
+  "renderer": "@resvg/resvg-js",
+  "generated_files": [
+    "tokenory-register.preview.svg",
+    "tokenory-register.preview.png",
+    "tokenory-register.svg",
+    "tokenory-register.png",
+    "layers/01-spindle-well.svg",
+    "layers/02-number-drums.svg",
+    "layers/03-printed-numerals.svg",
+    "layers/04-enamel-housing.svg",
+    "tmp/README.md",
+    "tmp/reports/style-report.json",
+    "tmp/reports/package-verification.json",
+    "tmp/reports/reference-diff.png",
+    "tmp/reports/reference-overlay.png",
+    "tmp/reports/reference-side-by-side.png",
+    "tmp/reports/visual-review.json"
+  ],
+  "generated_directories": [
+    "tmp/reports",
+    "layers",
+    "tmp"
+  ],
+  "preview_svg": "tokenory-register.preview.svg",
+  "preview_png": "tokenory-register.preview.png",
+  "app_svg": "tokenory-register.svg",
+  "app_png": "tokenory-register.png",
+  "layers": [
+    "layers/01-spindle-well.svg",
+    "layers/02-number-drums.svg",
+    "layers/03-printed-numerals.svg",
+    "layers/04-enamel-housing.svg"
+  ],
+  "apple_adapter": null,
+  "preview_background_layers": [],
+  "icon_composer_layer_decisions": [],
+  "background_mode": "spec",
+  "semantic_review": {
+    "status": "exact-enough",
+    "identity_risk": "low",
+    "basis": "Original Tokenory artwork. Verify the new crop and the shared axes rather than matching the previous composition.",
+    "route": "semantic-svg",
+    "notes": ""
+  },
+  "warnings": [],
+  "claims": [
+    "spec-driven reusable cross-platform icon source package",
+    "semantic source layers retained",
+    "rounded preview PNG rendered by @resvg/resvg-js",
+    "unrounded app/source canvas outputs retained separately from preview masking"
+  ]
+}

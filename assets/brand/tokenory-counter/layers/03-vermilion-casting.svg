@@ -1,0 +1,8 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+<defs><linearGradient id="case-return" gradientUnits="userSpaceOnUse" x1="153" y1="445" x2="829" y2="686"><stop offset="0" stop-color="#C94825"/><stop offset="0.35" stop-color="#B63F22"/><stop offset="0.77" stop-color="#983521"/><stop offset="1" stop-color="#812D20"/></linearGradient><linearGradient id="enamel" gradientUnits="userSpaceOnUse" x1="279" y1="271" x2="640" y2="743"><stop offset="0" stop-color="#FF8F4C"/><stop offset="0.38" stop-color="#FC733A"/><stop offset="0.78" stop-color="#EC582A"/><stop offset="1" stop-color="#DA4726"/></linearGradient></defs>
+<g transform="rotate(-7 512 512) translate(0 36)">
+<rect x="146" y="325" width="673" height="402" rx="98" fill="url(#case-return)"/>
+<rect x="146" y="302" width="673" height="402" rx="98" fill="url(#enamel)"/>
+</g>
+</svg>

@@ -1,0 +1,87 @@
+{
+  "status": "ok",
+  "out": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/tokenory-counter-flat",
+  "style_report": "tmp/reports/style-report.json",
+  "reports_dir": "tmp/reports",
+  "target_platforms": [
+    "macOS"
+  ],
+  "canvas": {
+    "width": 1024,
+    "height": 1024
+  },
+  "preview_svg": "tokenory-counter-flat.preview.svg",
+  "preview_png": {
+    "width": 1024,
+    "height": 1024,
+    "visible_pixels": 809468,
+    "visible_bounds": {
+      "min_x": 48,
+      "min_y": 48,
+      "max_x": 975,
+      "max_y": 975
+    }
+  },
+  "app_svg": "tokenory-counter-flat.svg",
+  "app_png": {
+    "width": 1024,
+    "height": 1024,
+    "visible_pixels": 809468,
+    "visible_bounds": {
+      "min_x": 48,
+      "min_y": 48,
+      "max_x": 975,
+      "max_y": 975
+    }
+  },
+  "generic_assets": {
+    "layers": [
+      "layers/01-square-orange-housing.svg",
+      "layers/02-recessed-square-aperture.svg",
+      "layers/03-three-parallel-drums.svg",
+      "layers/04-changing-register.svg",
+      "layers/05-thumbwheel-and-units-index.svg"
+    ]
+  },
+  "apple_adapter": null,
+  "generated_files_manifest_validation": {
+    "status": "valid",
+    "files": [
+      "tokenory-counter-flat.preview.svg",
+      "tokenory-counter-flat.preview.png",
+      "tokenory-counter-flat.svg",
+      "tokenory-counter-flat.png",
+      "layers/01-square-orange-housing.svg",
+      "layers/02-recessed-square-aperture.svg",
+      "layers/03-three-parallel-drums.svg",
+      "layers/04-changing-register.svg",
+      "layers/05-thumbwheel-and-units-index.svg",
+      "tmp/README.md",
+      "tmp/reports/style-report.json",
+      "tmp/reports/package-verification.json",
+      "tmp/reports/reference-diff.png",
+      "tmp/reports/reference-overlay.png",
+      "tmp/reports/reference-side-by-side.png",
+      "tmp/reports/visual-review.json"
+    ],
+    "problems": []
+  },
+  "visual_review": {
+    "decision": "accepted",
+    "reviewer": "Codex",
+    "evidence": [
+      "tokenory-counter-flat.svg",
+      ".build/verification/counter-bezel-comparison.png",
+      ".build/verification/dock-bezel-before-after.png"
+    ],
+    "notes": "Compared both macOS renders and the actual installed Dock tile. The outer enamel and window share a continuous contour with constant inset. The native 1024 px graphite edge measures about 102 px from the tile across sides and corners, without changing the reels or the menu bar artwork."
+  },
+  "outcome": {
+    "pixel_status": "not_required",
+    "route_status": "generic_assets_ready",
+    "review_required": false
+  },
+  "reference_comparison": null,
+  "warnings": [],
+  "failures": []
+}

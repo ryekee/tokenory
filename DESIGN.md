@@ -2,7 +2,7 @@
 
 Native macOS utility for checking AI usage and USD cost estimates. Preserve the menu bar entry, a single statistics window and standard Settings.
 
-- Identity: a notched champagne coin on ink navy. The same notch identifies the monochrome menu icon. No letter T or stacked bars.
+- The app icon is a front-facing orange counter with dark drums turning from 648 to 649. In `AppIcon.icon`, the default and dark appearances both use the orange enamel as the tile fill. The window follows the macOS mask at a constant inward distance (82 units on the 928-unit case), including at the corners. The 18 pt menu bar icon shows the last two drums in an orange case with a blue units digit. Render it in its original colors.
 - Use system typography, semantic foreground/background colors and native controls. Use blue only for selection and the primary chart.
 - Overview: one compact filter row and a toolbar range calendar; adjacent token and cost totals share a panel with the combined chart. Token bars and a cost line use separate, explicitly labelled zero-based scales. Tool share and model ranking sit below.
 - Dates use a temporal axis; values use locale-aware formatting. Never compress every date into a categorical label.
