@@ -1,0 +1,11 @@
+{
+  "decision": "accepted",
+  "reviewer": "Codex",
+  "reviewer_type": "main-agent",
+  "evidence": [
+    "tokenory-counter-3d.png",
+    "tmp/work/preview-64.png",
+    "tmp/work/preview-32.png"
+  ],
+  "notes": "Orange housing and blue unit digits and pointer inspected at 1024, 64 and 32 px. The full casing is visible and the preview mask leaves the silhouette intact."
+}

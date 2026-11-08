@@ -1,0 +1,6 @@
+{
+  "decision": "accepted",
+  "reviewer": "Codex",
+  "evidence": ["tokenory-counter-flat.svg", ".build/verification/counter-bezel-comparison.png", ".build/verification/dock-bezel-before-after.png"],
+  "notes": "Compared both macOS renders and the actual installed Dock tile. The outer enamel and window share a continuous contour with constant inset. The native 1024 px graphite edge measures about 102 px from the tile across sides and corners, without changing the reels or the menu bar artwork."
+}

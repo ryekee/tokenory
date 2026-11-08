@@ -1,0 +1,12 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+<defs><linearGradient id="seat" gradientUnits="userSpaceOnUse" x1="0" y1="366" x2="0" y2="644"><stop offset="0" stop-color="#873920"/><stop offset="0.46" stop-color="#A84425"/><stop offset="1" stop-color="#F7955C"/></linearGradient><linearGradient id="graphite-roller" gradientUnits="userSpaceOnUse" x1="0" y1="396" x2="0" y2="611"><stop offset="0" stop-color="#131B1E"/><stop offset="0.15" stop-color="#232A2B"/><stop offset="0.42" stop-color="#343D3C"/><stop offset="0.58" stop-color="#353D3A"/><stop offset="0.82" stop-color="#262C2B"/><stop offset="1" stop-color="#171D1F"/></linearGradient><linearGradient id="ivory-roller" gradientUnits="userSpaceOnUse" x1="0" y1="396" x2="0" y2="611"><stop offset="0" stop-color="#ADAD97"/><stop offset="0.13" stop-color="#E2DEC6"/><stop offset="0.36" stop-color="#FBF3D9"/><stop offset="0.65" stop-color="#FAF0D3"/><stop offset="0.84" stop-color="#E1D9BF"/><stop offset="1" stop-color="#B3B5A1"/></linearGradient></defs>
+<g transform="rotate(-7 512 512) translate(0 36)">
+<rect x="197" y="362" width="571" height="282" rx="56" fill="url(#seat)"/>
+<rect x="203" y="368" width="559" height="267" rx="51" fill="#2D3230"/>
+<rect x="216" y="381" width="533" height="241" rx="39" fill="#11181B"/>
+<rect x="226" y="393" width="158" height="217" rx="25" fill="url(#graphite-roller)"/>
+<rect x="391" y="393" width="165" height="217" rx="15" fill="url(#graphite-roller)"/>
+<rect x="563" y="393" width="174" height="217" rx="22" fill="url(#ivory-roller)"/>
+</g>
+</svg>

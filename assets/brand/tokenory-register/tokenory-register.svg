@@ -1,0 +1,24 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+<rect x="0" y="0" width="1024" height="1024" rx="0" fill="#171B1D"/>
+<defs><linearGradient id="carbon-cylinder" gradientUnits="userSpaceOnUse" x1="0" y1="144" x2="0" y2="869"><stop offset="0" stop-color="#101719"/><stop offset="0.095" stop-color="#1E2729"/><stop offset="0.29" stop-color="#354043"/><stop offset="0.47" stop-color="#3C4748"/><stop offset="0.64" stop-color="#343F41"/><stop offset="0.84" stop-color="#253133"/><stop offset="1" stop-color="#121A1D"/></linearGradient><linearGradient id="ivory-cylinder" gradientUnits="userSpaceOnUse" x1="0" y1="144" x2="0" y2="869"><stop offset="0" stop-color="#8B9089"/><stop offset="0.115" stop-color="#C1C0AC"/><stop offset="0.28" stop-color="#E6E0C9"/><stop offset="0.45" stop-color="#FAF3DD"/><stop offset="0.6" stop-color="#F6EDD5"/><stop offset="0.79" stop-color="#DDD5BA"/><stop offset="0.9" stop-color="#B5B4A2"/><stop offset="1" stop-color="#7B8380"/></linearGradient></defs>
+<g transform="rotate(-7 512 512)">
+<rect x="-150" y="92" width="470" height="842" rx="14" fill="url(#carbon-cylinder)"/>
+<rect x="330" y="92" width="356" height="842" rx="14" fill="url(#carbon-cylinder)"/>
+<rect x="697" y="92" width="470" height="842" rx="14" fill="url(#ivory-cylinder)"/>
+</g>
+<defs></defs>
+<g transform="rotate(-7 512 512)">
+<path transform="translate(43 321) scale(2.58 3.03)" fill="#F5F1DC" fill-rule="evenodd" d="M6 27 L36 5 Q40 2 47 2 H66 V111 H83 V129 H13 V111 H38 V33 L15 48 Z"/>
+<path transform="translate(379 325) scale(2.73 3.0)" fill="#F5F1DC" fill-rule="evenodd" d="M3 37 C5 11 23 0 49 0 C76 0 92 14 92 37 C92 52 85 63 68 77 L33 106 H92 V129 H2 V110 Q2 103 10 96 L55 58 C64 50 68 44 68 37 C68 27 61 22 51 22 C38 22 31 28 30 40 Z"/>
+<path transform="translate(716 260) scale(2.82 3.05)" fill="#B74929" fill-rule="evenodd" d="M47 0 C70 0 87 14 87 35 C87 47 82 57 71 62 C85 68 92 78 92 92 C92 117 74 131 47 131 C20 131 2 117 2 92 C2 79 9 68 23 62 C12 56 7 47 7 35 C7 14 24 0 47 0 Z M47 20 C36 20 29 27 29 37 C29 47 37 53 47 53 C59 53 66 47 66 37 C66 27 59 20 47 20 Z M47 73 C34 73 26 80 26 92 C26 104 34 111 47 111 C61 111 69 104 69 92 C69 80 61 73 47 73 Z"/>
+<path transform="translate(728 766) scale(2.56 1.6)" fill="#9F6045" fill-rule="evenodd" d="M46 0 C74 0 91 16 91 41 V84 C91 116 76 132 50 132 C25 132 8 121 5 99 L29 96 C32 107 39 112 49 112 C63 112 69 101 69 82 V71 C62 79 51 82 42 82 C15 82 2 66 2 42 C2 16 19 0 46 0 Z M46 20 C33 20 26 28 26 41 C26 54 34 62 47 62 C59 62 68 53 68 41 C68 28 60 20 46 20 Z"/>
+</g>
+<defs><linearGradient id="orange-enamel" gradientUnits="userSpaceOnUse" x1="92" y1="54" x2="670" y2="1058"><stop offset="0" stop-color="#FF904E"/><stop offset="0.31" stop-color="#FA783C"/><stop offset="0.77" stop-color="#E95C2E"/><stop offset="1" stop-color="#DB4926"/></linearGradient><linearGradient id="aperture-wall" gradientUnits="userSpaceOnUse" x1="0" y1="172" x2="0" y2="829"><stop offset="0" stop-color="#943B26"/><stop offset="0.16" stop-color="#823B29"/><stop offset="0.56" stop-color="#9E482D"/><stop offset="0.91" stop-color="#EF7743"/><stop offset="1" stop-color="#FFA469"/></linearGradient></defs>
+<g transform="rotate(-7 512 512)">
+<rect x="-170" y="-200" width="1364" height="399" rx="0" fill="url(#aperture-wall)"/>
+<rect x="-170" y="-200" width="1364" height="378" rx="0" fill="url(#orange-enamel)"/>
+<rect x="-170" y="819" width="1364" height="421" rx="0" fill="url(#aperture-wall)"/>
+<rect x="-170" y="832" width="1364" height="408" rx="0" fill="url(#orange-enamel)"/>
+</g>
+</svg>

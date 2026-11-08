@@ -1,0 +1,54 @@
+{
+  "mode": "icon-spec-authoring",
+  "layout": "delivery",
+  "spec": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/tokenory-counter-3d/tmp/work/spec.json",
+  "work_spec": "tmp/work/spec.json",
+  "name": "TokenoryCounter3D",
+  "canvas": 1024,
+  "target_platforms": [
+    "macOS"
+  ],
+  "deliverable_type": "source-package",
+  "source_reference": "tokenory-counter-3d.origin.png — user-supplied Things 3 reference for centred elevated perspective, converging sides, and a visible front wall.",
+  "brief": "Three-dimensional orange enamel counter shown from a centred elevated camera. The complete casing and knob surround two fixed porcelain drums showing 64 and a blue-printed units drum stepping from 8 to 9. Editable source: tmp/work/Tokenory Counter.blend.",
+  "renderer": "@resvg/resvg-js",
+  "generated_files": [
+    "tokenory-counter-3d.preview.svg",
+    "tokenory-counter-3d.preview.png",
+    "tokenory-counter-3d.svg",
+    "tokenory-counter-3d.png",
+    "layers/01-porcelain-drums-and-ink.png",
+    "layers/02-enamel-shell-and-thumbwheel.png",
+    "tmp/README.md",
+    "tmp/reports/style-report.json",
+    "tmp/reports/package-verification.json",
+    "tmp/reports/reference-diff.png",
+    "tmp/reports/reference-overlay.png",
+    "tmp/reports/reference-side-by-side.png",
+    "tmp/reports/visual-review.json"
+  ],
+  "generated_directories": [
+    "tmp/reports",
+    "layers",
+    "tmp"
+  ],
+  "preview_svg": "tokenory-counter-3d.preview.svg",
+  "preview_png": "tokenory-counter-3d.preview.png",
+  "app_svg": "tokenory-counter-3d.svg",
+  "app_png": "tokenory-counter-3d.png",
+  "layers": [
+    "layers/01-porcelain-drums-and-ink.png",
+    "layers/02-enamel-shell-and-thumbwheel.png"
+  ],
+  "apple_adapter": null,
+  "preview_background_layers": [],
+  "icon_composer_layer_decisions": [],
+  "background_mode": "spec",
+  "warnings": [],
+  "claims": [
+    "spec-driven reusable cross-platform icon source package",
+    "semantic source layers retained",
+    "rounded preview PNG rendered by @resvg/resvg-js",
+    "unrounded app/source canvas outputs retained separately from preview masking"
+  ]
+}

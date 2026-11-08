@@ -1,0 +1,7 @@
+{
+  "decision": "accepted",
+  "reviewer": "Codex (design review)",
+  "reviewer_type": "main-agent",
+  "evidence": ["tmp/work/tilt-comparison.png", "tokenory-counter.origin.svg", "tokenory-counter.preview.png", "tokenory-counter.png", "tmp/work/preview-64.png", "tmp/work/preview-32.png"],
+  "notes": "Inspected the front and tilted comparison, both final 1024 px renders and the small proofs. All four instrument layers share one rigid -7 degree transform about (512, 512). Removing this transform reproduces the centred front elevation exactly. The window has 51 px clearance on each side and 60 px above and below in the instrument's coordinate system."
+}

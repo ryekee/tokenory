@@ -1,0 +1,82 @@
+{
+  "status": "ok",
+  "out": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/menu-counter-ink",
+  "style_report": "tmp/reports/style-report.json",
+  "reports_dir": "tmp/reports",
+  "target_platforms": [
+    "macOS"
+  ],
+  "canvas": {
+    "width": 18,
+    "height": 18
+  },
+  "preview_svg": "menu-counter-ink.preview.svg",
+  "preview_png": {
+    "width": 18,
+    "height": 18,
+    "visible_pixels": 258,
+    "visible_bounds": {
+      "min_x": 0,
+      "min_y": 1,
+      "max_x": 17,
+      "max_y": 16
+    }
+  },
+  "app_svg": "menu-counter-ink.svg",
+  "app_png": {
+    "width": 18,
+    "height": 18,
+    "visible_pixels": 258,
+    "visible_bounds": {
+      "min_x": 0,
+      "min_y": 1,
+      "max_x": 17,
+      "max_y": 16
+    }
+  },
+  "generic_assets": {
+    "layers": [
+      "layers/01-case-and-fixed-drum.svg",
+      "layers/02-moving-units.svg"
+    ]
+  },
+  "apple_adapter": null,
+  "generated_files_manifest_validation": {
+    "status": "valid",
+    "files": [
+      "menu-counter-ink.preview.svg",
+      "menu-counter-ink.preview.png",
+      "menu-counter-ink.svg",
+      "menu-counter-ink.png",
+      "layers/01-case-and-fixed-drum.svg",
+      "layers/02-moving-units.svg",
+      "tmp/README.md",
+      "tmp/reports/style-report.json",
+      "tmp/reports/package-verification.json",
+      "tmp/reports/reference-diff.png",
+      "tmp/reports/reference-overlay.png",
+      "tmp/reports/reference-side-by-side.png",
+      "tmp/reports/visual-review.json"
+    ],
+    "problems": []
+  },
+  "visual_review": {
+    "decision": "accepted",
+    "reviewer": "Codex",
+    "reviewer_type": "main-agent",
+    "evidence": [
+      "menu-counter-ink.png",
+      "tmp/work/menu-icon@2x.png",
+      "tmp/work/enlarged-64.png"
+    ],
+    "notes": "Checked 18 and 36 px raster sizes and the 18 pt glyph in light and dark menu bar mockups. The template uses alpha for both reel apertures and the fixed four. The original-colour alternative has a solid enamel rim and light-on-dark numerals."
+  },
+  "outcome": {
+    "pixel_status": "not_required",
+    "route_status": "generic_assets_ready",
+    "review_required": false
+  },
+  "reference_comparison": null,
+  "warnings": [],
+  "failures": []
+}

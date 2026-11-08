@@ -1,0 +1,10 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+<defs><linearGradient id="orange-enamel" gradientUnits="userSpaceOnUse" x1="92" y1="54" x2="670" y2="1058"><stop offset="0" stop-color="#FF904E"/><stop offset="0.31" stop-color="#FA783C"/><stop offset="0.77" stop-color="#E95C2E"/><stop offset="1" stop-color="#DB4926"/></linearGradient><linearGradient id="aperture-wall" gradientUnits="userSpaceOnUse" x1="0" y1="172" x2="0" y2="829"><stop offset="0" stop-color="#943B26"/><stop offset="0.16" stop-color="#823B29"/><stop offset="0.56" stop-color="#9E482D"/><stop offset="0.91" stop-color="#EF7743"/><stop offset="1" stop-color="#FFA469"/></linearGradient></defs>
+<g transform="rotate(-7 512 512)">
+<rect x="-170" y="-200" width="1364" height="399" rx="0" fill="url(#aperture-wall)"/>
+<rect x="-170" y="-200" width="1364" height="378" rx="0" fill="url(#orange-enamel)"/>
+<rect x="-170" y="819" width="1364" height="421" rx="0" fill="url(#aperture-wall)"/>
+<rect x="-170" y="832" width="1364" height="408" rx="0" fill="url(#orange-enamel)"/>
+</g>
+</svg>

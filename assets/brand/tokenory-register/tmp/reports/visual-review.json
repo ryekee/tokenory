@@ -1,0 +1,7 @@
+{
+  "decision": "accepted",
+  "reviewer": "Codex (design review)",
+  "reviewer_type": "main-agent",
+  "evidence": ["tokenory-register.preview.png","tokenory-register.png","tmp/work/preview-64.png","tmp/work/source-64.png","tmp/work/preview-32.png"],
+  "notes": "Inspected both 1024 px masters and the small proofs. Enamel rails reach the top and bottom edges and drums reach the sides. The complete 128 is visible at 32 px. The lower lip occludes the incoming 9. The three foreground layers share the same -7 degree rotation. The previous illustration supplies the numeral paths only; the new crop is intentionally different."
+}

@@ -1,0 +1,22 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+<defs><linearGradient id="spindle-metal" gradientUnits="userSpaceOnUse" x1="365" y1="0" x2="457" y2="0"><stop offset="0" stop-color="#727D7A"/><stop offset="0.17" stop-color="#B7C2BB"/><stop offset="0.4" stop-color="#F3F1DB"/><stop offset="0.59" stop-color="#AFB9AE"/><stop offset="0.83" stop-color="#858F86"/><stop offset="1" stop-color="#525A58"/></linearGradient><linearGradient id="cap-crown" gradientUnits="userSpaceOnUse" x1="334" y1="178" x2="458" y2="264"><stop offset="0" stop-color="#555F5E"/><stop offset="0.47" stop-color="#374140"/><stop offset="1" stop-color="#20272A"/></linearGradient><linearGradient id="knob-metal" gradientUnits="userSpaceOnUse" x1="0" y1="444" x2="0" y2="587"><stop offset="0" stop-color="#FCF6DE"/><stop offset="0.15" stop-color="#CED2C4"/><stop offset="0.43" stop-color="#A9B3A9"/><stop offset="0.73" stop-color="#828D84"/><stop offset="1" stop-color="#545F58"/></linearGradient></defs>
+<g transform="rotate(-7 512 512) translate(0 36)">
+<rect x="357" y="234" width="108" height="114" rx="12" fill="url(#spindle-metal)"/>
+<path fill="#20282A" d="M309 196 Q312 175 334 175 H488 Q510 175 513 196 L517 228 Q519 252 494 252 H328 Q303 252 305 228 Z"/>
+<path fill="url(#cap-crown)" d="M309 194 Q313 174 334 174 H488 Q509 174 513 194 L516 211 Q519 228 499 228 H323 Q303 228 306 211 Z"/>
+<rect x="775" y="461" width="53" height="97" rx="16" fill="#48504C"/>
+<rect x="799" y="439" width="78" height="144" rx="23" fill="url(#knob-metal)"/>
+<rect x="811" y="452" width="55" height="3.4" rx="1.7" fill="#738078"/>
+<rect x="808" y="463" width="61" height="3.4" rx="1.7" fill="#738078"/>
+<rect x="807" y="475" width="63" height="3.4" rx="1.7" fill="#738078"/>
+<rect x="807" y="487" width="63" height="3.4" rx="1.7" fill="#738078"/>
+<rect x="807" y="499" width="63" height="3.4" rx="1.7" fill="#738078"/>
+<rect x="807" y="511" width="63" height="3.4" rx="1.7" fill="#738078"/>
+<rect x="807" y="523" width="63" height="3.4" rx="1.7" fill="#738078"/>
+<rect x="807" y="535" width="63" height="3.4" rx="1.7" fill="#738078"/>
+<rect x="807" y="547" width="63" height="3.4" rx="1.7" fill="#738078"/>
+<rect x="808" y="559" width="61" height="3.4" rx="1.7" fill="#738078"/>
+<rect x="812" y="571" width="53" height="3.4" rx="1.7" fill="#738078"/>
+</g>
+</svg>

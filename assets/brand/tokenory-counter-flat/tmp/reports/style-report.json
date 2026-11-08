@@ -1,0 +1,113 @@
+{
+  "mode": "icon-spec-authoring",
+  "layout": "delivery",
+  "spec": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/tokenory-counter-flat/tmp/work/spec.json",
+  "work_spec": "tmp/work/spec.json",
+  "name": "TokenoryCounterFlat",
+  "canvas": 1024,
+  "target_platforms": [
+    "macOS"
+  ],
+  "deliverable_type": "source-package",
+  "source_reference": "tokenory-counter-flat.origin.png — user-provided Things 3 reference for the square face, continuous corners, case geometry and recessed dark centre.",
+  "brief": "Flat skeuomorphic counter. A continuous square orange enamel casing encloses three aligned drums. Two fixed digits read 64. The blue-printed units wheel advances from 8 to 9. The complete outline is visible on a transparent canvas.",
+  "renderer": "@resvg/resvg-js",
+  "generated_files": [
+    "tokenory-counter-flat.preview.svg",
+    "tokenory-counter-flat.preview.png",
+    "tokenory-counter-flat.svg",
+    "tokenory-counter-flat.png",
+    "layers/01-square-orange-housing.svg",
+    "layers/02-recessed-square-aperture.svg",
+    "layers/03-three-parallel-drums.svg",
+    "layers/04-changing-register.svg",
+    "layers/05-thumbwheel-and-units-index.svg",
+    "tmp/README.md",
+    "tmp/reports/style-report.json",
+    "tmp/reports/package-verification.json",
+    "tmp/reports/reference-diff.png",
+    "tmp/reports/reference-overlay.png",
+    "tmp/reports/reference-side-by-side.png",
+    "tmp/reports/visual-review.json"
+  ],
+  "generated_directories": [
+    "tmp/reports",
+    "layers",
+    "tmp"
+  ],
+  "preview_svg": "tokenory-counter-flat.preview.svg",
+  "preview_png": "tokenory-counter-flat.preview.png",
+  "app_svg": "tokenory-counter-flat.svg",
+  "app_png": "tokenory-counter-flat.png",
+  "layers": [
+    "layers/01-square-orange-housing.svg",
+    "layers/02-recessed-square-aperture.svg",
+    "layers/03-three-parallel-drums.svg",
+    "layers/04-changing-register.svg",
+    "layers/05-thumbwheel-and-units-index.svg"
+  ],
+  "apple_adapter": null,
+  "preview_background_layers": [],
+  "icon_composer_layer_decisions": [],
+  "background_mode": "spec",
+  "source_analysis": {
+    "fidelity_target": "Composition and material direction only; original counter artwork and chart colours.",
+    "identity_risk": "low",
+    "route": "semantic-svg",
+    "must_preserve": [
+      "Square 928 × 928 casing",
+      "Constant 82-unit normal offset from the native macOS tile to the edge of the aperture, including the continuous corners.",
+      "Orange housing and blue units ink for the 648 to 649 transition"
+    ],
+    "must_not_add": [
+      "notification badge",
+      "check mark",
+      "tabletop or background tile"
+    ],
+    "components": [
+      {
+        "id": "Square orange housing",
+        "layer": "Square orange housing",
+        "format": "svg",
+        "spec_constraints": []
+      },
+      {
+        "id": "Recessed square aperture",
+        "layer": "Recessed square aperture",
+        "format": "svg",
+        "spec_constraints": []
+      },
+      {
+        "id": "Three parallel drums",
+        "layer": "Three parallel drums",
+        "format": "svg",
+        "spec_constraints": []
+      },
+      {
+        "id": "Changing register",
+        "layer": "Changing register",
+        "format": "svg",
+        "spec_constraints": []
+      },
+      {
+        "id": "Thumbwheel and units index",
+        "layer": "Thumbwheel and units index",
+        "format": "svg",
+        "spec_constraints": []
+      }
+    ],
+    "acceptance_checks": [
+      "Clear outline at 64 px",
+      "Static 64, shifting units drum",
+      "Transparent corners",
+      "At 1024 px, verify the graphite window starts 101–102 px inside the rendered macOS tile at both flat edges and diagonals."
+    ]
+  },
+  "warnings": [],
+  "claims": [
+    "spec-driven reusable cross-platform icon source package",
+    "semantic source layers retained",
+    "rounded preview PNG rendered by @resvg/resvg-js",
+    "unrounded app/source canvas outputs retained separately from preview masking"
+  ]
+}

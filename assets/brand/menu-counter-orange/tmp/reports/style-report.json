@@ -1,0 +1,58 @@
+{
+  "mode": "icon-spec-authoring",
+  "layout": "delivery",
+  "spec": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/menu-counter-orange/tmp/work/spec.json",
+  "work_spec": "tmp/work/spec.json",
+  "name": "MenuCounterOrange",
+  "canvas": 18,
+  "target_platforms": [
+    "macOS"
+  ],
+  "deliverable_type": "source-package",
+  "source_reference": "menu-counter-orange.origin.svg — the selected orange counter artwork.",
+  "brief": "An 18 point menu bar drawing of the last two wheels in 648 to 649. Original colour with orange casing and blue units.",
+  "renderer": "@resvg/resvg-js",
+  "generated_files": [
+    "menu-counter-orange.preview.svg",
+    "menu-counter-orange.preview.png",
+    "menu-counter-orange.svg",
+    "menu-counter-orange.png",
+    "layers/01-enamel-case.svg",
+    "layers/02-recessed-reels.svg",
+    "layers/03-fixed-tens.svg",
+    "layers/04-moving-units.svg",
+    "tmp/README.md",
+    "tmp/reports/style-report.json",
+    "tmp/reports/package-verification.json",
+    "tmp/reports/reference-diff.png",
+    "tmp/reports/reference-overlay.png",
+    "tmp/reports/reference-side-by-side.png",
+    "tmp/reports/visual-review.json"
+  ],
+  "generated_directories": [
+    "tmp/reports",
+    "layers",
+    "tmp"
+  ],
+  "preview_svg": "menu-counter-orange.preview.svg",
+  "preview_png": "menu-counter-orange.preview.png",
+  "app_svg": "menu-counter-orange.svg",
+  "app_png": "menu-counter-orange.png",
+  "layers": [
+    "layers/01-enamel-case.svg",
+    "layers/02-recessed-reels.svg",
+    "layers/03-fixed-tens.svg",
+    "layers/04-moving-units.svg"
+  ],
+  "apple_adapter": null,
+  "preview_background_layers": [],
+  "icon_composer_layer_decisions": [],
+  "background_mode": "spec",
+  "warnings": [],
+  "claims": [
+    "spec-driven reusable cross-platform icon source package",
+    "semantic source layers retained",
+    "rounded preview PNG rendered by @resvg/resvg-js",
+    "unrounded app/source canvas outputs retained separately from preview masking"
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "mode": "icon-spec-authoring",
+  "layout": "delivery",
+  "spec": "/Users/ryekee/workshop/P.A.R.A/0. Project/macOS/tokenory/assets/brand/tokenory-counter/tmp/work/spec.json",
+  "work_spec": "tmp/work/spec.json",
+  "name": "TokenoryCounter",
+  "canvas": 1024,
+  "target_platforms": [
+    "macOS"
+  ],
+  "deliverable_type": "source-package",
+  "source_reference": "tokenory-counter.origin.svg — aligned front elevation used as the source geometry for the 7° tilt.",
+  "brief": "A handheld mechanical tally counter for Tokenory, a local meter of AI token usage. An orange enamel casting frames three drums caught counting through 128. The complete front-facing instrument is tilted 7° counterclockwise. The window stays centred in the casting and parallel to its edges.",
+  "renderer": "@resvg/resvg-js",
+  "generated_files": [
+    "tokenory-counter.preview.svg",
+    "tokenory-counter.preview.png",
+    "tokenory-counter.svg",
+    "tokenory-counter.png",
+    "layers/01-paper-field.svg",
+    "layers/02-counter-hardware.svg",
+    "layers/03-vermilion-casting.svg",
+    "layers/04-number-wheels.svg",
+    "layers/05-stamped-numerals.svg",
+    "tmp/README.md",
+    "tmp/reports/style-report.json",
+    "tmp/reports/package-verification.json",
+    "tmp/reports/reference-diff.png",
+    "tmp/reports/reference-overlay.png",
+    "tmp/reports/reference-side-by-side.png",
+    "tmp/reports/visual-review.json"
+  ],
+  "generated_directories": [
+    "tmp/reports",
+    "layers",
+    "tmp"
+  ],
+  "preview_svg": "tokenory-counter.preview.svg",
+  "preview_png": "tokenory-counter.preview.png",
+  "app_svg": "tokenory-counter.svg",
+  "app_png": "tokenory-counter.png",
+  "layers": [
+    "layers/01-paper-field.svg",
+    "layers/02-counter-hardware.svg",
+    "layers/03-vermilion-casting.svg",
+    "layers/04-number-wheels.svg",
+    "layers/05-stamped-numerals.svg"
+  ],
+  "apple_adapter": null,
+  "preview_background_layers": [],
+  "icon_composer_layer_decisions": [],
+  "background_mode": "spec",
+  "semantic_review": {
+    "status": "exact-enough",
+    "identity_risk": "low",
+    "basis": "Original project-specific illustration with custom mechanical numerals. There is no likeness target.",
+    "route": "semantic-svg",
+    "notes": ""
+  },
+  "warnings": [],
+  "claims": [
+    "spec-driven reusable cross-platform icon source package",
+    "semantic source layers retained",
+    "rounded preview PNG rendered by @resvg/resvg-js",
+    "unrounded app/source canvas outputs retained separately from preview masking"
+  ]
+}

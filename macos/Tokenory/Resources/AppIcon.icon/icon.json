@@ -1,0 +1,122 @@
+{
+  "color-space-for-untagged-svg-colors": "display-p3",
+  "groups": [
+    {
+      "blend-mode": "normal",
+      "hidden": false,
+      "layers": [
+        {
+          "image-name": "04-thumbwheel-and-units-index.svg",
+          "name": "Thumbwheel and units index",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "glass": false
+        },
+        {
+          "image-name": "03-changing-register.svg",
+          "name": "Changing register",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "glass": false
+        },
+        {
+          "image-name": "02-three-parallel-drums.svg",
+          "name": "Three parallel drums",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "glass": false
+        },
+        {
+          "image-name": "01-recessed-square-aperture.svg",
+          "name": "Recessed square aperture",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "glass": false
+        }
+      ],
+      "lighting": "combined",
+      "name": "appicon",
+      "position": {
+        "scale": 1.103448275862069,
+        "translation-in-points": [
+          0,
+          0
+        ]
+      },
+      "specular": false,
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  },
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "extended-srgb:1.00000,0.67843,0.32157,1",
+          "extended-srgb:0.83529,0.38824,0.12941,1"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.12,
+            "y": 0.07
+          },
+          "stop": {
+            "x": 0.86,
+            "y": 0.93
+          }
+        }
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "extended-srgb:1.00000,0.67843,0.32157,1",
+          "extended-srgb:0.83529,0.38824,0.12941,1"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.12,
+            "y": 0.07
+          },
+          "stop": {
+            "x": 0.86,
+            "y": 0.93
+          }
+        }
+      }
+    }
+  ]
+}

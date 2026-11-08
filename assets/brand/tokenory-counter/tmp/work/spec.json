@@ -1,0 +1,185 @@
+{
+  "name": "Tokenory Counter",
+  "canvas": 1024,
+  "radius": 224,
+  "target_platforms": [
+    "macOS"
+  ],
+  "deliverable_type": "source-package",
+  "brief": "A handheld mechanical tally counter for Tokenory, a local meter of AI token usage. An orange enamel casting frames three drums caught counting through 128. The complete front-facing instrument is tilted 7° counterclockwise. The window stays centred in the casting and parallel to its edges.",
+  "semantic_review": {
+    "status": "exact-enough",
+    "identity_risk": "low",
+    "route": "semantic-svg",
+    "basis": "Original project-specific illustration with custom mechanical numerals. There is no likeness target."
+  },
+  "semantic_icon_design": {
+    "version": "semantic-icon-design/v0.1",
+    "route": "direct-authored-package",
+    "app_context": {
+      "app_name": "Tokenory",
+      "category": "local AI usage meter",
+      "job_to_be_done": "accumulate AI token usage and estimate its cost",
+      "tone": "tactile, legible, compact"
+    },
+    "style": {
+      "direction": "outlined-friendly-action-mark",
+      "svg_convertibility": "high",
+      "style_notes": "Precisely drawn physical instrument, warm enamel and graphite rolls."
+    },
+    "icon_intent": {
+      "metaphor": "A mechanical counter, paused between two units.",
+      "small_size_readability": "The key silhouette is the push button, case, and contrasting three-drum window."
+    },
+    "canvas": {
+      "size": 1024,
+      "composition_anchor": "center",
+      "safe_area": {
+        "x": [
+          108,
+          917
+        ],
+        "y": [
+          159,
+          837
+        ]
+      },
+      "alignment": "Foreground layers use shared pre-rotation bounds, then rotate 7° counterclockwise around (512,512)."
+    },
+    "layering_policy": {
+      "negative_space_strategy": "overlay-fill-layer",
+      "cutouts_are_layers": true
+    },
+    "background": {
+      "type": "linear-gradient",
+      "gradient_stops": [
+        "#F8F4E9",
+        "#E2DAC9"
+      ]
+    },
+    "layers": [
+      {
+        "id": "Counter hardware",
+        "order": 1,
+        "format_target": "svg",
+        "role": "moving controls",
+        "shape_model": "plunger and milled reset knob",
+        "fill": "aged steel, graphite",
+        "bounds": [
+          303,
+          210,
+          877,
+          619
+        ],
+        "must_preserve": [
+          "separate silhouettes"
+        ],
+        "must_not_add": [
+          "brand names or interface labels"
+        ]
+      },
+      {
+        "id": "Vermilion casting",
+        "order": 2,
+        "format_target": "svg",
+        "role": "enclosure",
+        "shape_model": "front-facing die-cast case with symmetric rounded corners",
+        "fill": "vermilion enamel",
+        "bounds": [
+          146,
+          338,
+          819,
+          763
+        ],
+        "must_preserve": [
+          "compact bottom return"
+        ],
+        "must_not_add": [
+          "brand names or interface labels"
+        ]
+      },
+      {
+        "id": "Number wheels",
+        "order": 3,
+        "format_target": "svg",
+        "role": "counter window",
+        "shape_model": "three broad drums in a recessed window",
+        "fill": "two graphite reels, one ivory reel",
+        "bounds": [
+          197,
+          398,
+          768,
+          680
+        ],
+        "must_preserve": [
+          "accented units wheel"
+        ],
+        "must_not_add": [
+          "brand names or interface labels"
+        ]
+      },
+      {
+        "id": "Stamped numerals",
+        "order": 4,
+        "format_target": "svg",
+        "role": "usage total",
+        "shape_model": "custom outlined numerals",
+        "fill": "ivory ink, oxide ink",
+        "bounds": [
+          256,
+          447,
+          685,
+          646
+        ],
+        "must_preserve": [
+          "partially visible incoming digit"
+        ],
+        "must_not_add": [
+          "brand names or interface labels"
+        ]
+      }
+    ]
+  },
+  "fill": {
+    "linear-gradient": [
+      "extended-srgb:0.97255,0.95686,0.91373,1",
+      "extended-srgb:0.88627,0.85490,0.78824,1"
+    ],
+    "orientation": {
+      "start": {
+        "x": 0.21484,
+        "y": 0.05859
+      },
+      "stop": {
+        "x": 0.7373,
+        "y": 0.95215
+      }
+    }
+  },
+  "layers": [
+    {
+      "name": "Paper field",
+      "svg": "<defs><linearGradient id=\"field\" gradientUnits=\"userSpaceOnUse\" x1=\"220\" y1=\"60\" x2=\"755\" y2=\"975\"><stop offset=\"0\" stop-color=\"#F8F4E9\"/><stop offset=\"1\" stop-color=\"#E2DAC9\"/></linearGradient></defs>\n<rect x=\"0\" y=\"0\" width=\"1024\" height=\"1024\" rx=\"0\" fill=\"url(#field)\"/>",
+      "composer": {
+        "include": false
+      }
+    },
+    {
+      "name": "Counter hardware",
+      "svg": "<defs><linearGradient id=\"spindle-metal\" gradientUnits=\"userSpaceOnUse\" x1=\"365\" y1=\"0\" x2=\"457\" y2=\"0\"><stop offset=\"0\" stop-color=\"#727D7A\"/><stop offset=\"0.17\" stop-color=\"#B7C2BB\"/><stop offset=\"0.4\" stop-color=\"#F3F1DB\"/><stop offset=\"0.59\" stop-color=\"#AFB9AE\"/><stop offset=\"0.83\" stop-color=\"#858F86\"/><stop offset=\"1\" stop-color=\"#525A58\"/></linearGradient><linearGradient id=\"cap-crown\" gradientUnits=\"userSpaceOnUse\" x1=\"334\" y1=\"178\" x2=\"458\" y2=\"264\"><stop offset=\"0\" stop-color=\"#555F5E\"/><stop offset=\"0.47\" stop-color=\"#374140\"/><stop offset=\"1\" stop-color=\"#20272A\"/></linearGradient><linearGradient id=\"knob-metal\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"444\" x2=\"0\" y2=\"587\"><stop offset=\"0\" stop-color=\"#FCF6DE\"/><stop offset=\"0.15\" stop-color=\"#CED2C4\"/><stop offset=\"0.43\" stop-color=\"#A9B3A9\"/><stop offset=\"0.73\" stop-color=\"#828D84\"/><stop offset=\"1\" stop-color=\"#545F58\"/></linearGradient></defs>\n<g transform=\"rotate(-7 512 512) translate(0 36)\">\n<rect x=\"357\" y=\"234\" width=\"108\" height=\"114\" rx=\"12\" fill=\"url(#spindle-metal)\"/>\n<path fill=\"#20282A\" d=\"M309 196 Q312 175 334 175 H488 Q510 175 513 196 L517 228 Q519 252 494 252 H328 Q303 252 305 228 Z\"/>\n<path fill=\"url(#cap-crown)\" d=\"M309 194 Q313 174 334 174 H488 Q509 174 513 194 L516 211 Q519 228 499 228 H323 Q303 228 306 211 Z\"/>\n<rect x=\"775\" y=\"461\" width=\"53\" height=\"97\" rx=\"16\" fill=\"#48504C\"/>\n<rect x=\"799\" y=\"439\" width=\"78\" height=\"144\" rx=\"23\" fill=\"url(#knob-metal)\"/>\n<rect x=\"811\" y=\"452\" width=\"55\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n<rect x=\"808\" y=\"463\" width=\"61\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n<rect x=\"807\" y=\"475\" width=\"63\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n<rect x=\"807\" y=\"487\" width=\"63\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n<rect x=\"807\" y=\"499\" width=\"63\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n<rect x=\"807\" y=\"511\" width=\"63\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n<rect x=\"807\" y=\"523\" width=\"63\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n<rect x=\"807\" y=\"535\" width=\"63\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n<rect x=\"807\" y=\"547\" width=\"63\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n<rect x=\"808\" y=\"559\" width=\"61\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n<rect x=\"812\" y=\"571\" width=\"53\" height=\"3.4\" rx=\"1.7\" fill=\"#738078\"/>\n</g>"
+    },
+    {
+      "name": "Vermilion casting",
+      "svg": "<defs><linearGradient id=\"case-return\" gradientUnits=\"userSpaceOnUse\" x1=\"153\" y1=\"445\" x2=\"829\" y2=\"686\"><stop offset=\"0\" stop-color=\"#C94825\"/><stop offset=\"0.35\" stop-color=\"#B63F22\"/><stop offset=\"0.77\" stop-color=\"#983521\"/><stop offset=\"1\" stop-color=\"#812D20\"/></linearGradient><linearGradient id=\"enamel\" gradientUnits=\"userSpaceOnUse\" x1=\"279\" y1=\"271\" x2=\"640\" y2=\"743\"><stop offset=\"0\" stop-color=\"#FF8F4C\"/><stop offset=\"0.38\" stop-color=\"#FC733A\"/><stop offset=\"0.78\" stop-color=\"#EC582A\"/><stop offset=\"1\" stop-color=\"#DA4726\"/></linearGradient></defs>\n<g transform=\"rotate(-7 512 512) translate(0 36)\">\n<rect x=\"146\" y=\"325\" width=\"673\" height=\"402\" rx=\"98\" fill=\"url(#case-return)\"/>\n<rect x=\"146\" y=\"302\" width=\"673\" height=\"402\" rx=\"98\" fill=\"url(#enamel)\"/>\n</g>"
+    },
+    {
+      "name": "Number wheels",
+      "svg": "<defs><linearGradient id=\"seat\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"366\" x2=\"0\" y2=\"644\"><stop offset=\"0\" stop-color=\"#873920\"/><stop offset=\"0.46\" stop-color=\"#A84425\"/><stop offset=\"1\" stop-color=\"#F7955C\"/></linearGradient><linearGradient id=\"graphite-roller\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"396\" x2=\"0\" y2=\"611\"><stop offset=\"0\" stop-color=\"#131B1E\"/><stop offset=\"0.15\" stop-color=\"#232A2B\"/><stop offset=\"0.42\" stop-color=\"#343D3C\"/><stop offset=\"0.58\" stop-color=\"#353D3A\"/><stop offset=\"0.82\" stop-color=\"#262C2B\"/><stop offset=\"1\" stop-color=\"#171D1F\"/></linearGradient><linearGradient id=\"ivory-roller\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"396\" x2=\"0\" y2=\"611\"><stop offset=\"0\" stop-color=\"#ADAD97\"/><stop offset=\"0.13\" stop-color=\"#E2DEC6\"/><stop offset=\"0.36\" stop-color=\"#FBF3D9\"/><stop offset=\"0.65\" stop-color=\"#FAF0D3\"/><stop offset=\"0.84\" stop-color=\"#E1D9BF\"/><stop offset=\"1\" stop-color=\"#B3B5A1\"/></linearGradient></defs>\n<g transform=\"rotate(-7 512 512) translate(0 36)\">\n<rect x=\"197\" y=\"362\" width=\"571\" height=\"282\" rx=\"56\" fill=\"url(#seat)\"/>\n<rect x=\"203\" y=\"368\" width=\"559\" height=\"267\" rx=\"51\" fill=\"#2D3230\"/>\n<rect x=\"216\" y=\"381\" width=\"533\" height=\"241\" rx=\"39\" fill=\"#11181B\"/>\n<rect x=\"226\" y=\"393\" width=\"158\" height=\"217\" rx=\"25\" fill=\"url(#graphite-roller)\"/>\n<rect x=\"391\" y=\"393\" width=\"165\" height=\"217\" rx=\"15\" fill=\"url(#graphite-roller)\"/>\n<rect x=\"563\" y=\"393\" width=\"174\" height=\"217\" rx=\"22\" fill=\"url(#ivory-roller)\"/>\n</g>"
+    },
+    {
+      "name": "Stamped numerals",
+      "svg": "<defs><linearGradient id=\"digit-ink\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"408\" x2=\"0\" y2=\"598\"><stop offset=\"0\" stop-color=\"#D8D8C5\"/><stop offset=\"0.4\" stop-color=\"#FAF5DF\"/><stop offset=\"1\" stop-color=\"#E7E4D0\"/></linearGradient></defs>\n<g transform=\"rotate(-7 512 512) translate(0 36)\">\n<g fill=\"url(#digit-ink)\"><path transform=\"translate(257 436) scale(1.08 1.02)\" d=\"M6 27 L36 5 Q40 2 47 2 H66 V111 H83 V129 H13 V111 H38 V33 L15 48 Z\"/><path transform=\"translate(422 435) scale(1.10 1.03)\" d=\"M3 37 C5 11 23 0 49 0 C76 0 92 14 92 37 C92 52 85 63 68 77 L33 106 H92 V129 H2 V110 Q2 103 10 96 L55 58 C64 50 68 44 68 37 C68 27 61 22 51 22 C38 22 31 28 30 40 Z\"/></g>\n<path transform=\"translate(597 411) scale(1.13 1.03)\" fill=\"#AF482A\" fill-rule=\"evenodd\" d=\"M47 0 C70 0 87 14 87 35 C87 47 82 57 71 62 C85 68 92 78 92 92 C92 117 74 131 47 131 C20 131 2 117 2 92 C2 79 9 68 23 62 C12 56 7 47 7 35 C7 14 24 0 47 0 Z M47 20 C36 20 29 27 29 37 C29 47 37 53 47 53 C59 53 66 47 66 37 C66 27 59 20 47 20 Z M47 73 C34 73 26 80 26 92 C26 104 34 111 47 111 C61 111 69 104 69 92 C69 80 61 73 47 73 Z\"/>\n<path fill=\"#A26D4D\" d=\"M612 603 C620 593 633 589 648 589 C662 589 676 594 682 603 L684 610 H667 Q662 603 648 603 Q633 603 627 610 H609 Z\"/>\n</g>"
+    }
+  ],
+  "source_reference": "tokenory-counter.origin.svg — aligned front elevation used as the source geometry for the 7° tilt."
+}

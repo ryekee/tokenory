@@ -1,18 +1,13 @@
 {
   "images": [
     {
-      "filename": "icon-18@1x.png",
-      "idiom": "mac",
-      "scale": "1x"
-    },
-    {
-      "filename": "icon-18@2x.png",
-      "idiom": "mac",
-      "scale": "2x"
+      "filename": "icon.svg",
+      "idiom": "mac"
     }
   ],
   "properties": {
-    "template-rendering-intent": "template"
+    "preserves-vector-representation": true,
+    "template-rendering-intent": "original"
   },
   "info": {
     "author": "xcode",

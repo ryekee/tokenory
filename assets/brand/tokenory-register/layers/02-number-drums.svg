@@ -1,0 +1,9 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+<defs><linearGradient id="carbon-cylinder" gradientUnits="userSpaceOnUse" x1="0" y1="144" x2="0" y2="869"><stop offset="0" stop-color="#101719"/><stop offset="0.095" stop-color="#1E2729"/><stop offset="0.29" stop-color="#354043"/><stop offset="0.47" stop-color="#3C4748"/><stop offset="0.64" stop-color="#343F41"/><stop offset="0.84" stop-color="#253133"/><stop offset="1" stop-color="#121A1D"/></linearGradient><linearGradient id="ivory-cylinder" gradientUnits="userSpaceOnUse" x1="0" y1="144" x2="0" y2="869"><stop offset="0" stop-color="#8B9089"/><stop offset="0.115" stop-color="#C1C0AC"/><stop offset="0.28" stop-color="#E6E0C9"/><stop offset="0.45" stop-color="#FAF3DD"/><stop offset="0.6" stop-color="#F6EDD5"/><stop offset="0.79" stop-color="#DDD5BA"/><stop offset="0.9" stop-color="#B5B4A2"/><stop offset="1" stop-color="#7B8380"/></linearGradient></defs>
+<g transform="rotate(-7 512 512)">
+<rect x="-150" y="92" width="470" height="842" rx="14" fill="url(#carbon-cylinder)"/>
+<rect x="330" y="92" width="356" height="842" rx="14" fill="url(#carbon-cylinder)"/>
+<rect x="697" y="92" width="470" height="842" rx="14" fill="url(#ivory-cylinder)"/>
+</g>
+</svg>
