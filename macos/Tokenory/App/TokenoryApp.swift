@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(workspaceOpened(_:)), name: NSWindow.didBecomeMainNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(workspaceClosed(_:)), name: NSWindow.willCloseNotification, object: nil)
         UsageStore.shared.start()
+        UpdateChecker.shared.start()
     }
     @objc private func workspaceOpened(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, window.canBecomeMain, !(window is NSPanel) else { return }
@@ -54,10 +55,11 @@ struct TokenoryApp: App {
 
 private struct DashboardCommands: Commands {
     @Environment(\.openWindow) private var openWindow
+    @ObservedObject private var updates = UpdateChecker.shared
     var body: some Commands {
         CommandGroup(after: .appInfo) {
-            Button(L("update.check")) { Task { await UpdateChecker.shared.check() } }
-                .disabled(UpdateChecker.shared.isChecking)
+            Button(L("update.check")) { updates.check() }
+                .disabled(!updates.canCheckForUpdates)
         }
         CommandGroup(after: .newItem) {
             Button(L("action.open_stats")) { openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }.keyboardShortcut("o")

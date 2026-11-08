@@ -2,52 +2,61 @@ import XCTest
 @testable import Tokenory
 
 final class UpdateCheckerTests: XCTestCase {
-    func testVersionComparison() throws {
-        XCTAssertTrue(try ReleaseVersion("v0.10.0") > ReleaseVersion("0.9.9"))
-        XCTAssertTrue(try ReleaseVersion("1.0.0") > ReleaseVersion("0.99.99"))
-        XCTAssertEqual(try ReleaseVersion("v0.1.1"), try ReleaseVersion("0.1.1"))
-        for invalid in ["", "latest", "1.2", "1.2.3-beta", "1..3", "-1.2.3"] {
-            XCTAssertThrowsError(try ReleaseVersion(invalid))
-        }
-    }
-
-    private static func payload(tag: String = "v0.1.1", draft: Bool = false, prerelease: Bool = false,
-                                url: String = "https://github.com/ryekee/tokenory/releases/tag/v0.1.1") -> Data {
-        try! JSONSerialization.data(withJSONObject: ["tag_name": tag, "html_url": url, "draft": draft, "prerelease": prerelease])
-    }
-
-    func testReleaseBoundary() throws {
-        XCTAssertEqual(try AppRelease.decode(Self.payload()).tag, "v0.1.1")
-        XCTAssertThrowsError(try AppRelease.decode(Self.payload(draft: true)))
-        XCTAssertThrowsError(try AppRelease.decode(Self.payload(prerelease: true)))
-        XCTAssertThrowsError(try AppRelease.decode(Self.payload(url: "https://example.com/release")))
-        XCTAssertThrowsError(try AppRelease.decode(Data("{}".utf8)))
-    }
-
     @MainActor
-    func testLatestUpdateUsesGitHubAndComparesInstalledVersion() async throws {
-        for (current, expected) in [("0.1.0", true), ("0.1.1", false), ("0.2.0", false)] {
-            let checker = UpdateChecker(currentVersion: current) { request in
-                XCTAssertEqual(request.url?.absoluteString, "https://api.github.com/repos/ryekee/tokenory/releases/latest")
-                XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
-                return (Self.payload(), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
-            }
-            let result = try await checker.latestUpdate()
-            XCTAssertEqual(result != nil, expected)
+    func testUpdaterSettingsPersistAndManualChecksRemainAvailableWhenAutomaticChecksAreOff() throws {
+        let domain = "ee.ryek.tokenory.tests.\(UUID().uuidString)"
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(domain).appendingPathExtension("app")
+        let contents = root.appendingPathComponent("Contents")
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: domain))
+        defer {
+            defaults.removePersistentDomain(forName: domain)
+            try? FileManager.default.removeItem(at: root)
         }
+        let info: [String: Any] = [
+            "CFBundleIdentifier": domain,
+            "CFBundleName": "Tokenory Test",
+            "CFBundleVersion": "5",
+            "CFBundleShortVersionString": "0.1.3",
+            "SUDefaultsDomain": domain,
+            "SUFeedURL": "https://github.com/ryekee/tokenory/releases/latest/download/appcast.xml",
+            "SUPublicEDKey": "RY7yf0+Hmmt5t4CaNLRZ0yxE/IyZ2cfkL9nZxt9G/0g=",
+            "SUEnableAutomaticChecks": true,
+            "SUScheduledCheckInterval": 86400,
+            "SUAllowsAutomaticUpdates": false
+        ]
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            .write(to: contents.appendingPathComponent("Info.plist"))
+        let bundle = try XCTUnwrap(Bundle(url: root))
+        let checker = UpdateChecker(bundle: bundle)
+        XCTAssertTrue(checker.automaticallyChecksForUpdates)
+        XCTAssertEqual(checker.checkIntervalHours, 24)
+        checker.setAutomaticChecks(false)
+        XCTAssertFalse(checker.automaticallyChecksForUpdates)
+        for hours in UpdateChecker.intervalHours {
+            checker.setIntervalHours(hours)
+            XCTAssertEqual(checker.updater.updateCheckInterval, Double(hours * 3600))
+            XCTAssertEqual(checker.checkIntervalHours, hours)
+        }
+        let reopened = UpdateChecker(bundle: bundle)
+        XCTAssertFalse(reopened.automaticallyChecksForUpdates)
+        XCTAssertEqual(reopened.checkIntervalHours, 168)
+        // Starting with automatic checks disabled must still enable the manual action.
+        reopened.start()
+        XCTAssertNil(reopened.startupError)
+        XCTAssertTrue(reopened.canCheckForUpdates)
+        reopened.setAutomaticChecks(true)
+        XCTAssertTrue(reopened.automaticallyChecksForUpdates)
+        reopened.setAutomaticChecks(false)
     }
 
-    @MainActor
-    func testHTTPAndNetworkFailuresAreNotReportedAsUpToDate() async {
-        for status in [404, 403, 429, 500] {
-            let checker = UpdateChecker(currentVersion: "0.1.1") { request in
-                (Data(), HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
-            }
-            do { _ = try await checker.latestUpdate(); XCTFail("Expected HTTP failure") }
-            catch { XCTAssertTrue(error is UpdateError) }
-        }
-        let checker = UpdateChecker(currentVersion: "0.1.1") { _ in throw URLError(.notConnectedToInternet) }
-        do { _ = try await checker.latestUpdate(); XCTFail("Expected network failure") }
-        catch { XCTAssertEqual((error as? URLError)?.code, .notConnectedToInternet) }
+    func testReleaseConfigurationSupportsSignedGitHubUpdates() throws {
+        let bundle = Bundle.main
+        XCTAssertEqual(bundle.object(forInfoDictionaryKey: "SUFeedURL") as? String,
+                       "https://github.com/ryekee/tokenory/releases/latest/download/appcast.xml")
+        let key = try XCTUnwrap(bundle.object(forInfoDictionaryKey: "SUPublicEDKey") as? String)
+        XCTAssertEqual(Data(base64Encoded: key)?.count, 32)
+        XCTAssertEqual(bundle.object(forInfoDictionaryKey: "SUEnableAutomaticChecks") as? Bool, true)
+        XCTAssertEqual(bundle.object(forInfoDictionaryKey: "SUAllowsAutomaticUpdates") as? Bool, false)
     }
 }

@@ -13,7 +13,7 @@ Tokenory 是 `missuo/tokens` 的本地实现分支。它复用上游的日志发
 - 区分来源成本、API 参考估算和未计价用量。新价格不会自动改写旧估算。
 - 原生 SwiftUI 界面，支持简体中文和 English。关闭窗口继续采集，退出 App 停止采集。
 
-用量账本和设置位于 `~/Library/Application Support/Tokenory`。Tokenory 不向 tokens.ci 或其他排行榜上传用量，不把提示词正文写入账本。**本地存储不等于完全离线**：参考价格刷新会访问价格源，手动检查更新会访问 GitHub API。账单类客户端的缓存需要另行同步，见下文。
+用量账本和设置位于 `~/Library/Application Support/Tokenory`。Tokenory 不向 tokens.ci 或其他排行榜上传用量，不把提示词正文写入账本。**本地存储不等于完全离线**：参考价格刷新会访问价格源，更新检查会访问 GitHub Release。账单类客户端的缓存需要另行同步，见下文。
 
 ## 支持的客户端
 
@@ -44,7 +44,9 @@ Tokenory 是 `missuo/tokens` 的本地实现分支。它复用上游的日志发
 
 下载版适用于运行 macOS 15 或更高版本的 Apple Silicon Mac。解压 ZIP 后，将 `Tokenory.app` 拖入「应用程序」。App 使用 Shenzhen Hiko Technology Co., Ltd. 的 Developer ID 签名，并附有 Apple 公证票据。[下载最新版本](https://github.com/ryekee/tokenory/releases/latest)
 
-可在「Tokenory → 检查更新…」或「设置 → 通用」中手动检查 `ryekee/tokenory` 的 GitHub latest release。发现更高版本时，可打开对应 Release 页面查看说明并下载；安装仍需手动完成。版本标签使用 `vMAJOR.MINOR.PATCH`，仅检查正式版。
+可在「Tokenory → 检查更新…」或「设置 → 通用」中检查新版，并在 App 内下载、安装和重启。自动检查默认每天一次，可关闭或改为每小时、每 6 小时、每 12 小时、每天、每周；安装由用户确认。更新源为 `ryekee/tokenory` 的 GitHub latest release，使用 Sparkle 验证更新包。v0.1.2 及更早版本需手动升级一次。
+
+发布流程见 [macOS 发布说明](docs/local/releases.md)。
 
 ## 从源码构建与运行
 
