@@ -19,7 +19,7 @@ final class UpdateCheckerTests: XCTestCase {
             "CFBundleVersion": "5",
             "CFBundleShortVersionString": "0.1.3",
             "SUDefaultsDomain": domain,
-            "SUFeedURL": "https://github.com/ryekee/tokenory/releases/latest/download/appcast.xml",
+            "SUFeedURL": "https://raw.githubusercontent.com/ryekee/tokenory/updates/appcast.xml",
             "SUPublicEDKey": "RY7yf0+Hmmt5t4CaNLRZ0yxE/IyZ2cfkL9nZxt9G/0g=",
             "SUEnableAutomaticChecks": true,
             "SUScheduledCheckInterval": 86400,
@@ -29,6 +29,7 @@ final class UpdateCheckerTests: XCTestCase {
             .write(to: contents.appendingPathComponent("Info.plist"))
         let bundle = try XCTUnwrap(Bundle(url: root))
         let checker = UpdateChecker(bundle: bundle)
+        XCTAssertEqual(checker.updater.httpHeaders?["Accept"], "application/octet-stream")
         XCTAssertTrue(checker.automaticallyChecksForUpdates)
         XCTAssertEqual(checker.checkIntervalHours, 24)
         checker.setAutomaticChecks(false)
@@ -53,7 +54,7 @@ final class UpdateCheckerTests: XCTestCase {
     func testReleaseConfigurationSupportsSignedGitHubUpdates() throws {
         let bundle = Bundle.main
         XCTAssertEqual(bundle.object(forInfoDictionaryKey: "SUFeedURL") as? String,
-                       "https://github.com/ryekee/tokenory/releases/latest/download/appcast.xml")
+                       "https://raw.githubusercontent.com/ryekee/tokenory/updates/appcast.xml")
         let key = try XCTUnwrap(bundle.object(forInfoDictionaryKey: "SUPublicEDKey") as? String)
         XCTAssertEqual(Data(base64Encoded: key)?.count, 32)
         XCTAssertEqual(bundle.object(forInfoDictionaryKey: "SUEnableAutomaticChecks") as? Bool, true)

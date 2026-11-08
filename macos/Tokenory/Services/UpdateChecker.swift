@@ -14,11 +14,13 @@ final class UpdateChecker: NSObject, ObservableObject, SPUStandardUserDriverDele
     let currentVersion: String
     private(set) var updater: SPUUpdater!
 
-    init(bundle: Bundle = .main) {
+    init(bundle: Bundle = .main, userDriver: (any SPUUserDriver)? = nil) {
         currentVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
         super.init()
-        let driver = SPUStandardUserDriver(hostBundle: bundle, delegate: self)
+        let driver = userDriver ?? SPUStandardUserDriver(hostBundle: bundle, delegate: self)
         updater = SPUUpdater(hostBundle: bundle, applicationBundle: bundle, userDriver: driver, delegate: nil)
+        // Public Release Asset API downloads require this content negotiation header.
+        updater.httpHeaders = ["Accept": "application/octet-stream"]
         updater.publisher(for: \.canCheckForUpdates).assign(to: &$canCheckForUpdates)
         updater.publisher(for: \.automaticallyChecksForUpdates).assign(to: &$automaticallyChecksForUpdates)
         updater.publisher(for: \.updateCheckInterval).map { Int($0 / 3600) }.assign(to: &$checkIntervalHours)
