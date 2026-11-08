@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Tokenory</title>
+        <item>
+            <title>0.1.4</title>
+            <pubDate>Sun, 08 Nov 2026 17:19:55 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.4</link>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>0.1.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown">## 修复更新源
+
+- 更新清单改为仓库内固定 raw 地址，避开 GitHub Release 网页下载链路的间歇性 504。
+- 安装包改用无需登录的 GitHub Release Asset API 下载，保留 Sparkle 签名验证。
+- 发布时自动同步更新清单，确保它指向最新正式 Release 的对应安装包。
+
+自动检查开关、检查频率和应用内安装方式不变。支持 macOS 15 及以上的 Apple Silicon Mac。版本 0.1.4（build 6）。
+
+本版本使用 Hiko Developer ID 签名，已通过 Apple 公证并附加票据。若旧版因 504 无法更新，可下载 ZIP 手动替换一次；用量数据和设置保留。
+</description>
+            <enclosure url="https://api.github.com/repos/ryekee/tokenory/releases/assets/723477810" length="8781274" type="application/octet-stream" sparkle:edSignature="haeTW+lC2t9/r4MHZ1ojg742kNUeZ4wLrxA6HVKfBTSPMSsFhO7abmAjCai8bFD9WZEJ7K+1MPRpBkAo9lX6Aw==" />
+        </item>
+    </channel>
+</rss>
