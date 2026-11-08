@@ -101,6 +101,14 @@ struct SettingsView: View {
                     Toggle(L("settings.login"), isOn: Binding(get: { login.enabled }, set: { value in do { try login.setEnabled(value) } catch { store.fail(error) } }))
                         .labelsHidden().toggleStyle(.switch).controlSize(.small).fixedSize().frame(width: 180, alignment: .trailing)
                 }
+                Divider()
+                HStack {
+                    Text(LF("update.current", UpdateChecker.shared.currentVersion)).foregroundStyle(.secondary)
+                    Spacer()
+                    if UpdateChecker.shared.isChecking { ProgressView().controlSize(.small) }
+                    Button(L("update.check")) { Task { await UpdateChecker.shared.check() } }
+                        .disabled(UpdateChecker.shared.isChecking)
+                }
                 if login.status == .requiresApproval {
                     Button(L("settings.open_login")) { SMAppService.openSystemSettingsLoginItems() }
                 }
