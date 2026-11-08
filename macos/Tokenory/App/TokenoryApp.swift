@@ -55,6 +55,10 @@ struct TokenoryApp: App {
 private struct DashboardCommands: Commands {
     @Environment(\.openWindow) private var openWindow
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button(L("update.check")) { Task { await UpdateChecker.shared.check() } }
+                .disabled(UpdateChecker.shared.isChecking)
+        }
         CommandGroup(after: .newItem) {
             Button(L("action.open_stats")) { openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }.keyboardShortcut("o")
         }
