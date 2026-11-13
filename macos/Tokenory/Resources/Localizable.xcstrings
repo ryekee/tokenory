@@ -1332,7 +1332,6 @@
       }
     },
     "token.input": {
-      "comment": "Tokenory UI: token.input. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -1344,7 +1343,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "新输入"
+            "value": "输入"
           }
         }
       }
@@ -1475,6 +1474,24 @@
         }
       }
     },
+    "price.compactor_reference": {
+      "comment": "User-selected reference estimate; the actual model version is unconfirmed.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "compactor · GPT-6 Luna reference estimate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "compactor · GPT-6 Luna 参考估算"
+          }
+        }
+      }
+    },
     "price.explanation": {
       "comment": "Tokenory UI: price.explanation. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",
@@ -1482,13 +1499,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estimates use USD API rates. For codex-auto-review, Tokenory uses a tokens.ci reference estimate. Neither represents your bill. Recalculate to update saved estimates."
+            "value": "Estimates use USD API rates. For codex-auto-review, Tokenory uses a tokens.ci reference estimate. Neither represents your bill. Missing prices fill automatically. Recalculate to update existing amounts."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "费用按美元 API 费率估算；codex-auto-review 使用 tokens.ci 参考估算。估算不代表实际账单。更新历史记录请使用「重新计算已有估算」。"
+            "value": "费用按美元 API 费率估算；codex-auto-review 使用 tokens.ci 参考估算。估算不代表实际账单。待计价记录自动补齐；更新已有金额请使用「重新计算已有估算」。"
           }
         }
       }
@@ -1583,6 +1600,125 @@
         }
       }
     },
+    "price.period": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Period"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "时段"
+          }
+        }
+      }
+    },
+    "price.peak": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peak"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高峰"
+          }
+        }
+      }
+    },
+    "price.off_peak": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off-peak"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低谷"
+          }
+        }
+      }
+    },
+    "price.subscription_rates": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subscription plan · API reference estimate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅套餐 · API 参考估算"
+          }
+        }
+      }
+    },
+    "price.scope": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price scope"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "费率范围"
+          }
+        }
+      }
+    },
+    "price.scope_all": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部"
+          }
+        }
+      }
+    },
+    "price.scope_used": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已使用"
+          }
+        }
+      }
+    },
     "price.rate_units": {
       "comment": "Tokenory UI: price.rate_units. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",
@@ -1590,13 +1726,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "USD per million tokens. DeepSeek shows peak rates."
+            "value": "USD per million tokens."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "单位：美元 / 百万 tokens。DeepSeek 显示高峰价。"
+            "value": "单位：美元 / 百万 tokens。"
           }
         }
       }
@@ -3510,6 +3646,511 @@
           "stringUnit": {
             "state": "translated",
             "value": "每周"
+          }
+        }
+      }
+    },
+    "overview.back": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to previous range"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回此前范围"
+          }
+        }
+      }
+    },
+    "overview.active_days": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Active days"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "活跃天数"
+          }
+        }
+      }
+    },
+    "overview.models": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Models used"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用模型"
+          }
+        }
+      }
+    },
+    "overview.cost_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated at API rates. This is not a subscription charge."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按 API 费率估算，不代表订阅扣费。"
+          }
+        }
+      }
+    },
+    "overview.sort": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rank by"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排序依据"
+          }
+        }
+      }
+    },
+    "overview.sort_tokens": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By tokens"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按 Tokens"
+          }
+        }
+      }
+    },
+    "overview.sort_cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By cost"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按费用"
+          }
+        }
+      }
+    },
+    "activity.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activity"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "活动日历"
+          }
+        }
+      }
+    },
+    "activity.year": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last 12 months"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 12 个月"
+          }
+        }
+      }
+    },
+    "activity.days": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld active day"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld active days"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个活跃日"
+          }
+        }
+      }
+    },
+    "activity.low": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Less"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "少"
+          }
+        }
+      }
+    },
+    "activity.high": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多"
+          }
+        }
+      }
+    },
+    "activity.partial": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This day has partial coverage."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此日记录不完整。"
+          }
+        }
+      }
+    },
+    "activity.open_day": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View day"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看当日"
+          }
+        }
+      }
+    },
+    "activity.weekday": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Most productive day"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最高产的一天"
+          }
+        }
+      }
+    },
+    "activity.peak": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biggest day"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单日最高"
+          }
+        }
+      }
+    },
+    "history.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage over time"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用量走势"
+          }
+        }
+      }
+    },
+    "history.cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cost"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "费用"
+          }
+        }
+      }
+    },
+    "history.total_tokens": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Range total tokens"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "范围内总 Tokens"
+          }
+        }
+      }
+    },
+    "history.total_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raw total for the displayed range."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前范围内的原始用量合计。"
+          }
+        }
+      }
+    },
+    "history.metric": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metric"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指标"
+          }
+        }
+      }
+    },
+    "history.display": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示"
+          }
+        }
+      }
+    },
+    "history.average": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30-day average"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 天平均"
+          }
+        }
+      }
+    },
+    "history.daily": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每日"
+          }
+        }
+      }
+    },
+    "history.average_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trailing average across calendar days."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按日历天数计算移动平均。"
+          }
+        }
+      }
+    },
+    "habits.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coding patterns"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编码习惯"
+          }
+        }
+      }
+    },
+    "habits.weekdays": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tokens by weekday"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每周分布"
+          }
+        }
+      }
+    },
+    "habits.hours": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tokens by hour"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每小时分布"
+          }
+        }
+      }
+    },
+    "habits.share": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ of total"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "占总量 %@"
           }
         }
       }

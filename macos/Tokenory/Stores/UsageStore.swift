@@ -1,3 +1,7 @@
+// [INPUT]: 接收引擎报告、目录和设置协议。
+// [OUTPUT]: 发布界面使用的统计、价格和采集状态。
+// [POS]: 原生界面与 worker 的状态边界。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
 import Observation
 
@@ -14,9 +18,25 @@ final class UsageStore {
     var today: UsageReport?
     var report: UsageReport?
     var reportFilter: UsageFilter?
+    var activity: ActivityReport?
+    var activityCalendar: UsageActivity?
+    @ObservationIgnored private var historyCache: [HistorySelection: UsageHistory] = [:]
+    private struct HistorySelection: Hashable {
+        let metric: UsageMetric
+        let average: Bool
+        let client: String?
+    }
+    func history(metric: UsageMetric, average: Bool, client: String?) -> UsageHistory? {
+        guard let activity else { return nil }
+        let key = HistorySelection(metric: metric, average: average, client: client)
+        if let cached = historyCache[key] { return cached }
+        let data = UsageHistory(report: activity, metric: metric, average: average, client: client, calendarDays: activityCalendar?.days)
+        historyCache[key] = data
+        return data
+    }
     var catalog: UsageReport?
     var filter = UsageFilter()
-    var dateRange: UsageDateRange = .month
+    var dateRange: UsageDateRange = .week
     var status: EngineStatus?
     var scanning = false
     var connected = false
@@ -25,6 +45,7 @@ final class UsageStore {
     var sources: JSONValue = .null
     var prices: JSONValue = .null
     var priceProviders: [PriceProviderGroup] = []
+    var usedPriceModels: Set<PriceModelIdentity> = []
     var settings: EngineSettings?
     var clients: [ClientInfo] = []
     private var eventTask: Task<Void, Never>?
@@ -70,14 +91,28 @@ final class UsageStore {
             let queryFilter = filter
             let dashboardFilter = try JSONValue.encode(queryFilter)
             let day = Self.day(now); let todayFilter = try JSONValue.encode(UsageFilter(from: day, to: day))
+            var historyFilter = queryFilter
+            let calendar = Localization.reportingCalendar
+            let start = calendar.date(byAdding: .year, value: -1, to: calendar.startOfDay(for: now))!
+            historyFilter.from = Self.day(calendar.date(byAdding: .day, value: 1, to: start)!)
+            historyFilter.to = day
+            historyFilter.offset = 0
             async let dashboard = engine.request("overview", payload: dashboardFilter)
+            async let history = engine.request("activity", payload: .encode(historyFilter))
             async let quick = engine.request("overview", payload: todayFilter)
             async let all = engine.request("overview")
             async let engineStatus = engine.request("status")
-            let results = try await (dashboard, quick, all, engineStatus)
+            let results = try await (dashboard, quick, all, engineStatus, history)
             guard generation == refreshGeneration else { return }
-            report = try results.0.decode(UsageReport.self); reportFilter = queryFilter; today = try results.1.decode(UsageReport.self); catalog = try results.2.decode(UsageReport.self)
-            status = try results.3.decode(EngineStatus.self); scanning = status?.scanning ?? false; connected = true
+            let newReport = try results.0.decode(UsageReport.self)
+            let newToday = try results.1.decode(UsageReport.self)
+            let newCatalog = try results.2.decode(UsageReport.self)
+            let newStatus = try results.3.decode(EngineStatus.self)
+            let newActivity = try results.4.decode(ActivityReport.self)
+            report = newReport; reportFilter = queryFilter; today = newToday; catalog = newCatalog
+            activityCalendar = UsageActivity(report: newActivity)
+            historyCache.removeAll(keepingCapacity: true)
+            activity = newActivity; status = newStatus; scanning = newStatus.scanning; connected = true
         } catch { if generation == refreshGeneration { fail(error) } }
         if generation == refreshGeneration { loading = false }
     }
@@ -94,6 +129,13 @@ final class UsageStore {
         catch { start(); throw error }
         try await engine.start(); error = nil; await refresh(); await loadManagement()
     }
+    func loadSources() async {
+        do {
+            let response = try await engine.request("sources")
+            let decodedClients = try response["clients"].decode([ClientInfo].self)
+            sources = response; clients = decodedClients
+        } catch { fail(error) }
+    }
     func loadManagement() async {
         do {
             async let s = engine.request("sources"); async let p = engine.request("prices"); async let c = engine.request("settings")
@@ -101,7 +143,8 @@ final class UsageStore {
             let catalog = try values.1.decode(PriceCatalogResponse.self)
             clients = try values.0["clients"].decode([ClientInfo].self)
             sources = values.0; prices = values.1; settings = try values.2.decode(EngineSettings.self)
-            priceProviders = PriceProviderGroup.make(catalog.current?.snapshot.entries ?? [])
+            usedPriceModels = Set(catalog.usedModels ?? [])
+            priceProviders = PriceProviderGroup.make(catalog.catalog ?? catalog.current?.snapshot.entries ?? [])
         } catch { fail(error) }
     }
     @discardableResult
@@ -118,6 +161,7 @@ final class UsageStore {
             scanning = false
             do { status = try await engine.request("status").decode(EngineStatus.self) } catch { fail(error) }
             await refreshToday()
+            if sources != .null { await loadSources() }
         case "usageChanged": await refresh()
         case "pricesUpdated": await loadManagement()
         case "scanFailed": scanning = false; error = event.message

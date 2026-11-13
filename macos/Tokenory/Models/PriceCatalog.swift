@@ -1,3 +1,7 @@
+// [INPUT]: 解码引擎价格目录与生成的供应商品牌资源。
+// [OUTPUT]: 提供完整费率目录、品牌名称和费率分组。
+// [POS]: 价格协议到设置页的展示模型；不计算账本金额。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
 
 struct PriceCatalogResponse: Decodable {
@@ -6,6 +10,12 @@ struct PriceCatalogResponse: Decodable {
         let snapshot: Snapshot
     }
     let current: Current?
+    let catalog: [PriceCatalogEntry]?
+    let usedModels: [PriceModelIdentity]?
+}
+struct PriceModelIdentity: Decodable, Hashable {
+    let provider: String
+    let model: String
 }
 struct PriceCatalogEntry: Decodable {
     let provider: String
@@ -30,9 +40,13 @@ struct PriceProviderGroup: Identifiable {
         case "anthropic": "Anthropic"
         case "deepseek": "DeepSeek"
         case "google": "Google"
+        case "devin", "cognition": "Devin"
+        case "mistralai": "Mistral AI"
+        case "moonshot": "Moonshot AI"
+        case "zhipu": "Zhipu AI"
         case "_session": L("provider.unspecified")
         case "unknown": L("provider.unknown")
-        default: id
+        default: ProviderBrand.all[id]?.name ?? id
         }
     }
     static func make(_ entries: [PriceCatalogEntry]) -> [PriceProviderGroup] {
@@ -59,4 +73,15 @@ struct PriceProviderGroup: Identifiable {
             return $0.title.localizedStandardCompare($1.title) == .orderedAscending
         }
     }
+}
+
+struct ProviderBrand: Decodable {
+    let name: String
+    let icon: String
+    let subscription: Bool
+    let original: Bool
+    static let all: [String: ProviderBrand] = {
+        let url = Bundle.main.url(forResource: "ProviderCatalog", withExtension: "json")!
+        return try! JSONDecoder().decode([String: ProviderBrand].self, from: Data(contentsOf: url))
+    }()
 }

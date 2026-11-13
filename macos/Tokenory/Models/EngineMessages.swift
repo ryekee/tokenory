@@ -1,3 +1,7 @@
+// [INPUT]: 接收 worker 的 JSON 数据流和协议字段。
+// [OUTPUT]: 提供类型化消息、报告和增量分行器。
+// [POS]: 原生 IPC 的解析边界；已扫描的数据不重复遍历。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
 
 enum JSONValue: Codable, Sendable, Equatable {
@@ -72,6 +76,20 @@ struct UsageReport: Decodable, Sendable {
     let hourly: HourlyUsage?
 }
 struct HourlyUsage: Decodable, Sendable { let buckets: [UsageGroup]; let unallocated: UsageSummary }
+struct ActivityReport: Decodable, Sendable {
+    let revision: Int64
+    let from: String
+    let to: String
+    let daily: [UsageGroup]
+    let modelDays: [ModelDay]
+    var hourly: HourlyUsage? = nil
+}
+struct ModelDay: Decodable, Sendable {
+    let date: String
+    let client: String
+    let model: String
+    let summary: UsageSummary
+}
 struct SourceStatus: Decodable, Sendable { let client: String; let status: String; let files: Int; let records: Int; let errors: [String] }
 struct ScanResult: Decodable, Sendable { let startedAt: String; let durationMs: Int; let changed: Int; let revision: Int64; let sources: [SourceStatus] }
 struct EngineStatus: Decodable, Sendable { let scanning: Bool; let lastScan: ScanResult?; let dataDirectory: String; let revision: Int64; let refreshingPrices: Bool }
@@ -84,14 +102,17 @@ struct RepricePreview: Decodable, Sendable { let id: String; let snapshotId: Str
 
 struct JSONLineFramer: Sendable {
     private var buffer = Data()
+    private var scannedBytes = 0
     mutating func append(_ data: Data) throws -> [Data] {
         buffer.append(data)
         guard buffer.count <= 64 * 1024 * 1024 else { throw EngineError(code: "protocol", message: L("error.too_large")) }
         var lines: [Data] = []
-        while let end = buffer.firstIndex(of: 10) {
+        while let end = buffer[buffer.index(buffer.startIndex, offsetBy: scannedBytes)...].firstIndex(of: 10) {
             let line = Data(buffer[..<end]); buffer.removeSubrange(...end)
+            scannedBytes = 0
             if !line.isEmpty { lines.append(line) }
         }
+        scannedBytes = buffer.count
         return lines
     }
 }

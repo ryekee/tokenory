@@ -20,6 +20,7 @@ struct RecordsView: View {
         return result
     }
     var body: some View {
+        let dates = Dictionary(uniqueKeysWithValues: Set(report.details.map(\.date)).map { ($0, Localization.day($0)) })
         VStack(spacing: 0) {
             HStack {
                 Text(LF("usage.record_count", report.summary.recordCount)).font(.headline)
@@ -52,7 +53,7 @@ struct RecordsView: View {
                                         ForEach(report.details) { detail in
                                             Button { openDetail(detail) } label: {
                                                 columns {
-                                                    Text(Localization.day(detail.date))
+                                                    Text(dates[detail.date]!)
                                                     BrandLabel(name: detail.client, kind: .tool, title: clientName(detail.client))
                                                     BrandLabel(name: detail.model, kind: .model).fontWeight(.medium).help(detail.model)
                                                     Text(compactTokens(detail.total)).monospacedDigit()

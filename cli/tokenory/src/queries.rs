@@ -1,3 +1,7 @@
+// [INPUT]: Validated filters and the effective ledger view.
+// [OUTPUT]: Selected-range reports, complete daily client/model activity and timestamp-qualified hourly patterns.
+// [POS]: Read-only aggregation boundary; never aggregate paginated details.
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
     db::{revision, Database},
     usage::{validate_date, Tokens, UsageRecord},
@@ -80,8 +84,45 @@ pub struct HourlyReport {
     pub buckets: Vec<Group>,
     pub unallocated: Summary,
 }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelDay {
+    pub date: String,
+    pub client: String,
+    pub model: String,
+    pub summary: Summary,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityReport {
+    pub revision: i64,
+    pub from: String,
+    pub to: String,
+    pub daily: Vec<Group>,
+    pub model_days: Vec<ModelDay>,
+    pub hourly: HourlyReport,
+}
+
+pub fn activity(db: &mut Database, f: &Filter) -> Result<ActivityReport> {
+    f.validate()?;
+    let from = f.from.as_deref().ok_or_else(|| anyhow::anyhow!("activity requires a start date"))?;
+    let to = f.to.as_deref().ok_or_else(|| anyhow::anyhow!("activity requires an end date"))?;
+    let start = chrono::NaiveDate::parse_from_str(from, "%Y-%m-%d")?;
+    let end = chrono::NaiveDate::parse_from_str(to, "%Y-%m-%d")?;
+    ensure!((end - start).num_days() <= 366, "activity range must not exceed 367 days");
+    let tx = db.connection.transaction()?;
+    let daily = grouped(&tx, f, "date")?;
+    let model_days = tx.prepare(&format!("SELECT date,client,model,{SUMMARY_SQL} FROM effective_usage{WHERE_SQL} GROUP BY date,client,model ORDER BY date,client,model"))?
+        .query_map(params![f.from, f.to, f.client, f.provider, f.model, f.source], |r| {
+            Ok(ModelDay { date: r.get(0)?, client: r.get(1)?, model: r.get(2)?, summary: read_summary(r, 3)? })
+        })?.collect::<rusqlite::Result<Vec<_>>>()?;
+    let hourly = hourly_aggregate(&tx, f, "%H")?;
+    let result = ActivityReport { revision: revision(&tx)?, from: from.into(), to: to.into(), daily, model_days, hourly };
+    tx.commit()?;
+    Ok(result)
+}
 const WHERE_SQL:&str=" WHERE (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) AND (?3 IS NULL OR client=?3) AND (?4 IS NULL OR provider=?4) AND (?5 IS NULL OR model=?5) AND (?6 IS NULL OR source=?6)";
-const SUMMARY_SQL:&str="coalesce(sum(tokens),0),coalesce(sum(input),0),coalesce(sum(output),0),coalesce(sum(cache_read),0),coalesce(sum(cache_write),0),coalesce(sum(reasoning),0),sum(estimated_cost),coalesce(sum(CASE WHEN estimated_cost IS NULL THEN tokens ELSE 0 END),0),count(*),count(DISTINCT date),sum(requests),count(DISTINCT CASE WHEN json_extract(body, '$.metadata.partialDay')=1 THEN date END)";
+const SUMMARY_SQL:&str="coalesce(sum(tokens),0),coalesce(sum(input),0),coalesce(sum(output),0),coalesce(sum(cache_read),0),coalesce(sum(cache_write),0),coalesce(sum(reasoning),0),sum(estimated_cost),coalesce(sum(CASE WHEN estimated_cost IS NULL THEN tokens ELSE 0 END),0),count(*),count(DISTINCT CASE WHEN tokens>0 THEN date END),sum(requests),count(DISTINCT CASE WHEN json_extract(body, '$.metadata.partialDay')=1 THEN date END)";
 fn read_summary(row: &Row<'_>, start: usize) -> rusqlite::Result<Summary> {
     let known: Option<f64> = row.get(start + 6)?;
     let pending: i64 = row.get(start + 7)?;
@@ -132,12 +173,15 @@ fn hourly(c: &Connection, f: &Filter) -> Result<Option<HourlyReport>> {
     if f.from.is_none() || f.from != f.to {
         return Ok(None);
     }
+    Ok(Some(hourly_aggregate(c, f, "%Y-%m-%dT%H:00:00+08:00")?))
+}
+fn hourly_aggregate(c: &Connection, f: &Filter, format: &str) -> Result<HourlyReport> {
     // Imported daily totals cannot be reconstructed as hourly activity. Only
     // timestamps that belong to the selected Beijing reporting day qualify.
     let timestamp = "json_extract(body, '$.timestampMs') / 1000.0";
     let timed = format!("coalesce(json_extract(body, '$.metadata.granularity') NOT IN ('day', 'sourceRecord'), 1) AND coalesce(strftime('%Y-%m-%d', {timestamp}, 'unixepoch', '+8 hours') = date, 0)");
     let key =
-        format!("strftime('%Y-%m-%dT%H:00:00', {timestamp}, 'unixepoch', '+8 hours') || '+08:00'");
+        format!("strftime('{format}', {timestamp}, 'unixepoch', '+8 hours')");
     let buckets = c.prepare(&format!("SELECT {key} AS hour, {SUMMARY_SQL} FROM effective_usage{WHERE_SQL} AND ({timed}) GROUP BY hour ORDER BY hour"))?
         .query_map(params![f.from, f.to, f.client, f.provider, f.model, f.source], |r| {
             Ok(Group { key: r.get(0)?, summary: read_summary(r, 1)? })
@@ -147,10 +191,7 @@ fn hourly(c: &Connection, f: &Filter) -> Result<Option<HourlyReport>> {
         params![f.from, f.to, f.client, f.provider, f.model, f.source],
         |r| read_summary(r, 0),
     )?;
-    Ok(Some(HourlyReport {
-        buckets,
-        unallocated,
-    }))
+    Ok(HourlyReport { buckets, unallocated })
 }
 pub fn report(db: &mut Database, f: &Filter) -> Result<Report> {
     f.validate()?;

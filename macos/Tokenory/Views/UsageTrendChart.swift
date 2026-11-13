@@ -1,3 +1,7 @@
+// [INPUT]: Selected-range daily/hourly report.
+// [OUTPUT]: Dual-axis Tokens bars and cost line with shared hover readout.
+// [POS]: Upper overview chart; preserves unknown prices and unallocated hours.
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 import Charts
 
