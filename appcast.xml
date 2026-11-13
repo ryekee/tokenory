@@ -3,24 +3,23 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.4</title>
-            <pubDate>Sun, 08 Nov 2026 17:19:55 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.4</link>
-            <sparkle:version>6</sparkle:version>
-            <sparkle:shortVersionString>0.1.4</sparkle:shortVersionString>
+            <title>0.1.5</title>
+            <pubDate>Sat, 14 Nov 2026 00:55:54 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.5</link>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>0.1.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown">## 修复更新源
+            <description sparkle:format="markdown"># Tokenory 0.1.5
 
-- 更新清单改为仓库内固定 raw 地址，避开 GitHub Release 网页下载链路的间歇性 504。
-- 安装包改用无需登录的 GitHub Release Asset API 下载，保留 Sparkle 签名验证。
-- 发布时自动同步更新清单，确保它指向最新正式 Release 的对应安装包。
-
-自动检查开关、检查频率和应用内安装方式不变。支持 macOS 15 及以上的 Apple Silicon Mac。版本 0.1.4（build 6）。
-
-本版本使用 Hiko Developer ID 签名，已通过 Apple 公证并附加票据。若旧版因 504 无法更新，可下载 ZIP 手动替换一次；用量数据和设置保留。
+- 总览新增活动日历：悬停查看每日摘要，点击可查看当天数据。
+- 新增模型用量走势和编码习惯分析，支持查看每日用量、30 天平均、活跃星期和 24 小时分布。
+- 默认显示最近 7 天的数据，保留 Tokens 与费用组合图，并优化页面切换和图表交互。
+- 明细和来源页面可保留浏览状态，工具与模型使用统一的分段切换。
+- 更新离线费率目录和供应商图标，支持按供应商折叠和搜索。
+- 更新价格时自动备份，并补齐待计价记录；已有金额保持不变。
 </description>
-            <enclosure url="https://api.github.com/repos/ryekee/tokenory/releases/assets/723477810" length="8781274" type="application/octet-stream" sparkle:edSignature="haeTW+lC2t9/r4MHZ1ojg742kNUeZ4wLrxA6HVKfBTSPMSsFhO7abmAjCai8bFD9WZEJ7K+1MPRpBkAo9lX6Aw==" />
+            <enclosure url="https://api.github.com/repos/ryekee/tokenory/releases/assets/744433808" length="9679378" type="application/octet-stream" sparkle:edSignature="FMCSJD6lJZ1QXIFodesFbDCLyfwR5EbVstaA4kOT884x2BLJVqnnVaCw/okRwj6rLyMCsFi5weXTvlrR1kkcCA==" />
         </item>
     </channel>
 </rss>
