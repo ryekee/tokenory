@@ -1,3 +1,7 @@
+// [INPUT]: 接收用量存储、更新服务及系统登录项状态。
+// [OUTPUT]: 提供通用、价格、采集和数据设置界面。
+// [POS]: 设置窗口入口；价格目录交给 PriceCatalogView 展示。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
 import SwiftUI
 import ServiceManagement
@@ -156,15 +160,8 @@ struct SettingsView: View {
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 16) {
                     DisclosureGroup(L("price.rates"), isExpanded: $ratesExpanded) {
-                        PriceCatalogView(providers: store.priceProviders)
+                        PriceCatalogView(providers: store.priceProviders, usedModels: store.usedPriceModels)
                     }
-                    Divider()
-                    DisclosureGroup {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(L("price.deepseek_schedule")).font(.callout).foregroundStyle(.secondary)
-                            Link(L("price.official_page"), destination: URL(string: "https://api-docs.deepseek.com/quick_start/pricing/")!)
-                        }.padding(.top, 12)
-                    } label: { BrandLabel(name: "deepseek", kind: .provider, title: "DeepSeek") }
                     Divider()
                     DisclosureGroup(LF("price.missing_models", store.prices["missing"].array.count)) {
                         VStack(alignment: .leading, spacing: 10) {
@@ -176,7 +173,7 @@ struct SettingsView: View {
                                     Text(compactTokens(missing["tokens"].int ?? 0)).monospacedDigit()
                                 }.font(.callout)
                             }
-                        }.padding(.top, 12)
+                        }
                     }
                 }
             }

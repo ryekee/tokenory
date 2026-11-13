@@ -1,3 +1,7 @@
+// [INPUT]: 使用 IPC 消息、报告和分行器。
+// [OUTPUT]: 验证碎片消息、完整大目录和协议错误。
+// [POS]: 原生解析边界的行为测试。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import XCTest
 @testable import Tokenory
 
@@ -9,6 +13,14 @@ final class EngineClientTests: XCTestCase {
         for byte in bytes { lines += try framer.append(Data([byte])) }
         XCTAssertEqual(lines.count, 2)
         XCTAssertEqual(try JSONDecoder().decode(JSONValue.self, from: lines[0])["label"].string, "今日")
+    }
+    func testLargeCatalogFramesAcrossChunksWithoutLosingFollowingMessages() throws {
+        var framer = JSONLineFramer()
+        let chunk = Data(repeating: 65, count: 4096)
+        for _ in 0..<512 { XCTAssertTrue(try framer.append(chunk).isEmpty) }
+        let lines = try framer.append(Data("\nnext\npart".utf8))
+        XCTAssertEqual(lines.map(\.count), [2 * 1024 * 1024, 4])
+        XCTAssertEqual(try framer.append(Data("ial\n".utf8)), [Data("partial".utf8)])
     }
     func testErrorEnvelopeDoesNotDecodeAsReport() throws {
         let data = Data(#"{"version":1,"id":"bad","error":{"code":"invalidRequest","message":"invalid date"}}"#.utf8)

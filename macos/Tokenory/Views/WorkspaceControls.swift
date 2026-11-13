@@ -1,3 +1,7 @@
+// [INPUT]: 接收导航项、选择状态和折叠内容。
+// [OUTPUT]: 提供统一导航、悬停和折叠控件。
+// [POS]: 共享控件保持同一前缘，展开间距由组件统一控制。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 struct WorkspaceTab<ID: Hashable>: Identifiable {
@@ -74,13 +78,14 @@ struct WorkspaceDisclosureStyle: DisclosureGroupStyle {
                     configuration.label
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 8).frame(minHeight: 36).contentShape(Rectangle())
+                .frame(minHeight: 32).contentShape(Rectangle())
             }
             .buttonStyle(WorkspaceHoverStyle())
             .accessibilityValue(L(configuration.isExpanded ? "state.expanded" : "state.collapsed"))
             if configuration.isExpanded {
                 configuration.content.frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 12)
+                    .padding(.leading, 21)
+                    .padding(.top, 8)
                     .transition(.opacity)
             }
         }.clipped()

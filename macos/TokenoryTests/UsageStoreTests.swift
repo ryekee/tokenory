@@ -1,3 +1,8 @@
+// [INPUT]: 使用真实 helper、临时源日志和 UsageStore。
+// [OUTPUT]: 验证账本到原生展示的状态更新及客户端目录。
+// [POS]: 跨 Rust 和 Swift 的集成测试边界。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
+import AppKit
 import XCTest
 @testable import Tokenory
 
@@ -15,6 +20,7 @@ final class UsageStoreTests: XCTestCase {
         try Data(row.utf8).write(to: logs.appending(path: "session.jsonl"))
         let engine = EngineClient(helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/tokenory"), directory: data)
         let store = UsageStore(engine: engine, directory: data)
+        XCTAssertEqual(store.dateRange, .week)
         store.dateRange = .all
         store.filter = UsageFilter()
         do {
@@ -25,8 +31,25 @@ final class UsageStoreTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(100))
             }
             XCTAssertEqual(store.report?.summary.tokens, 1000)
+            await store.loadSources()
+            XCTAssertEqual(store.clients.count, 42)
+            XCTAssertTrue(store.priceProviders.isEmpty)
+            XCTAssertNil(store.settings)
             await store.loadManagement()
             XCTAssertEqual(store.clients.count, 42)
+            XCTAssertTrue(store.priceProviders.contains { $0.id == "google" })
+            XCTAssertTrue(store.priceProviders.contains { $0.id == "xiaomi" && $0.title == "Xiaomi MiMo" })
+            XCTAssertGreaterThan(store.priceProviders.count, 200)
+            XCTAssertEqual(Set(store.usedPriceModels.map(\.model)), ["deepseek-flash"])
+            let supported = Set(store.clients.map(\.id))
+            XCTAssertEqual(supported, Set(Brand.toolSlugs.keys).union(Brand.toolSymbols.keys))
+            for client in store.clients {
+                if let slug = Brand.slug(client.id, kind: .tool) {
+                    XCTAssertNotNil(NSImage(named: "Brand-" + slug), client.id)
+                } else if let symbol = Brand.toolSymbols[client.id] {
+                    XCTAssertNotNil(NSImage(systemSymbolName: symbol, accessibilityDescription: nil), client.id)
+                } else { XCTFail("Missing icon: " + client.id) }
+            }
             XCTAssertEqual(store.clients.first { $0.id == "paseo" }?.collectsAs, ["claude", "codex"])
             XCTAssertEqual(store.clients.first { $0.id == "orca" }?.collectsAs, ["micode"])
             XCTAssertTrue(store.clients.first { $0.id == "gemini" }?.supportsExtraPaths == true)
@@ -43,6 +66,18 @@ final class UsageStoreTests: XCTestCase {
             store.dateRange = .week
             await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
             XCTAssertEqual(store.filter.from, "2026-10-31")
+            XCTAssertEqual(store.activity?.from, "2025-11-07")
+            XCTAssertEqual(store.activity?.to, "2026-11-06")
+            XCTAssertEqual(store.activity?.hourly?.buckets.first?.key, "09")
+            XCTAssertEqual(store.activity?.hourly?.buckets.first?.summary.tokens, 1000)
+            XCTAssertEqual(store.activityCalendar?.activeDays, 1)
+            XCTAssertEqual(store.history(metric: .tokens, average: true, client: nil)?.total, 1000)
+            XCTAssertEqual(store.activity?.modelDays.reduce(0) { $0 + $1.summary.tokens }, 1000)
+            store.filter.model = "not-a-model"
+            await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
+            XCTAssertTrue(store.activity?.modelDays.isEmpty == true)
+            store.filter.model = nil
+            await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
             XCTAssertEqual(store.report?.summary.tokens, 1000)
             store.dateRange = .month
             await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)

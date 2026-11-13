@@ -1,3 +1,7 @@
+// [INPUT]: 接收统计报告、筛选状态和记录详情。
+// [OUTPUT]: 提供主窗口导航和可滚动的记录详情弹窗。
+// [POS]: 主工作区入口；详情操作区独立于长内容滚动。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 private enum DashboardSection: String, CaseIterable {
@@ -10,6 +14,7 @@ struct DashboardView: View {
     @State private var section: DashboardSection = .overview
     @Environment(\.colorScheme) private var scheme
     @State private var selectedDetail: UsageDetail?
+    @State private var visited: Set<DashboardSection> = [.overview]
     var body: some View {
         NavigationSplitView {
             VStack(spacing: 0) {
@@ -27,15 +32,38 @@ struct DashboardView: View {
         } detail: {
             VStack(spacing: 0) {
                 ErrorBanner().padding(.horizontal, 20)
-                if section == .imports { ImportView() }
-                else if section == .sources { SourcesView() }
-                else {
-                    UsageFiltersView(showsSource: section == .details)
-                        .padding(.horizontal, 22).padding(.vertical, 14)
-                    if let report = store.report {
-                        if section == .details { RecordsView(report: report) { selectedDetail = $0 } }
-                        else { OverviewView(report: report) }
-                    } else { ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity) }
+                ZStack {
+                    // Keep the overview mounted so navigation reuses chart layouts and scroll state.
+                    VStack(spacing: 0) {
+                        UsageFiltersView(showsSource: false)
+                            .padding(.horizontal, 22).padding(.vertical, 14)
+                        if let report = store.report { OverviewView(report: report) }
+                        else { ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity) }
+                    }
+                    .opacity(section == .overview ? 1 : 0)
+                    .allowsHitTesting(section == .overview)
+                    .disabled(section != .overview)
+                    .accessibilityHidden(section != .overview)
+                    if section == .imports { ImportView() }
+                    if section == .sources || visited.contains(.sources) {
+                        SourcesView()
+                            .opacity(section == .sources ? 1 : 0)
+                            .allowsHitTesting(section == .sources)
+                            .disabled(section != .sources)
+                            .accessibilityHidden(section != .sources)
+                    }
+                    if section == .details || visited.contains(.details) {
+                        VStack(spacing: 0) {
+                            UsageFiltersView(showsSource: true)
+                                .padding(.horizontal, 22).padding(.vertical, 14)
+                            if let report = store.report { RecordsView(report: report) { selectedDetail = $0 } }
+                            else { ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity) }
+                        }
+                        .opacity(section == .details ? 1 : 0)
+                        .allowsHitTesting(section == .details)
+                        .disabled(section != .details)
+                        .accessibilityHidden(section != .details)
+                    }
                 }
             }.background(WorkspaceStyle.canvas(scheme)).navigationTitle(section.title)
                 .toolbar {
@@ -48,6 +76,7 @@ struct DashboardView: View {
                 }
         }
         .frame(minWidth: 800, minHeight: 560)
+        .onChange(of: section) { _, next in visited.insert(next) }
         .onChange(of: store.filter) { _, _ in Task { await store.refresh() } }
         .sheet(item: $selectedDetail) { detail in DetailSheet(detail: detail) }
     }
@@ -60,24 +89,28 @@ struct DetailSheet: View {
     @State private var price = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            BrandLabel(name: detail.model, kind: .model, size: 22).font(.title2).textSelection(.enabled)
-            Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 10) {
-                row(L("field.date"), Localization.day(detail.date))
-                GridRow {
-                    Text(L("field.tool_provider")).foregroundStyle(.secondary)
-                    HStack(spacing: 10) {
-                        BrandLabel(name: detail.client, kind: .tool, title: clientName(detail.client))
-                        Text("/").foregroundStyle(.tertiary)
-                        BrandLabel(name: detail.provider, kind: .provider)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    BrandLabel(name: detail.model, kind: .model, size: 22).font(.title2).textSelection(.enabled)
+                    Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 10) {
+                        row(L("field.date"), Localization.day(detail.date))
+                        GridRow {
+                            Text(L("field.tool_provider")).foregroundStyle(.secondary)
+                            HStack(spacing: 10) {
+                                BrandLabel(name: detail.client, kind: .tool, title: clientName(detail.client))
+                                Text("/").foregroundStyle(.tertiary)
+                                BrandLabel(name: detail.provider, kind: .provider)
+                            }
+                        }
+                        row(L("field.source"), detail.source); row(L("token.input"), detail.tokens.input.formatted(.number.locale(Localization.locale))); row(L("token.output"), detail.tokens.output.formatted(.number.locale(Localization.locale))); row(L("token.cache_read"), detail.tokens.cacheRead.formatted(.number.locale(Localization.locale))); row(L("token.cache_write"), detail.tokens.cacheWrite.formatted(.number.locale(Localization.locale))); row(L("token.reasoning"), detail.tokens.reasoning.formatted(.number.locale(Localization.locale)))
+                        row(L("cost.estimate"), usd(detail.estimatedCostUsd)); row(L("field.source_cost"), detail.sourceCostUsd.map { usd($0) } ?? L("value.unavailable"))
+                        if let session = detail.sessionId { row(L("field.session"), session) }
+                        row(L("field.date_basis"), detail.timezone ?? L("value.unknown_timezone"))
                     }
-                }
-                row(L("field.source"), detail.source); row(L("token.input"), detail.tokens.input.formatted(.number.locale(Localization.locale))); row(L("token.output"), detail.tokens.output.formatted(.number.locale(Localization.locale))); row(L("token.cache_read"), detail.tokens.cacheRead.formatted(.number.locale(Localization.locale))); row(L("token.cache_write"), detail.tokens.cacheWrite.formatted(.number.locale(Localization.locale))); row(L("token.reasoning"), detail.tokens.reasoning.formatted(.number.locale(Localization.locale)))
-                row(L("cost.estimate"), usd(detail.estimatedCostUsd)); row(L("field.source_cost"), detail.sourceCostUsd.map { usd($0) } ?? L("value.unavailable"))
-                if let session = detail.sessionId { row(L("field.session"), session) }
-                row(L("field.date_basis"), detail.timezone ?? L("value.unknown_timezone"))
-            }
-            if let basis = detail.costBasis { DisclosureGroup(L("cost.calculation")) { Text(basis).font(.caption).textSelection(.enabled).foregroundStyle(.secondary) } }
-            if !price.isEmpty { DisclosureGroup(L("price.snapshot")) { ScrollView { Text(price).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }.frame(maxHeight: 180) } }
+                    if let basis = detail.costBasis { DisclosureGroup(L("cost.calculation")) { Text(basis).font(.caption).textSelection(.enabled).foregroundStyle(.secondary) } }
+                    if !price.isEmpty { DisclosureGroup(L("price.snapshot")) { ScrollView { Text(price).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }.frame(maxHeight: 180) } }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.frame(maxHeight: 480)
             HStack { Spacer(); Button(L("action.done")) { dismiss() }.keyboardShortcut(.defaultAction) }
         }.padding(24).frame(width: 600)
             .disclosureGroupStyle(WorkspaceDisclosureStyle())
@@ -86,5 +119,5 @@ struct DetailSheet: View {
                 do { let value = try await store.perform("priceSnapshot", payload: .object(["id": .string(id)])); let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; price = String(decoding: try encoder.encode(value), as: UTF8.self) } catch { store.fail(error) }
             }
     }
-    private func row(_ title: String, _ value: String) -> some View { GridRow { Text(title).foregroundStyle(.secondary); Text(value).textSelection(.enabled) } }
+    private func row(_ title: String, _ value: String) -> some View { GridRow { Text(title).foregroundStyle(.secondary); Text(value).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) } }
 }

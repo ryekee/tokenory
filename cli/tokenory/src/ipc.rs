@@ -1,3 +1,7 @@
+// [INPUT]: 接收原生应用的 JSON 请求，读取采集和价格数据。
+// [OUTPUT]: 输出协议响应、扫描状态和账本更新事件。
+// [POS]: 单写者 worker 协调采集、计价和查询。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
     collector::{self, DiagnosticCache, ScanBatch},
     config::Config,
@@ -120,8 +124,11 @@ pub fn sources(db: &Database) -> Result<Value> {
 pub fn prices(db: &Database) -> Result<Value> {
     let mut stmt=db.connection.prepare("SELECT provider,model,sum(tokens) FROM effective_usage WHERE estimated_cost IS NULL GROUP BY provider,model ORDER BY sum(tokens) DESC")?;
     let missing=stmt.query_map([],|r|Ok(json!({"provider":r.get::<_,String>(0)?,"model":r.get::<_,String>(1)?,"tokens":r.get::<_,i64>(2)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
-    let current = pricing::active_snapshot(&db.connection)?
-        .map(|(id, snapshot)| json!({"id":id,"snapshot":snapshot}));
+    let mut used_stmt = db.connection.prepare("SELECT DISTINCT provider,model FROM effective_usage ORDER BY provider,model")?;
+    let used_models = used_stmt.query_map([], |r| Ok(json!({"provider":r.get::<_,String>(0)?,"model":r.get::<_,String>(1)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    let active = pricing::active_snapshot(&db.connection)?;
+    let catalog = crate::price_catalog::entries(active.as_ref().map(|(_, snapshot)| snapshot))?;
+    let current = active.map(|(id, snapshot)| json!({"id":id,"snapshot":snapshot}));
     let mut stmt = db
         .connection
         .prepare("SELECT id,created_at FROM price_snapshots ORDER BY created_at DESC")?;
@@ -130,7 +137,7 @@ pub fn prices(db: &Database) -> Result<Value> {
             Ok(json!({"id":r.get::<_,String>(0)?,"createdAt":r.get::<_,String>(1)?}))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(json!({"current":current,"missing":missing,"history":history}))
+    Ok(json!({"current":current,"catalog":catalog,"usedModels":used_models,"missing":missing,"history":history}))
 }
 pub fn export(
     db: &mut Database,
@@ -194,6 +201,7 @@ pub fn export(
 fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result<Value> {
     match op {
         "overview" => Ok(serde_json::to_value(queries::report(db, &payload(v)?)?)?),
+        "activity" => Ok(serde_json::to_value(queries::activity(db, &payload(v)?)?)?),
         "daily" => Ok(serde_json::to_value(
             queries::report(db, &payload(v)?)?.daily,
         )?),
@@ -300,6 +308,10 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
         JoinHandle<(String, Result<tokens_core::pricing::PricingService, String>)>,
     > = None;
     let mut next_price_refresh = Instant::now();
+    let mut cached_prices = tokens_core::pricing::PricingService::load_cached_any_age()
+        .unwrap_or_else(|| {
+            tokens_core::pricing::PricingService::new(Default::default(), Default::default())
+        });
     let mut last_scan: Option<Value> = {
         use rusqlite::OptionalExtension;
         db.connection
@@ -335,7 +347,18 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
          result=async {match &mut scan {Some(task)=>task.await,None=>std::future::pending().await}},if scan.is_some()=>{
           scan=None;next_scan=Instant::now()+Duration::from_secs(config.interval_seconds);
           let result=match result {Ok((c,b))=>{cache=Some(c);b.and_then(|b|collector::persist(db,b))},Err(e)=>Err(e.into())};
-          match result {Ok(r)=>{last_scan=Some(serde_json::to_value(&r)?);send(json!({"version":1,"event":"scanFinished","payload":r}))?;if r.changed>0 {send(json!({"version":1,"event":"usageChanged","revision":r.revision}))?;}},Err(e)=>send(json!({"version":1,"event":"scanFailed","message":format!("{e:#}")}))?}
+          match result {Ok(mut r)=>{
+            let before_prices = revision(&db.connection)?;
+            {
+                match crate::price_coverage::extend_from_service(db, &cached_prices) {
+                    Ok(true) => send(json!({"version":1,"event":"pricesUpdated"}))?,
+                    Ok(false) => {},
+                    Err(error) => send(json!({"version":1,"event":"priceRefreshFailed","message":format!("{error:#}")}))?,
+                }
+            }
+            r.revision = revision(&db.connection)?;
+            if r.revision != before_prices { send(json!({"version":1,"event":"usageChanged","revision":r.revision}))?; }
+            last_scan=Some(serde_json::to_value(&r)?);send(json!({"version":1,"event":"scanFinished","payload":r}))?;if r.changed>0 {send(json!({"version":1,"event":"usageChanged","revision":r.revision}))?;}},Err(e)=>send(json!({"version":1,"event":"scanFailed","message":format!("{e:#}")}))?}
          },
          _=tokio::time::sleep_until(next_scan),if scan.is_none()=>{scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent)));send(json!({"version":1,"event":"scanStarted"}))?;},
          _=tokio::time::sleep_until(next_price_refresh),if scan.is_none() && price_task.is_none()=>{
@@ -343,7 +366,7 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
           price_task=Some(tokio::spawn(async {(String::new(),tokens_core::pricing::PricingService::fetch_snapshot().await)}));
          },
          result=async {match &mut price_task {Some(task)=>task.await,None=>std::future::pending().await}},if price_task.is_some()=>{
-          price_task=None;let(id,result)=result?;let result=result.map_err(|e|anyhow!(e)).and_then(|service|{ensure!(service.has_pricing_data(),"no upstream price dataset available; saved prices retained");let snapshot=pricing::snapshot_from_service(db,&service)?;Ok(json!({"id":pricing::save_snapshot(db,snapshot)?}))});
+          price_task=None;let(id,result)=result?;let result=result.map_err(|e|anyhow!(e)).and_then(|service|{ensure!(service.has_pricing_data(),"no upstream price dataset available; saved prices retained");let snapshot=pricing::snapshot_from_service(db,&service)?;let before=revision(&db.connection)?;let snapshot_id=pricing::save_snapshot(db,snapshot)?;cached_prices=service;let after=revision(&db.connection)?;if before!=after{send(json!({"version":1,"event":"usageChanged","revision":after}))?;}Ok(json!({"id":snapshot_id}))});
           if id.is_empty() { match result { Ok(value)=>send(json!({"version":1,"event":"pricesUpdated","payload":value}))?, Err(error)=>send(json!({"version":1,"event":"priceRefreshFailed","message":format!("{error:#}")}))? } } else { reply(&id,result)?; }
 
          }

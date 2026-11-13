@@ -1,3 +1,7 @@
+// [INPUT]: 读取 UsageRecord、官方费率和 SQLite 账本。
+// [OUTPUT]: 提供价格快照、费用估算和带备份的重估流程。
+// [POS]: 在采集与查询之间保存可追溯的计价依据。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
     db::{advance_revision, put_record, Database},
     queries::{report, Filter},
@@ -10,6 +14,7 @@ use tokens_core::pricing::{
     lookup::{compute_cost, compute_cost_for_snapshot},
     ModelPricing, PricingService,
 };
+const COMPACTOR_REFERENCE: &str = "GPT-6 Luna reference (user-selected)";
 const AUTO_REVIEW: &str = "codex-auto-review";
 const TOKENS_CI_REFERENCE: &str = "tokens.ci export reference";
 
@@ -114,6 +119,41 @@ impl PriceSnapshot {
                     ..Default::default() },
             });
         }
+        for model in [
+            "swe-2-flash",
+            "swe-2-flash-medium",
+            "swe-2-flash-high",
+            "swe-2-flash-max",
+        ] {
+            p.entries.push(PriceEntry {
+                schedule: None, provider: "devin".into(), model: model.into(),
+                matched_key: "swe-2-flash".into(),
+                source: "https://docs.devin.ai/desktop/models".into(),
+                assumption: "Official USD list rates verified 2026-11-13; equivalent usage estimate, not quota consumption or billing; self-serve promotional free period through 2026-12-04T18:00:00Z is not applied".into(),
+                explicit_free: false, allow_fast: false,
+                rates: ModelPricing {
+                    input_cost_per_token: Some(0.10e-6),
+                    cache_read_input_token_cost: Some(0.01e-6),
+                    cache_creation_input_token_cost: Some(0.125e-6),
+                    output_cost_per_token: Some(0.50e-6),
+                    ..Default::default()
+                },
+            });
+        }
+        p.entries.push(PriceEntry {
+            schedule: None, provider: "xiaomi".into(), model: "mimo-v2-pro".into(), matched_key: "mimo-v2-pro".into(),
+            source: "https://mimo.xiaomi.com/mimo-v2-pro".into(),
+            assumption: "Archived official launch USD rates (2026-03-18), verified 2026-11-13; not current availability or historical billing; event input above 256K costs 2x, aggregates use base rates; launch cache-write promotion applied".into(),
+            explicit_free: false, allow_fast: false,
+            rates: ModelPricing { input_cost_per_token: Some(1e-6), output_cost_per_token: Some(3e-6), cache_read_input_token_cost: Some(0.2e-6), cache_creation_input_token_cost: Some(0.), ..Default::default() },
+        });
+        p.entries.push(PriceEntry {
+            schedule: None, provider: "devin".into(), model: "compactor".into(),
+            matched_key: "gpt-6-luna".into(), source: COMPACTOR_REFERENCE.into(),
+            assumption: "User-selected reference estimate (2026-11-13): Devin compactor uses GPT-6 Luna standard USD rates from https://developers.openai.com/api/docs/pricing; actual underlying model version is unconfirmed; not an actual charge".into(),
+            explicit_free: false, allow_fast: false,
+            rates: ModelPricing { input_cost_per_token: Some(0.10e-6), cache_read_input_token_cost: Some(0.01e-6), output_cost_per_token: Some(0.50e-6), ..Default::default() },
+        });
         // Reproduces exported Codex review costs; this routing label has no published API tariff.
         p.entries.push(PriceEntry {
             schedule: None, provider: "openai".into(), model: AUTO_REVIEW.into(), matched_key: AUTO_REVIEW.into(),
@@ -135,7 +175,10 @@ impl PriceSnapshot {
             ensure!(
                 e.schedule.is_none()
                     || (e.schedule.as_deref() == Some("deepseek-cn-2026-v1")
-                        && e.provider == "deepseek"),
+                        && (e.provider == "deepseek"
+                            || (matches!(e.provider.as_str(), "unknown" | "_session")
+                                && e.source
+                                    == "https://api-docs.deepseek.com/quick_start/pricing/"))),
                 "unsupported price schedule"
             );
             ensure!(
@@ -196,6 +239,7 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
                 && (review_export || (source == "local" && e.provider == r.provider));
         }
         e.model == r.model && e.provider == r.provider
+            && (e.source != COMPACTOR_REFERENCE || r.client == "devin-cli")
     }) else {
         return unknown("no verified price for this provider/model");
     };
@@ -214,9 +258,9 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     let speed_factor = match speed {
         Some("fast")
             if official_openai
-                && (r.model.starts_with("gpt-6")
-                    || r.model.starts_with("gpt-5.6-")
-                    || matches!(r.model.as_str(), "gpt-5.3-codex" | "gpt-5.4-mini")) =>
+                && (e.matched_key.starts_with("gpt-6")
+                    || e.matched_key.starts_with("gpt-5.6-")
+                    || matches!(e.matched_key.as_str(), "gpt-5.3-codex" | "gpt-5.4-mini")) =>
         {
             2.
         }
@@ -230,7 +274,8 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
             2.
         }
         Some("ultrafast")
-            if official_openai && matches!(r.model.as_str(), "gpt-6-astra" | "gpt-6.1-sol") =>
+            if official_openai
+                && matches!(e.matched_key.as_str(), "gpt-6-astra" | "gpt-6.1-sol") =>
         {
             6.
         }
@@ -269,6 +314,12 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     } else {
         e.rates.clone()
     };
+    let official_mimo = e.source == "https://mimo.xiaomi.com/mimo-v2-pro";
+    if official_mimo && !aggregate && t.input + t.cache_read + t.cache_write > 256_000 {
+        rates.input_cost_per_token = rates.input_cost_per_token.map(|v| v * 2.);
+        rates.output_cost_per_token = rates.output_cost_per_token.map(|v| v * 2.);
+        rates.cache_read_input_token_cost = rates.cache_read_input_token_cost.map(|v| v * 2.);
+    }
     let long_context = official_openai
         && !aggregate
         && t.input + t.cache_read + t.cache_write > 272_000
@@ -298,7 +349,7 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     } else {
         (1., "fixed rate")
     };
-    let cost = (if aggregate || official_openai {
+    let cost = (if aggregate || official_openai || official_mimo {
         compute_cost(
             &rates,
             t.input,
@@ -396,12 +447,22 @@ pub fn save_snapshot(db: &mut Database, p: PriceSnapshot) -> Result<String> {
     let body = serde_json::to_string(&p)?;
     use sha2::{Digest, Sha256};
     let id = format!("{:x}", Sha256::digest(body.as_bytes()));
+    let changes = crate::price_coverage::pending_assignments(&db.connection, &id, &p)?;
+    if !changes.is_empty() {
+        db.backup_before("price-coverage")?;
+    }
     let tx = db.connection.transaction()?;
     tx.execute(
         "INSERT OR IGNORE INTO price_snapshots(id,created_at,body) VALUES (?1,?2,?3)",
         params![id, p.created_at, body],
     )?;
     tx.execute("INSERT INTO app_state(key,value) VALUES ('activePrice',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[&id])?;
+    for (source, batch, record) in &changes {
+        put_record(&tx, source, batch, record)?;
+    }
+    if !changes.is_empty() {
+        advance_revision(&tx)?;
+    }
     tx.commit()?;
     Ok(id)
 }
@@ -425,7 +486,7 @@ pub fn active_snapshot(c: &rusqlite::Connection) -> Result<Option<(String, Price
         .transpose()
 }
 pub fn initialize(db: &mut Database) -> Result<()> {
-    const VERSION: &str = "2026-11-06-codex-review-v1";
+    const VERSION: &str = "2026-11-13-compactor-reference-v3";
     let installed: Option<String> = db
         .connection
         .query_row(
@@ -457,7 +518,8 @@ pub fn assign(source: &str, r: &mut UsageRecord, id: &str, p: &PriceSnapshot) {
     r.price_snapshot_id = Some(id.into());
 }
 pub fn snapshot_from_service(db: &Database, service: &PricingService) -> Result<PriceSnapshot> {
-    let mut p = PriceSnapshot::bundled_reference();
+    let bundled = PriceSnapshot::bundled_reference();
+    let mut p = bundled.clone();
     let rows = {
         let mut stmt=db.connection.prepare("SELECT provider,model,sum(input),sum(output),sum(cache_read),sum(cache_write),sum(reasoning) FROM usage_records GROUP BY provider,model")?;
         let rows = stmt
@@ -484,13 +546,75 @@ pub fn snapshot_from_service(db: &Database, service: &PricingService) -> Result<
         {
             continue;
         }
-        if !service.covers_usage_with_provider(&model, Some(&provider), &usage) {
+        let provider_unknown = matches!(provider.as_str(), "unknown" | "_session");
+        let subscription = crate::price_catalog::subscription_provider(&provider);
+        let reference_model = if subscription { model.rsplit('/').next().unwrap_or(&model) } else { &model };
+        let lookup_provider = if provider_unknown || subscription {
+            // 明确渠道前缀及本地部署标识不能推断为原厂调用。
+            if reference_model.contains('/') || reference_model.contains(':') {
+                continue;
+            }
+            let Some(inferred) = crate::price_coverage::reference_provider(reference_model) else {
+                continue;
+            };
+            inferred
+        } else {
+            &provider
+        };
+        let assumption = if subscription {
+            format!("Subscription plan; first-party {lookup_provider} API reference estimate, not subscription charges")
+        } else if provider_unknown {
+            format!("Provider unknown; first-party {lookup_provider} reference estimate only, not actual provider or billing")
+        } else {
+            "current cached API reference; not historical billing; speed-specific rates unverified"
+                .into()
+        };
+        // 仅去除同一提供方命名空间；第三方网关保留独立价格。
+        let bare_model = reference_model
+            .strip_prefix(&format!("{lookup_provider}/"))
+            .unwrap_or(reference_model);
+        let canonical_model =
+            tokens_core::pricing::aliases::resolve_alias(bare_model).unwrap_or(bare_model);
+        if let Some(reference) = bundled
+            .entries
+            .iter()
+            .find(|e| e.provider == lookup_provider && e.model == canonical_model)
+            .cloned()
+        {
+            let mut entry = reference;
+            entry.model = model.clone();
+            entry.provider = provider.clone();
+            if provider_unknown || subscription {
+                entry.assumption = format!("{}; {}", entry.assumption, assumption);
+            }
+            p.entries.push(entry);
             continue;
         }
-        if let Some(found) =
-            service.resolve_for_usage_with_provider(&model, Some(&provider), &usage)
-        {
-            p.entries.push(PriceEntry{schedule:None,provider,model,matched_key:found.matched_key,source:found.source,assumption:"current cached API reference; not historical billing; speed-specific rates unverified".into(),explicit_free:false,allow_fast:false,rates:found.pricing});
+        let resolved = if provider_unknown || subscription {
+            ["litellm", "models.dev"].into_iter().filter_map(|source| {
+                service.lookup_with_source_and_provider(reference_model, Some(source), Some(lookup_provider))
+            }).find(|found| {
+                let root = found.matched_key.split('/').next().unwrap_or("");
+                let root = match root { "moonshot" => "moonshotai", "x-ai" => "xai", "z-ai" => "zai", other => other };
+                found.evidence.is_submission_safe() && root == lookup_provider
+            })
+        } else {
+            service.resolve_for_usage_with_provider(&model, Some(lookup_provider), &usage)
+        };
+        if let Some(found) = resolved {
+            // 缺少某个 token 类别费率时，只让使用该类别的记录待计价。
+            if !found.evidence.is_submission_safe() { continue; }
+            p.entries.push(PriceEntry {
+                schedule: None,
+                provider,
+                model,
+                matched_key: found.matched_key,
+                source: found.source,
+                assumption,
+                explicit_free: false,
+                allow_fast: false,
+                rates: found.pricing,
+            });
         }
     }
     p.validate()?;

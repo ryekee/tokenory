@@ -1,3 +1,7 @@
+// [INPUT]: 接收导入预览、采集状态和来源覆盖记录。
+// [OUTPUT]: 提供导入交互、来源概览和导出入口。
+// [POS]: 来源页面使用自适应卡片，导入控件按原生尺寸对齐。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -25,8 +29,8 @@ struct ImportView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    Picker(L("import.format"), selection: $source) { Text("CC Switch").tag("cc-switch"); Text(L("import.tokens_ci")).tag("tokens-ci") }.frame(width: 250)
+                HStack(spacing: 12) {
+                    Picker(L("import.format"), selection: $source) { Text("CC Switch").tag("cc-switch"); Text(L("import.tokens_ci")).tag("tokens-ci") }.fixedSize()
                     Button(L("import.choose")) { choose() }.disabled(busy)
                     if busy { ProgressView().controlSize(.small) }
                 }
@@ -77,7 +81,7 @@ struct ImportView: View {
                 }
                 if store.sources["batches"].array.isEmpty { Text(L("import.no_batches")).foregroundStyle(.secondary) }
             }.padding(24)
-        }.task { await store.loadManagement() }
+        }.disclosureGroupStyle(WorkspaceDisclosureStyle()).task { await store.loadManagement() }
     }
     private func choose() {
         guard let file = FilePanels.open() else { return }
@@ -111,28 +115,31 @@ struct SourcesView: View {
     @State private var notice: String?
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 if let scan = store.status?.lastScan {
-                    ForEach(scan.sources.filter { $0.status != "unavailable" }, id: \.client) { source in
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(source.status == "ok" ? L("source.ok") : source.status == "partial" ? L("status.partial") : L("source.empty"))
-                                Text(LF("source.files", source.files, source.records)).font(.caption).foregroundStyle(.secondary)
-                                ForEach(source.errors, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
-                            }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                        } label: { BrandLabel(name: source.client, kind: .tool, title: clientName(source.client)) }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), alignment: .topLeading)], alignment: .leading, spacing: 14) {
+                        ForEach(scan.sources.filter { $0.status != "unavailable" }, id: \.client) { source in
+                            WorkspacePanel {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    BrandLabel(name: source.client, kind: .tool, title: clientName(source.client)).font(.headline)
+                                    Text(source.status == "ok" ? L("source.ok") : source.status == "partial" ? L("status.partial") : L("source.empty"))
+                                    Text(LF("source.files", source.files, source.records)).font(.caption).foregroundStyle(.secondary)
+                                    ForEach(source.errors, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
                     }
                 }
                 DisclosureGroup(LF("source.supported_clients", store.clients.count)) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(L("source.local_inputs")).font(.callout).foregroundStyle(.secondary)
-                        LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 12) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), alignment: .leading)], alignment: .leading, spacing: 12) {
                             ForEach(store.clients) { client in
                                 BrandLabel(name: client.id, kind: .tool, title: client.name)
                             }
                         }
                         Text(L("source.wrapper_clients")).font(.caption).foregroundStyle(.secondary)
-                    }.padding(.top, 12)
+                    }
                 }
                 Text(L("source.coverage")).font(.headline)
                 ForEach(store.sources["coverage"].array, id: \.self) { source in
@@ -153,7 +160,7 @@ struct SourcesView: View {
                 HStack { Button(L("export.json")) { export("json") }; Button(L("export.csv")) { export("csv") }; if let notice { Text(notice).foregroundStyle(.secondary) } }
                 Text(L("export.note")).font(.caption).foregroundStyle(.secondary)
             }.padding(24)
-        }.task { await store.loadManagement() }
+        }.disclosureGroupStyle(WorkspaceDisclosureStyle()).task { await store.loadSources() }
     }
     private func export(_ format: String) {
         guard let file = FilePanels.save(name: "Tokenory-\(UsageStore.day(Date())).\(format)") else { return }

@@ -1,3 +1,7 @@
+// [INPUT]: 使用真实计价、导入和 SQLite 接口。
+// [OUTPUT]: 验证价格匹配、费用计算和历史重估。
+// [POS]: 隔离测试账本，验证计价规则的外部行为。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 use tokenory::{
     db::Database,
     import::{apply_import, preview_records, ApplyOptions},
@@ -157,7 +161,7 @@ fn rates_ttl_speed_and_daily_granularity_are_explicit() {
     assert!(estimate("local", &r, &p).cost.unwrap() > 2.);
 }
 #[test]
-fn refresh_does_not_reprice_until_confirmed_and_stale_preview_is_rejected() {
+fn refresh_fills_missing_prices_but_preserves_known_costs_and_rejects_stale_preview() {
     let t = tempfile::tempdir().unwrap();
     let mut db = Database::open(t.path()).unwrap();
     let p = preview_records(
@@ -176,7 +180,7 @@ fn refresh_does_not_reprice_until_confirmed_and_stale_preview_is_rejected() {
             .unwrap()
             .summary
             .known_estimated_cost_usd,
-        None
+        Some(0.006)
     );
     apply_reprice(&mut db, &p.id).unwrap();
     let id2 = save_snapshot(&mut db, snapshot(4., 16.)).unwrap();
@@ -426,4 +430,279 @@ fn session_totals_do_not_trigger_request_context_tiers_or_hourly_discounts() {
     let aggregate = estimate("local", &r, &p).cost;
     r.metadata["granularity"] = "day".into();
     assert_eq!(estimate("local", &r, &p).cost, aggregate);
+}
+
+#[test]
+fn devin_flash_variants_price_all_token_categories_at_list_rates() {
+    let p = PriceSnapshot::bundled_reference();
+    p.validate().unwrap();
+    let mut r = record();
+    r.client = "devin-cli".into();
+    r.provider = "devin".into();
+    r.metadata = serde_json::json!({"granularity":"sourceRecord"});
+    r.tokens = Tokens {
+        input: 1_000_000,
+        cache_read: 2_000_000,
+        cache_write: 3_000_000,
+        output: 4_000_000,
+        reasoning: 1_000_000,
+    };
+    for model in [
+        "swe-2-flash",
+        "swe-2-flash-medium",
+        "swe-2-flash-high",
+        "swe-2-flash-max",
+    ] {
+        r.model = model.into();
+        let e = estimate("local", &r, &p);
+        assert!((e.cost.unwrap() - 2.995).abs() < 1e-12);
+        assert!(e.basis.contains("not quota consumption or billing"));
+    }
+    r.provider = "reseller".into();
+    assert!(estimate("local", &r, &p).cost.is_none());
+    r.provider = "devin".into();
+    r.model = "swe-2-medium".into();
+    assert!(estimate("local", &r, &p).cost.is_none());
+}
+
+#[test]
+fn every_supported_client_uses_shared_prices_and_cached_models_fill_pending_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = Database::open(dir.path()).unwrap();
+    tokenory::pricing::initialize(&mut db).unwrap();
+    for client in tokenory::clients::CLIENTS {
+        let mut r = record();
+        r.client = client.as_str().into();
+        r.key = r.client.clone();
+        r.provider = "openai".into();
+        r.model = "gpt-6.1-sol".into();
+        tokenory::pricing::assign("local", &mut r, "test", &PriceSnapshot::bundled_reference());
+        assert_eq!(r.estimated_cost_usd, Some(0.007), "{}", r.client);
+        r.provider = "test".into();
+        r.model = "new-model".into();
+        r.estimated_cost_usd = None;
+        tokenory::db::put_record(&db.connection, "local", "", &r).unwrap();
+    }
+    let service = tokens_core::pricing::PricingService::new(
+        [(
+            "test/new-model".into(),
+            ModelPricing {
+                input_cost_per_token: Some(2e-6),
+                output_cost_per_token: Some(8e-6),
+                ..Default::default()
+            },
+        )]
+        .into_iter()
+        .collect(),
+        Default::default(),
+    );
+    assert!(tokenory::price_coverage::extend_from_service(&mut db, &service).unwrap());
+    let count: i64 = db
+        .connection
+        .query_row(
+            "SELECT count(*) FROM usage_records WHERE estimated_cost IS NOT NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, tokenory::clients::CLIENTS.len() as i64);
+    assert!(!tokenory::price_coverage::extend_from_service(&mut db, &service).unwrap());
+    assert!(std::fs::read_dir(dir.path().join("backups"))
+        .unwrap()
+        .any(|p| p
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains("price-coverage")));
+}
+
+#[test]
+fn missing_price_fill_preserves_tokens_source_cost_known_amounts_and_unknown_models() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = Database::open(dir.path()).unwrap();
+    let mut pending = record();
+    pending.source_cost_usd = Some(3.25);
+    tokenory::db::put_record(&db.connection, "import", "batch", &pending).unwrap();
+    let mut known = pending.clone();
+    known.key = "known".into();
+    known.estimated_cost_usd = Some(7.);
+    tokenory::db::put_record(&db.connection, "import", "batch", &known).unwrap();
+    let mut unknown = pending.clone();
+    unknown.key = "unknown".into();
+    unknown.provider = "reseller".into();
+    tokenory::db::put_record(&db.connection, "import", "batch", &unknown).unwrap();
+    let before = tokenory::db::revision(&db.connection).unwrap();
+    let id = save_snapshot(&mut db, snapshot(2., 8.)).unwrap();
+    let read = |key: &str| -> UsageRecord {
+        let body: String = db
+            .connection
+            .query_row(
+                "SELECT body FROM usage_records WHERE item_key=?1",
+                [key],
+                |r| r.get(0),
+            )
+            .unwrap();
+        serde_json::from_str(&body).unwrap()
+    };
+    let filled = read("a");
+    assert_eq!(filled.estimated_cost_usd, Some(0.006));
+    assert_eq!(filled.tokens, pending.tokens);
+    assert_eq!(filled.source_cost_usd, pending.source_cost_usd);
+    assert_eq!(filled.price_snapshot_id, Some(id));
+    assert_eq!(read("known").estimated_cost_usd, Some(7.));
+    assert!(read("unknown").estimated_cost_usd.is_none());
+    assert!(tokenory::db::revision(&db.connection).unwrap() > before);
+}
+
+#[test]
+fn namespaced_official_models_use_bundled_rates_without_crossing_provider_boundary() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = Database::open(dir.path()).unwrap();
+    let mut r = record();
+    r.provider = "openai".into();
+    r.model = "openai/gpt-6.1-sol".into();
+    tokenory::db::put_record(&db.connection, "local", "", &r).unwrap();
+    let service = tokens_core::pricing::PricingService::new(Default::default(), Default::default());
+    let p = tokenory::pricing::snapshot_from_service(&db, &service).unwrap();
+    assert_eq!(estimate("local", &r, &p).cost, Some(0.007));
+    r.metadata["inferenceSpeed"] = serde_json::json!({"speed":"fast"});
+    assert_eq!(estimate("local", &r, &p).cost, Some(0.014));
+    r.provider = "reseller".into();
+    assert!(estimate("local", &r, &p).cost.is_none());
+}
+
+#[test]
+fn unknown_providers_use_labeled_first_party_references_without_changing_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = Database::open(dir.path()).unwrap();
+    let service = tokens_core::pricing::PricingService::new(
+        [(
+            "moonshot/kimi-k2.5".into(),
+            ModelPricing {
+                input_cost_per_token: Some(0.6e-6),
+                output_cost_per_token: Some(3e-6),
+                ..Default::default()
+            },
+        )]
+        .into_iter()
+        .collect(),
+        [("moonshotai/kimi-k2.5".into(), ModelPricing {
+            input_cost_per_token: Some(0.5e-6), output_cost_per_token: Some(2.5e-6), ..Default::default()
+        })].into_iter().collect(),
+    );
+    for (i, (provider, model)) in [
+        ("_session", "kimi-k2.5"),
+        ("moonshotai", "kimi-k2.5"),
+        ("unknown", "kimi-k2.5"),
+        ("unknown", "gpt-6.1-sol"),
+        ("reseller", "gpt-6.1-sol"),
+        ("unknown", "openrouter/gpt-6.1-sol"),
+        ("unknown", "compactor"),
+        ("unknown", "deepseek-flash"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut r = record();
+        r.key = i.to_string();
+        r.provider = provider.into();
+        r.model = model.into();
+        tokenory::db::put_record(&db.connection, "local", "", &r).unwrap();
+    }
+    let p = tokenory::pricing::snapshot_from_service(&db, &service).unwrap();
+    p.validate().unwrap();
+    for (provider, model, expected) in [
+        ("_session", "kimi-k2.5", Some(0.0021)),
+        ("unknown", "kimi-k2.5", Some(0.0021)),
+        ("unknown", "gpt-6.1-sol", Some(0.007)),
+        ("reseller", "gpt-6.1-sol", None),
+        ("unknown", "openrouter/gpt-6.1-sol", None),
+        ("unknown", "compactor", None),
+    ] {
+        let mut r = record();
+        r.provider = provider.into();
+        r.model = model.into();
+        let e = estimate("local", &r, &p);
+        match expected {
+            Some(value) => {
+                assert!((e.cost.unwrap() - value).abs() < 1e-12, "{model}");
+                assert!(e.basis.contains("Provider unknown"));
+            }
+            None => assert!(e.cost.is_none(), "{provider}/{model}"),
+        }
+        assert_eq!(r.provider, provider);
+    }
+}
+
+#[test]
+fn archived_mimo_reference_uses_full_request_tier_but_not_daily_total() {
+    let mut r = record();
+    r.provider = "xiaomi".into();
+    r.model = "mimo-v2-pro".into();
+    r.tokens = Tokens {
+        input: 250_000,
+        cache_read: 10_000,
+        output: 1000,
+        ..Default::default()
+    };
+    let p = PriceSnapshot::bundled_reference();
+    assert!((estimate("local", &r, &p).cost.unwrap() - 0.51).abs() < 1e-12);
+    r.metadata = serde_json::json!({"granularity":"day"});
+    assert!((estimate("local", &r, &p).cost.unwrap() - 0.255).abs() < 1e-12);
+}
+
+#[test]
+fn missing_category_rate_does_not_block_other_records_of_the_same_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = Database::open(dir.path()).unwrap();
+    let mut r = record();
+    r.provider = "test".into();
+    r.model = "model-a".into();
+    tokenory::db::put_record(&db.connection, "local", "", &r).unwrap();
+    let mut incomplete = r.clone();
+    incomplete.key = "cache-write".into();
+    incomplete.tokens.cache_write = 100;
+    tokenory::db::put_record(&db.connection, "local", "", &incomplete).unwrap();
+    let service = tokens_core::pricing::PricingService::new(
+        [(
+            "test/model-a".into(),
+            ModelPricing {
+                input_cost_per_token: Some(2e-6),
+                output_cost_per_token: Some(8e-6),
+                ..Default::default()
+            },
+        )]
+        .into_iter()
+        .collect(),
+        Default::default(),
+    );
+    let p = tokenory::pricing::snapshot_from_service(&db, &service).unwrap();
+    assert_eq!(estimate("local", &r, &p).cost, Some(0.006));
+    assert_eq!(
+        estimate("local", &incomplete, &p).reason.as_deref(),
+        Some("a populated token category has no rate")
+    );
+}
+
+#[test]
+fn devin_compactor_reference_fills_missing_cost_without_renaming_the_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = Database::open(dir.path()).unwrap();
+    let mut r = record();
+    r.client = "devin-cli".into(); r.provider = "devin".into(); r.model = "compactor".into();
+    r.tokens = Tokens { input: 71_232, output: 5_038, ..Default::default() };
+    tokenory::db::put_record(&db.connection, "local", "", &r).unwrap();
+    tokenory::pricing::initialize(&mut db).unwrap();
+    let body: String = db.connection.query_row("SELECT body FROM usage_records WHERE item_key='a'", [], |row| row.get(0)).unwrap();
+    let updated: UsageRecord = serde_json::from_str(&body).unwrap();
+    assert!((updated.estimated_cost_usd.unwrap() - 0.0096422).abs() < 1e-12);
+    assert_eq!(updated.model, "compactor");
+    assert_eq!(updated.tokens, r.tokens);
+    assert!(updated.cost_basis.as_deref().unwrap().contains("User-selected reference estimate"));
+    assert!(updated.cost_basis.as_deref().unwrap().contains("unconfirmed"));
+    let p = PriceSnapshot::bundled_reference();
+    r.client = "other-agent".into();
+    assert!(estimate("local", &r, &p).cost.is_none());
+    r.client = "devin-cli".into(); r.provider = "unknown".into();
+    assert!(estimate("local", &r, &p).cost.is_none());
 }

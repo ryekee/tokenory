@@ -1,3 +1,7 @@
+// [INPUT]: 读取各客户端日志和当前价格快照。
+// [OUTPUT]: 生成并持久化规范化用量与扫描诊断。
+// [POS]: 解析器与账本之间的边界；维护稳定记录身份。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
     clients::{source_paths, CLIENTS},
     config::Config,
@@ -388,9 +392,12 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
                 && old.provider == record.provider
                 && old.metadata == record.metadata
             {
-                record.estimated_cost_usd = old.estimated_cost_usd;
-                record.cost_basis = old.cost_basis;
-                record.price_snapshot_id = old.price_snapshot_id;
+                // 已有金额保持不可变；此前缺价格的记录采用当前首次估算。
+                if old.estimated_cost_usd.is_some() || record.estimated_cost_usd.is_none() {
+                    record.estimated_cost_usd = old.estimated_cost_usd;
+                    record.cost_basis = old.cost_basis;
+                    record.price_snapshot_id = old.price_snapshot_id;
+                }
             }
             // A display/timezone preference must not silently move persisted events.
             if record.metadata["collectionMode"] == "sessionSnapshot" {

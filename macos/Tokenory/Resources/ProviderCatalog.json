@@ -1,0 +1,1647 @@
+{
+  "302ai": {
+    "icon": "provider-302ai",
+    "name": "302.AI",
+    "original": true,
+    "source": "https://models.dev/logos/302ai.svg",
+    "subscription": false
+  },
+  "abacus": {
+    "icon": "provider-abacus",
+    "name": "Abacus",
+    "original": false,
+    "source": "https://models.dev/logos/abacus.svg",
+    "subscription": false
+  },
+  "abliteration-ai": {
+    "icon": "provider-abliteration-ai",
+    "name": "abliteration.ai",
+    "original": false,
+    "source": "https://models.dev/logos/abliteration-ai.svg",
+    "subscription": false
+  },
+  "above": {
+    "icon": "provider-above",
+    "name": "above.dev",
+    "original": false,
+    "source": "https://models.dev/logos/above.svg",
+    "subscription": false
+  },
+  "agentrouter": {
+    "icon": "provider-agentrouter",
+    "name": "AgentRouter",
+    "original": false,
+    "source": "https://models.dev/logos/agentrouter.svg",
+    "subscription": false
+  },
+  "agnes": {
+    "icon": "provider-agnes",
+    "name": "Agnes AI",
+    "original": false,
+    "source": "https://models.dev/logos/agnes.svg",
+    "subscription": false
+  },
+  "ai-router": {
+    "icon": "provider-ai-router",
+    "name": "AI-ROUTER",
+    "original": false,
+    "source": "https://models.dev/logos/ai-router.svg",
+    "subscription": false
+  },
+  "ai21": {
+    "icon": "provider-ai21",
+    "name": "AI21 Labs",
+    "original": false,
+    "source": "https://models.dev/logos/ai21.svg",
+    "subscription": false
+  },
+  "aiand": {
+    "icon": "provider-aiand",
+    "name": "ai&",
+    "original": false,
+    "source": "https://models.dev/logos/aiand.svg",
+    "subscription": false
+  },
+  "aihubmix": {
+    "icon": "provider-aihubmix",
+    "name": "AIHubMix",
+    "original": false,
+    "source": "https://models.dev/logos/aihubmix.svg",
+    "subscription": false
+  },
+  "aimlapi": {
+    "icon": "provider-aimlapi",
+    "name": "AI/ML API",
+    "original": false,
+    "source": "https://models.dev/logos/aimlapi.svg",
+    "subscription": false
+  },
+  "ainetcafe": {
+    "icon": "provider-ainetcafe",
+    "name": "ainetcafe",
+    "original": false,
+    "source": "https://models.dev/logos/ainetcafe.svg",
+    "subscription": false
+  },
+  "aixy": {
+    "icon": "provider-aixy",
+    "name": "Aixy",
+    "original": false,
+    "source": "https://models.dev/logos/aixy.svg",
+    "subscription": false
+  },
+  "aki-io": {
+    "icon": "provider-aki-io",
+    "name": "AKI.IO",
+    "original": false,
+    "source": "https://models.dev/logos/aki-io.svg",
+    "subscription": false
+  },
+  "alibaba": {
+    "icon": "provider-alibaba",
+    "name": "Alibaba",
+    "original": false,
+    "source": "https://models.dev/logos/alibaba.svg",
+    "subscription": false
+  },
+  "alibaba-cn": {
+    "icon": "provider-alibaba-cn",
+    "name": "Alibaba (China)",
+    "original": false,
+    "source": "https://models.dev/logos/alibaba-cn.svg",
+    "subscription": false
+  },
+  "alibaba-coding-plan": {
+    "icon": "provider-alibaba-coding-plan",
+    "name": "Alibaba Coding Plan",
+    "original": false,
+    "source": "https://models.dev/logos/alibaba-coding-plan.svg",
+    "subscription": true
+  },
+  "alibaba-coding-plan-cn": {
+    "icon": "provider-alibaba-coding-plan-cn",
+    "name": "Alibaba Coding Plan (China)",
+    "original": false,
+    "source": "https://models.dev/logos/alibaba-coding-plan-cn.svg",
+    "subscription": true
+  },
+  "alibaba-token-plan": {
+    "icon": "provider-alibaba-token-plan",
+    "name": "Alibaba Token Plan",
+    "original": false,
+    "source": "https://models.dev/logos/alibaba-token-plan.svg",
+    "subscription": true
+  },
+  "alibaba-token-plan-cn": {
+    "icon": "provider-alibaba-token-plan-cn",
+    "name": "Alibaba Token Plan (China)",
+    "original": false,
+    "source": "https://models.dev/logos/alibaba-token-plan-cn.svg",
+    "subscription": true
+  },
+  "amazon-bedrock": {
+    "icon": "provider-amazon-bedrock",
+    "name": "Amazon Bedrock",
+    "original": false,
+    "source": "https://models.dev/logos/amazon-bedrock.svg",
+    "subscription": false
+  },
+  "ambient": {
+    "icon": "provider-ambient",
+    "name": "Ambient",
+    "original": false,
+    "source": "https://models.dev/logos/ambient.svg",
+    "subscription": false
+  },
+  "amd": {
+    "icon": "provider-amd",
+    "name": "AMD",
+    "original": false,
+    "source": "https://models.dev/logos/amd.svg",
+    "subscription": false
+  },
+  "anthropic": {
+    "icon": "provider-anthropic",
+    "name": "Anthropic",
+    "original": false,
+    "source": "https://models.dev/logos/anthropic.svg",
+    "subscription": false
+  },
+  "anyapi": {
+    "icon": "provider-anyapi",
+    "name": "AnyAPI",
+    "original": false,
+    "source": "https://models.dev/logos/anyapi.svg",
+    "subscription": false
+  },
+  "arcee": {
+    "icon": "provider-arcee",
+    "name": "Arcee",
+    "original": false,
+    "source": "https://models.dev/logos/arcee.svg",
+    "subscription": false
+  },
+  "atomic-chat": {
+    "icon": "provider-atomic-chat",
+    "name": "Atomic Chat",
+    "original": false,
+    "source": "https://models.dev/logos/atomic-chat.svg",
+    "subscription": false
+  },
+  "auriko": {
+    "icon": "provider-auriko",
+    "name": "Auriko",
+    "original": false,
+    "source": "https://models.dev/logos/auriko.svg",
+    "subscription": false
+  },
+  "azure": {
+    "icon": "provider-azure",
+    "name": "Azure",
+    "original": false,
+    "source": "https://models.dev/logos/azure.svg",
+    "subscription": false
+  },
+  "azure-cognitive-services": {
+    "icon": "provider-azure-cognitive-services",
+    "name": "Azure Cognitive Services",
+    "original": false,
+    "source": "https://models.dev/logos/azure-cognitive-services.svg",
+    "subscription": false
+  },
+  "bailing": {
+    "icon": "provider-bailing",
+    "name": "Bailing",
+    "original": false,
+    "source": "https://models.dev/logos/bailing.svg",
+    "subscription": false
+  },
+  "baseten": {
+    "icon": "provider-baseten",
+    "name": "Baseten",
+    "original": false,
+    "source": "https://models.dev/logos/baseten.svg",
+    "subscription": false
+  },
+  "bee": {
+    "icon": "provider-bee",
+    "name": "Bee by HEOSSI",
+    "original": false,
+    "source": "https://models.dev/logos/bee.svg",
+    "subscription": false
+  },
+  "berget": {
+    "icon": "provider-berget",
+    "name": "Berget.AI",
+    "original": false,
+    "source": "https://models.dev/logos/berget.svg",
+    "subscription": false
+  },
+  "blueclaw": {
+    "icon": "provider-blueclaw",
+    "name": "Blue Claw",
+    "original": false,
+    "source": "https://models.dev/logos/blueclaw.svg",
+    "subscription": false
+  },
+  "bothub": {
+    "icon": "provider-bothub",
+    "name": "Bothub",
+    "original": false,
+    "source": "https://models.dev/logos/bothub.svg",
+    "subscription": false
+  },
+  "boundless": {
+    "icon": "provider-boundless",
+    "name": "Boundless",
+    "original": false,
+    "source": "https://models.dev/logos/boundless.svg",
+    "subscription": false
+  },
+  "cerebras": {
+    "icon": "provider-cerebras",
+    "name": "Cerebras",
+    "original": false,
+    "source": "https://models.dev/logos/cerebras.svg",
+    "subscription": false
+  },
+  "chutes": {
+    "icon": "provider-chutes",
+    "name": "Chutes",
+    "original": false,
+    "source": "https://models.dev/logos/chutes.svg",
+    "subscription": false
+  },
+  "clarifai": {
+    "icon": "provider-clarifai",
+    "name": "Clarifai",
+    "original": false,
+    "source": "https://models.dev/logos/clarifai.svg",
+    "subscription": false
+  },
+  "claudinio": {
+    "icon": "provider-claudinio",
+    "name": "Claudinio",
+    "original": false,
+    "source": "https://models.dev/logos/claudinio.svg",
+    "subscription": false
+  },
+  "cline-pass": {
+    "icon": "provider-cline-pass",
+    "name": "ClinePass",
+    "original": false,
+    "source": "https://models.dev/logos/cline-pass.svg",
+    "subscription": true
+  },
+  "cloudferro-sherlock": {
+    "icon": "provider-cloudferro-sherlock",
+    "name": "CloudFerro Sherlock",
+    "original": false,
+    "source": "https://models.dev/logos/cloudferro-sherlock.svg",
+    "subscription": false
+  },
+  "cloudflare-ai-gateway": {
+    "icon": "provider-cloudflare-ai-gateway",
+    "name": "Cloudflare AI Gateway",
+    "original": false,
+    "source": "https://models.dev/logos/cloudflare-ai-gateway.svg",
+    "subscription": false
+  },
+  "cloudflare-workers-ai": {
+    "icon": "provider-cloudflare-workers-ai",
+    "name": "Cloudflare Workers AI",
+    "original": false,
+    "source": "https://models.dev/logos/cloudflare-workers-ai.svg",
+    "subscription": false
+  },
+  "cohere": {
+    "icon": "provider-cohere",
+    "name": "Cohere",
+    "original": false,
+    "source": "https://models.dev/logos/cohere.svg",
+    "subscription": false
+  },
+  "commandcode": {
+    "icon": "provider-commandcode",
+    "name": "CommandCode",
+    "original": false,
+    "source": "https://models.dev/logos/commandcode.svg",
+    "subscription": false
+  },
+  "coralbricks": {
+    "icon": "provider-coralbricks",
+    "name": "CoralBricks",
+    "original": false,
+    "source": "https://models.dev/logos/coralbricks.svg",
+    "subscription": false
+  },
+  "cortecs": {
+    "icon": "provider-cortecs",
+    "name": "Cortecs",
+    "original": false,
+    "source": "https://models.dev/logos/cortecs.svg",
+    "subscription": false
+  },
+  "crossmodel": {
+    "icon": "provider-crossmodel",
+    "name": "CrossModel",
+    "original": false,
+    "source": "https://models.dev/logos/crossmodel.svg",
+    "subscription": false
+  },
+  "crusoe": {
+    "icon": "provider-crusoe",
+    "name": "Crusoe",
+    "original": false,
+    "source": "https://models.dev/logos/crusoe.svg",
+    "subscription": false
+  },
+  "daoxe": {
+    "icon": "provider-daoxe",
+    "name": "DaoXE",
+    "original": false,
+    "source": "https://models.dev/logos/daoxe.svg",
+    "subscription": false
+  },
+  "databricks": {
+    "icon": "provider-databricks",
+    "name": "Databricks",
+    "original": false,
+    "source": "https://models.dev/logos/databricks.svg",
+    "subscription": false
+  },
+  "deepinfra": {
+    "icon": "provider-deepinfra",
+    "name": "Deep Infra",
+    "original": false,
+    "source": "https://models.dev/logos/deepinfra.svg",
+    "subscription": false
+  },
+  "deepseek": {
+    "icon": "provider-deepseek",
+    "name": "DeepSeek",
+    "original": false,
+    "source": "https://models.dev/logos/deepseek.svg",
+    "subscription": false
+  },
+  "digitalocean": {
+    "icon": "provider-digitalocean",
+    "name": "DigitalOcean",
+    "original": false,
+    "source": "https://models.dev/logos/digitalocean.svg",
+    "subscription": false
+  },
+  "dinference": {
+    "icon": "provider-dinference",
+    "name": "DInference",
+    "original": false,
+    "source": "https://models.dev/logos/dinference.svg",
+    "subscription": false
+  },
+  "drun": {
+    "icon": "provider-drun",
+    "name": "D.Run (China)",
+    "original": false,
+    "source": "https://models.dev/logos/drun.svg",
+    "subscription": false
+  },
+  "ebcloud": {
+    "icon": "provider-ebcloud",
+    "name": "EBCloud",
+    "original": false,
+    "source": "https://models.dev/logos/ebcloud.svg",
+    "subscription": false
+  },
+  "echo": {
+    "icon": "provider-echo",
+    "name": "Echo",
+    "original": false,
+    "source": "https://models.dev/logos/echo.svg",
+    "subscription": false
+  },
+  "edenai": {
+    "icon": "provider-edenai",
+    "name": "Eden AI",
+    "original": false,
+    "source": "https://models.dev/logos/edenai.svg",
+    "subscription": false
+  },
+  "empiriolabs": {
+    "icon": "provider-empiriolabs",
+    "name": "EmpirioLabs AI",
+    "original": false,
+    "source": "https://models.dev/logos/empiriolabs.svg",
+    "subscription": false
+  },
+  "engy": {
+    "icon": "provider-engy",
+    "name": "engy",
+    "original": false,
+    "source": "https://models.dev/logos/engy.svg",
+    "subscription": false
+  },
+  "evroc": {
+    "icon": "provider-evroc",
+    "name": "evroc",
+    "original": false,
+    "source": "https://models.dev/logos/evroc.svg",
+    "subscription": false
+  },
+  "fastrouter": {
+    "icon": "provider-fastrouter",
+    "name": "FastRouter",
+    "original": false,
+    "source": "https://models.dev/logos/fastrouter.svg",
+    "subscription": false
+  },
+  "fireworks-ai": {
+    "icon": "provider-fireworks-ai",
+    "name": "Fireworks AI",
+    "original": false,
+    "source": "https://models.dev/logos/fireworks-ai.svg",
+    "subscription": false
+  },
+  "freemodel": {
+    "icon": "provider-freemodel",
+    "name": "FreeModel",
+    "original": false,
+    "source": "https://models.dev/logos/freemodel.svg",
+    "subscription": false
+  },
+  "friendli": {
+    "icon": "provider-friendli",
+    "name": "Friendli",
+    "original": false,
+    "source": "https://models.dev/logos/friendli.svg",
+    "subscription": false
+  },
+  "frogbot": {
+    "icon": "provider-frogbot",
+    "name": "FrogBot",
+    "original": false,
+    "source": "https://models.dev/logos/frogbot.svg",
+    "subscription": false
+  },
+  "github-copilot": {
+    "icon": "provider-github-copilot",
+    "name": "GitHub Copilot",
+    "original": false,
+    "source": "https://models.dev/logos/github-copilot.svg",
+    "subscription": true
+  },
+  "gitlab": {
+    "icon": "provider-gitlab",
+    "name": "GitLab Duo",
+    "original": false,
+    "source": "https://models.dev/logos/gitlab.svg",
+    "subscription": true
+  },
+  "gmicloud": {
+    "icon": "provider-gmicloud",
+    "name": "GMI Cloud",
+    "original": false,
+    "source": "https://models.dev/logos/gmicloud.svg",
+    "subscription": false
+  },
+  "google": {
+    "icon": "provider-google",
+    "name": "Google",
+    "original": false,
+    "source": "https://models.dev/logos/google.svg",
+    "subscription": false
+  },
+  "google-vertex": {
+    "icon": "provider-google-vertex",
+    "name": "Vertex",
+    "original": false,
+    "source": "https://models.dev/logos/google-vertex.svg",
+    "subscription": false
+  },
+  "google-vertex-anthropic": {
+    "icon": "provider-google-vertex-anthropic",
+    "name": "Vertex (Anthropic)",
+    "original": false,
+    "source": "https://models.dev/logos/google-vertex-anthropic.svg",
+    "subscription": false
+  },
+  "greenpt": {
+    "icon": "provider-greenpt",
+    "name": "GreenPT",
+    "original": false,
+    "source": "https://models.dev/logos/greenpt.svg",
+    "subscription": false
+  },
+  "groq": {
+    "icon": "provider-groq",
+    "name": "Groq",
+    "original": false,
+    "source": "https://models.dev/logos/groq.svg",
+    "subscription": false
+  },
+  "helicone": {
+    "icon": "provider-helicone",
+    "name": "Helicone",
+    "original": false,
+    "source": "https://models.dev/logos/helicone.svg",
+    "subscription": false
+  },
+  "hetzner": {
+    "icon": "provider-hetzner",
+    "name": "Hetzner",
+    "original": false,
+    "source": "https://models.dev/logos/hetzner.svg",
+    "subscription": false
+  },
+  "hopper": {
+    "icon": "provider-hopper",
+    "name": "Hopper",
+    "original": false,
+    "source": "https://models.dev/logos/hopper.svg",
+    "subscription": false
+  },
+  "hpc-ai": {
+    "icon": "provider-hpc-ai",
+    "name": "HPC-AI",
+    "original": false,
+    "source": "https://models.dev/logos/hpc-ai.svg",
+    "subscription": false
+  },
+  "huggingface": {
+    "icon": "provider-huggingface",
+    "name": "Hugging Face",
+    "original": false,
+    "source": "https://models.dev/logos/huggingface.svg",
+    "subscription": false
+  },
+  "hyper": {
+    "icon": "provider-hyper",
+    "name": "Charm Hyper",
+    "original": false,
+    "source": "https://models.dev/logos/hyper.svg",
+    "subscription": false
+  },
+  "impossibl": {
+    "icon": "provider-impossibl",
+    "name": "Impossibl",
+    "original": false,
+    "source": "https://models.dev/logos/impossibl.svg",
+    "subscription": false
+  },
+  "inception": {
+    "icon": "provider-inception",
+    "name": "Inception",
+    "original": false,
+    "source": "https://models.dev/logos/inception.svg",
+    "subscription": false
+  },
+  "inceptron": {
+    "icon": "provider-inceptron",
+    "name": "Inceptron",
+    "original": false,
+    "source": "https://models.dev/logos/inceptron.svg",
+    "subscription": false
+  },
+  "inco": {
+    "icon": "provider-inco",
+    "name": "Inco",
+    "original": false,
+    "source": "https://models.dev/logos/inco.svg",
+    "subscription": false
+  },
+  "infer": {
+    "icon": "provider-infer",
+    "name": "Infer by Flow7",
+    "original": false,
+    "source": "https://models.dev/logos/infer.svg",
+    "subscription": false
+  },
+  "inference": {
+    "icon": "provider-inference",
+    "name": "Inference",
+    "original": false,
+    "source": "https://models.dev/logos/inference.svg",
+    "subscription": false
+  },
+  "inferx": {
+    "icon": "provider-inferx",
+    "name": "InferX",
+    "original": false,
+    "source": "https://models.dev/logos/inferx.svg",
+    "subscription": false
+  },
+  "infomaniak": {
+    "icon": "provider-infomaniak",
+    "name": "Infomaniak",
+    "original": false,
+    "source": "https://models.dev/logos/infomaniak.svg",
+    "subscription": false
+  },
+  "io-net": {
+    "icon": "provider-io-net",
+    "name": "IO.NET",
+    "original": false,
+    "source": "https://models.dev/logos/io-net.svg",
+    "subscription": false
+  },
+  "iteracompute": {
+    "icon": "provider-iteracompute",
+    "name": "IteraCompute",
+    "original": false,
+    "source": "https://models.dev/logos/iteracompute.svg",
+    "subscription": false
+  },
+  "jalapeno": {
+    "icon": "provider-jalapeno",
+    "name": "Jalapeno Cloud",
+    "original": false,
+    "source": "https://models.dev/logos/jalapeno.svg",
+    "subscription": false
+  },
+  "jiekou": {
+    "icon": "provider-jiekou",
+    "name": "Jiekou.AI",
+    "original": false,
+    "source": "https://models.dev/logos/jiekou.svg",
+    "subscription": false
+  },
+  "kenari": {
+    "icon": "provider-kenari",
+    "name": "Kenari",
+    "original": false,
+    "source": "https://models.dev/logos/kenari.svg",
+    "subscription": false
+  },
+  "kilo": {
+    "icon": "provider-kilo",
+    "name": "Kilo Gateway",
+    "original": false,
+    "source": "https://models.dev/logos/kilo.svg",
+    "subscription": false
+  },
+  "kimi-code-plan-cn": {
+    "icon": "provider-kimi-code-plan-cn",
+    "name": "Kimi For Coding (kimi.com)",
+    "original": false,
+    "source": "https://models.dev/logos/kimi-code-plan-cn.svg",
+    "subscription": true
+  },
+  "kimi-code-plan-global": {
+    "icon": "provider-kimi-code-plan-global",
+    "name": "Kimi For Coding (kimi.ai)",
+    "original": false,
+    "source": "https://models.dev/logos/kimi-code-plan-global.svg",
+    "subscription": true
+  },
+  "klokintegration": {
+    "icon": "provider-klokintegration",
+    "name": "klokintegration.se",
+    "original": false,
+    "source": "https://models.dev/logos/klokintegration.svg",
+    "subscription": false
+  },
+  "kosmik": {
+    "icon": "provider-kosmik",
+    "name": "Kosmik Compute",
+    "original": false,
+    "source": "https://models.dev/logos/kosmik.svg",
+    "subscription": false
+  },
+  "kuae-cloud-coding-plan": {
+    "icon": "provider-kuae-cloud-coding-plan",
+    "name": "KUAE Cloud Coding Plan",
+    "original": false,
+    "source": "https://models.dev/logos/kuae-cloud-coding-plan.svg",
+    "subscription": true
+  },
+  "lilac": {
+    "icon": "provider-lilac",
+    "name": "Lilac",
+    "original": false,
+    "source": "https://models.dev/logos/lilac.svg",
+    "subscription": false
+  },
+  "liquid": {
+    "icon": "provider-liquid",
+    "name": "Liquid Inference",
+    "original": false,
+    "source": "https://models.dev/logos/liquid.svg",
+    "subscription": false
+  },
+  "llmgateway": {
+    "icon": "provider-llmgateway",
+    "name": "DevPass (LLM Gateway)",
+    "original": false,
+    "source": "https://models.dev/logos/llmgateway.svg",
+    "subscription": false
+  },
+  "llmgateway-providers": {
+    "icon": "provider-llmgateway-providers",
+    "name": "LLM Gateway",
+    "original": false,
+    "source": "https://models.dev/logos/llmgateway-providers.svg",
+    "subscription": false
+  },
+  "llmtech": {
+    "icon": "provider-llmtech",
+    "name": "LLM Tech",
+    "original": false,
+    "source": "https://models.dev/logos/llmtech.svg",
+    "subscription": false
+  },
+  "llmtr": {
+    "icon": "provider-llmtr",
+    "name": "LLMTR",
+    "original": false,
+    "source": "https://models.dev/logos/llmtr.svg",
+    "subscription": false
+  },
+  "lmstudio": {
+    "icon": "provider-lmstudio",
+    "name": "LMStudio",
+    "original": false,
+    "source": "https://models.dev/logos/lmstudio.svg",
+    "subscription": false
+  },
+  "longcat": {
+    "icon": "provider-longcat",
+    "name": "LongCat",
+    "original": false,
+    "source": "https://models.dev/logos/longcat.svg",
+    "subscription": false
+  },
+  "lowrouter": {
+    "icon": "provider-lowrouter",
+    "name": "LowRouter",
+    "original": false,
+    "source": "https://models.dev/logos/lowrouter.svg",
+    "subscription": false
+  },
+  "lucidquery": {
+    "icon": "provider-lucidquery",
+    "name": "LucidQuery",
+    "original": false,
+    "source": "https://models.dev/logos/lucidquery.svg",
+    "subscription": false
+  },
+  "lynkr": {
+    "icon": "provider-lynkr",
+    "name": "Lynkr",
+    "original": false,
+    "source": "https://models.dev/logos/lynkr.svg",
+    "subscription": false
+  },
+  "meganova": {
+    "icon": "provider-meganova",
+    "name": "Meganova",
+    "original": false,
+    "source": "https://models.dev/logos/meganova.svg",
+    "subscription": false
+  },
+  "melious": {
+    "icon": "provider-melious",
+    "name": "Melious",
+    "original": false,
+    "source": "https://models.dev/logos/melious.svg",
+    "subscription": false
+  },
+  "merge-gateway": {
+    "icon": "provider-merge-gateway",
+    "name": "Merge Gateway",
+    "original": false,
+    "source": "https://models.dev/logos/merge-gateway.svg",
+    "subscription": false
+  },
+  "meta": {
+    "icon": "provider-meta",
+    "name": "Meta",
+    "original": false,
+    "source": "https://models.dev/logos/meta.svg",
+    "subscription": false
+  },
+  "minimax": {
+    "icon": "provider-minimax",
+    "name": "MiniMax (minimax.io)",
+    "original": false,
+    "source": "https://models.dev/logos/minimax.svg",
+    "subscription": false
+  },
+  "minimax-cn": {
+    "icon": "provider-minimax-cn",
+    "name": "MiniMax (minimax.cn)",
+    "original": false,
+    "source": "https://models.dev/logos/minimax-cn.svg",
+    "subscription": false
+  },
+  "minimax-cn-coding-plan": {
+    "icon": "provider-minimax-cn-coding-plan",
+    "name": "MiniMax Token Plan (minimax.cn)",
+    "original": false,
+    "source": "https://models.dev/logos/minimax-cn-coding-plan.svg",
+    "subscription": true
+  },
+  "minimax-coding-plan": {
+    "icon": "provider-minimax-coding-plan",
+    "name": "MiniMax Token Plan (minimax.io)",
+    "original": false,
+    "source": "https://models.dev/logos/minimax-coding-plan.svg",
+    "subscription": true
+  },
+  "mistral": {
+    "icon": "provider-mistral",
+    "name": "Mistral",
+    "original": false,
+    "source": "https://models.dev/logos/mistral.svg",
+    "subscription": false
+  },
+  "mixlayer": {
+    "icon": "provider-mixlayer",
+    "name": "Mixlayer",
+    "original": false,
+    "source": "https://models.dev/logos/mixlayer.svg",
+    "subscription": false
+  },
+  "moark": {
+    "icon": "provider-moark",
+    "name": "Moark",
+    "original": false,
+    "source": "https://models.dev/logos/moark.svg",
+    "subscription": false
+  },
+  "modal": {
+    "icon": "provider-modal",
+    "name": "Modal",
+    "original": false,
+    "source": "https://models.dev/logos/modal.svg",
+    "subscription": false
+  },
+  "model-oracle-ai": {
+    "icon": "provider-model-oracle-ai",
+    "name": "Model Oracle AI",
+    "original": false,
+    "source": "https://models.dev/logos/model-oracle-ai.svg",
+    "subscription": false
+  },
+  "modelis": {
+    "icon": "provider-modelis",
+    "name": "Modelis",
+    "original": false,
+    "source": "https://models.dev/logos/modelis.svg",
+    "subscription": false
+  },
+  "modelscope": {
+    "icon": "provider-modelscope",
+    "name": "ModelScope",
+    "original": false,
+    "source": "https://models.dev/logos/modelscope.svg",
+    "subscription": false
+  },
+  "modular": {
+    "icon": "provider-modular",
+    "name": "Modular",
+    "original": false,
+    "source": "https://models.dev/logos/modular.svg",
+    "subscription": false
+  },
+  "moonshotai": {
+    "icon": "provider-moonshotai",
+    "name": "Moonshot AI",
+    "original": false,
+    "source": "https://models.dev/logos/moonshotai.svg",
+    "subscription": false
+  },
+  "moonshotai-cn": {
+    "icon": "provider-moonshotai-cn",
+    "name": "Moonshot AI (China)",
+    "original": false,
+    "source": "https://models.dev/logos/moonshotai-cn.svg",
+    "subscription": false
+  },
+  "morph": {
+    "icon": "provider-morph",
+    "name": "Morph",
+    "original": false,
+    "source": "https://models.dev/logos/morph.svg",
+    "subscription": false
+  },
+  "munito": {
+    "icon": "provider-munito",
+    "name": "Munito AI",
+    "original": false,
+    "source": "https://models.dev/logos/munito.svg",
+    "subscription": false
+  },
+  "munito-eu": {
+    "icon": "provider-munito-eu",
+    "name": "Munito AI (EU)",
+    "original": false,
+    "source": "https://models.dev/logos/munito-eu.svg",
+    "subscription": false
+  },
+  "nan": {
+    "icon": "provider-nan",
+    "name": "NaN",
+    "original": false,
+    "source": "https://models.dev/logos/nan.svg",
+    "subscription": false
+  },
+  "nano-gpt": {
+    "icon": "provider-nano-gpt",
+    "name": "NanoGPT",
+    "original": false,
+    "source": "https://models.dev/logos/nano-gpt.svg",
+    "subscription": false
+  },
+  "nearai": {
+    "icon": "provider-nearai",
+    "name": "NEAR AI Cloud",
+    "original": false,
+    "source": "https://models.dev/logos/nearai.svg",
+    "subscription": false
+  },
+  "nebius": {
+    "icon": "provider-nebius",
+    "name": "Nebius Token Factory",
+    "original": false,
+    "source": "https://models.dev/logos/nebius.svg",
+    "subscription": false
+  },
+  "neon": {
+    "icon": "provider-neon",
+    "name": "Neon",
+    "original": false,
+    "source": "https://models.dev/logos/neon.svg",
+    "subscription": false
+  },
+  "neosmith": {
+    "icon": "provider-neosmith",
+    "name": "NeoSmith",
+    "original": false,
+    "source": "https://models.dev/logos/neosmith.svg",
+    "subscription": false
+  },
+  "neuralwatt": {
+    "icon": "provider-neuralwatt",
+    "name": "Neuralwatt",
+    "original": false,
+    "source": "https://models.dev/logos/neuralwatt.svg",
+    "subscription": false
+  },
+  "nova": {
+    "icon": "provider-nova",
+    "name": "Nova",
+    "original": false,
+    "source": "https://models.dev/logos/nova.svg",
+    "subscription": false
+  },
+  "novita-ai": {
+    "icon": "provider-novita-ai",
+    "name": "Novita AI",
+    "original": true,
+    "source": "https://models.dev/logos/novita-ai.svg",
+    "subscription": false
+  },
+  "nvidia": {
+    "icon": "provider-nvidia",
+    "name": "Nvidia",
+    "original": false,
+    "source": "https://models.dev/logos/nvidia.svg",
+    "subscription": false
+  },
+  "oci": {
+    "icon": "provider-oci",
+    "name": "OCI Generative AI",
+    "original": false,
+    "source": "https://models.dev/logos/oci.svg",
+    "subscription": false
+  },
+  "ofox": {
+    "icon": "provider-ofox",
+    "name": "Ofox",
+    "original": false,
+    "source": "https://models.dev/logos/ofox.svg",
+    "subscription": false
+  },
+  "ollama-cloud": {
+    "icon": "provider-ollama-cloud",
+    "name": "Ollama Cloud",
+    "original": false,
+    "source": "https://models.dev/logos/ollama-cloud.svg",
+    "subscription": false
+  },
+  "openai": {
+    "icon": "provider-openai",
+    "name": "OpenAI",
+    "original": false,
+    "source": "https://models.dev/logos/openai.svg",
+    "subscription": false
+  },
+  "opencode": {
+    "icon": "provider-opencode",
+    "name": "OpenCode",
+    "original": false,
+    "source": "https://models.dev/logos/opencode.svg",
+    "subscription": false
+  },
+  "opencode-go": {
+    "icon": "provider-opencode-go",
+    "name": "OpenCode Go",
+    "original": false,
+    "source": "https://models.dev/logos/opencode-go.svg",
+    "subscription": false
+  },
+  "openreason": {
+    "icon": "provider-openreason",
+    "name": "OpenReason",
+    "original": false,
+    "source": "https://models.dev/logos/openreason.svg",
+    "subscription": false
+  },
+  "openrouter": {
+    "icon": "provider-openrouter",
+    "name": "OpenRouter",
+    "original": false,
+    "source": "https://models.dev/logos/openrouter.svg",
+    "subscription": false
+  },
+  "opper": {
+    "icon": "provider-opper",
+    "name": "Opper",
+    "original": false,
+    "source": "https://models.dev/logos/opper.svg",
+    "subscription": false
+  },
+  "orcarouter": {
+    "icon": "provider-orcarouter",
+    "name": "OrcaRouter",
+    "original": false,
+    "source": "https://models.dev/logos/orcarouter.svg",
+    "subscription": false
+  },
+  "ovhcloud": {
+    "icon": "provider-ovhcloud",
+    "name": "OVHcloud AI Endpoints",
+    "original": false,
+    "source": "https://models.dev/logos/ovhcloud.svg",
+    "subscription": false
+  },
+  "pareto": {
+    "icon": "provider-pareto",
+    "name": "Pareto Inference",
+    "original": false,
+    "source": "https://models.dev/logos/pareto.svg",
+    "subscription": false
+  },
+  "pendra": {
+    "icon": "provider-pendra",
+    "name": "Pendra",
+    "original": false,
+    "source": "https://models.dev/logos/pendra.svg",
+    "subscription": false
+  },
+  "perplexity": {
+    "icon": "provider-perplexity",
+    "name": "Perplexity",
+    "original": false,
+    "source": "https://models.dev/logos/perplexity.svg",
+    "subscription": false
+  },
+  "perplexity-agent": {
+    "icon": "provider-perplexity-agent",
+    "name": "Perplexity Agent",
+    "original": false,
+    "source": "https://models.dev/logos/perplexity-agent.svg",
+    "subscription": false
+  },
+  "pioneer": {
+    "icon": "provider-pioneer",
+    "name": "Pioneer",
+    "original": false,
+    "source": "https://models.dev/logos/pioneer.svg",
+    "subscription": false
+  },
+  "poe": {
+    "icon": "provider-poe",
+    "name": "Poe",
+    "original": false,
+    "source": "https://models.dev/logos/poe.svg",
+    "subscription": false
+  },
+  "poolside": {
+    "icon": "provider-poolside",
+    "name": "Poolside",
+    "original": false,
+    "source": "https://models.dev/logos/poolside.svg",
+    "subscription": false
+  },
+  "prime": {
+    "icon": "provider-prime",
+    "name": "Prime Inference",
+    "original": false,
+    "source": "https://models.dev/logos/prime.svg",
+    "subscription": false
+  },
+  "privatemode-ai": {
+    "icon": "provider-privatemode-ai",
+    "name": "Privatemode AI",
+    "original": false,
+    "source": "https://models.dev/logos/privatemode-ai.svg",
+    "subscription": false
+  },
+  "qihang-ai": {
+    "icon": "provider-qihang-ai",
+    "name": "QiHang",
+    "original": false,
+    "source": "https://models.dev/logos/qihang-ai.svg",
+    "subscription": false
+  },
+  "qiniu-ai": {
+    "icon": "provider-qiniu-ai",
+    "name": "Qiniu",
+    "original": false,
+    "source": "https://models.dev/logos/qiniu-ai.svg",
+    "subscription": false
+  },
+  "qvac": {
+    "icon": "provider-qvac",
+    "name": "QVAC",
+    "original": false,
+    "source": "https://models.dev/logos/qvac.svg",
+    "subscription": false
+  },
+  "reflection": {
+    "icon": "provider-reflection",
+    "name": "Reflection",
+    "original": false,
+    "source": "https://models.dev/logos/reflection.svg",
+    "subscription": false
+  },
+  "regolo-ai": {
+    "icon": "provider-regolo-ai",
+    "name": "Regolo AI",
+    "original": true,
+    "source": "https://models.dev/logos/regolo-ai.svg",
+    "subscription": false
+  },
+  "requesty": {
+    "icon": "provider-requesty",
+    "name": "Requesty",
+    "original": false,
+    "source": "https://models.dev/logos/requesty.svg",
+    "subscription": false
+  },
+  "routing-run": {
+    "icon": "provider-routing-run",
+    "name": "routing.run",
+    "original": false,
+    "source": "https://models.dev/logos/routing-run.svg",
+    "subscription": false
+  },
+  "runinfra": {
+    "icon": "provider-runinfra",
+    "name": "RunInfra",
+    "original": false,
+    "source": "https://models.dev/logos/runinfra.svg",
+    "subscription": false
+  },
+  "sakana": {
+    "icon": "provider-sakana",
+    "name": "Sakana AI",
+    "original": false,
+    "source": "https://models.dev/logos/sakana.svg",
+    "subscription": false
+  },
+  "salad-cloud": {
+    "icon": "provider-salad-cloud",
+    "name": "SaladCloud AI Gateway",
+    "original": false,
+    "source": "https://models.dev/logos/salad-cloud.svg",
+    "subscription": false
+  },
+  "sambanova": {
+    "icon": "provider-sambanova",
+    "name": "SambaNova",
+    "original": false,
+    "source": "https://models.dev/logos/sambanova.svg",
+    "subscription": false
+  },
+  "sap-ai-core": {
+    "icon": "provider-sap-ai-core",
+    "name": "SAP AI Core",
+    "original": false,
+    "source": "https://models.dev/logos/sap-ai-core.svg",
+    "subscription": false
+  },
+  "sarvam": {
+    "icon": "provider-sarvam",
+    "name": "Sarvam AI",
+    "original": false,
+    "source": "https://models.dev/logos/sarvam.svg",
+    "subscription": false
+  },
+  "scaleway": {
+    "icon": "provider-scaleway",
+    "name": "Scaleway",
+    "original": false,
+    "source": "https://models.dev/logos/scaleway.svg",
+    "subscription": false
+  },
+  "scnet-token-plan": {
+    "icon": "provider-scnet-token-plan",
+    "name": "SCNet Token Plan",
+    "original": false,
+    "source": "https://models.dev/logos/scnet-token-plan.svg",
+    "subscription": true
+  },
+  "scx-ai": {
+    "icon": "provider-scx-ai",
+    "name": "SCX.ai",
+    "original": false,
+    "source": "https://models.dev/logos/scx-ai.svg",
+    "subscription": false
+  },
+  "sensenova": {
+    "icon": "provider-sensenova",
+    "name": "SenseNova (China)",
+    "original": false,
+    "source": "https://models.dev/logos/sensenova.svg",
+    "subscription": false
+  },
+  "siliconflow": {
+    "icon": "provider-siliconflow",
+    "name": "SiliconFlow",
+    "original": false,
+    "source": "https://models.dev/logos/siliconflow.svg",
+    "subscription": false
+  },
+  "siliconflow-cn": {
+    "icon": "provider-siliconflow-cn",
+    "name": "SiliconFlow (China)",
+    "original": false,
+    "source": "https://models.dev/logos/siliconflow-cn.svg",
+    "subscription": false
+  },
+  "snowflake-cortex": {
+    "icon": "provider-snowflake-cortex",
+    "name": "Snowflake Cortex",
+    "original": false,
+    "source": "https://models.dev/logos/snowflake-cortex.svg",
+    "subscription": false
+  },
+  "stackit": {
+    "icon": "provider-stackit",
+    "name": "STACKIT",
+    "original": false,
+    "source": "https://models.dev/logos/stackit.svg",
+    "subscription": false
+  },
+  "standardcompute": {
+    "icon": "provider-standardcompute",
+    "name": "Standard Compute",
+    "original": false,
+    "source": "https://models.dev/logos/standardcompute.svg",
+    "subscription": false
+  },
+  "stepfun": {
+    "icon": "provider-stepfun",
+    "name": "StepFun (China)",
+    "original": false,
+    "source": "https://models.dev/logos/stepfun.svg",
+    "subscription": false
+  },
+  "stepfun-ai": {
+    "icon": "provider-stepfun-ai",
+    "name": "StepFun (Global)",
+    "original": false,
+    "source": "https://models.dev/logos/stepfun-ai.svg",
+    "subscription": false
+  },
+  "stepfun-ai-step-plan": {
+    "icon": "provider-stepfun-ai-step-plan",
+    "name": "StepFun Step Plan (Global)",
+    "original": false,
+    "source": "https://models.dev/logos/stepfun-ai-step-plan.svg",
+    "subscription": true
+  },
+  "stepfun-step-plan": {
+    "icon": "provider-stepfun-step-plan",
+    "name": "StepFun Step Plan (China)",
+    "original": false,
+    "source": "https://models.dev/logos/stepfun-step-plan.svg",
+    "subscription": true
+  },
+  "subconscious": {
+    "icon": "provider-subconscious",
+    "name": "Subconscious",
+    "original": false,
+    "source": "https://models.dev/logos/subconscious.svg",
+    "subscription": false
+  },
+  "submodel": {
+    "icon": "provider-submodel",
+    "name": "submodel",
+    "original": false,
+    "source": "https://models.dev/logos/submodel.svg",
+    "subscription": false
+  },
+  "synthetic": {
+    "icon": "provider-synthetic",
+    "name": "Synthetic",
+    "original": false,
+    "source": "https://models.dev/logos/synthetic.svg",
+    "subscription": false
+  },
+  "tempr": {
+    "icon": "provider-tempr",
+    "name": "Tempr Gateway",
+    "original": false,
+    "source": "https://models.dev/logos/tempr.svg",
+    "subscription": false
+  },
+  "tencent-coding-plan": {
+    "icon": "provider-tencent-coding-plan",
+    "name": "Tencent Coding Plan (China)",
+    "original": false,
+    "source": "https://models.dev/logos/tencent-coding-plan.svg",
+    "subscription": true
+  },
+  "tencent-token-plan": {
+    "icon": "provider-tencent-token-plan",
+    "name": "Tencent Token Plan",
+    "original": false,
+    "source": "https://models.dev/logos/tencent-token-plan.svg",
+    "subscription": true
+  },
+  "tencent-tokenhub": {
+    "icon": "provider-tencent-tokenhub",
+    "name": "Tencent TokenHub",
+    "original": false,
+    "source": "https://models.dev/logos/tencent-tokenhub.svg",
+    "subscription": false
+  },
+  "tensorx": {
+    "icon": "provider-tensorx",
+    "name": "TensorX",
+    "original": false,
+    "source": "https://models.dev/logos/tensorx.svg",
+    "subscription": false
+  },
+  "the-grid-ai": {
+    "icon": "provider-the-grid-ai",
+    "name": "The Grid AI",
+    "original": false,
+    "source": "https://models.dev/logos/the-grid-ai.svg",
+    "subscription": false
+  },
+  "thinkingmachines": {
+    "icon": "provider-thinkingmachines",
+    "name": "Thinking Machines",
+    "original": false,
+    "source": "https://models.dev/logos/thinkingmachines.svg",
+    "subscription": false
+  },
+  "tinfoil": {
+    "icon": "provider-tinfoil",
+    "name": "Tinfoil",
+    "original": false,
+    "source": "https://models.dev/logos/tinfoil.svg",
+    "subscription": false
+  },
+  "togetherai": {
+    "icon": "provider-togetherai",
+    "name": "Together AI",
+    "original": false,
+    "source": "https://models.dev/logos/togetherai.svg",
+    "subscription": false
+  },
+  "tokengo": {
+    "icon": "provider-tokengo",
+    "name": "TokenGo",
+    "original": false,
+    "source": "https://models.dev/logos/tokengo.svg",
+    "subscription": false
+  },
+  "tokenrouter": {
+    "icon": "provider-tokenrouter",
+    "name": "TokenRouter",
+    "original": false,
+    "source": "https://models.dev/logos/tokenrouter.svg",
+    "subscription": false
+  },
+  "trustedrouter": {
+    "icon": "provider-trustedrouter",
+    "name": "TrustedRouter",
+    "original": false,
+    "source": "https://models.dev/logos/trustedrouter.svg",
+    "subscription": false
+  },
+  "umans-ai": {
+    "icon": "provider-umans-ai",
+    "name": "Umans AI",
+    "original": true,
+    "source": "https://models.dev/logos/umans-ai.svg",
+    "subscription": false
+  },
+  "umans-ai-coding-plan": {
+    "icon": "provider-umans-ai-coding-plan",
+    "name": "Umans AI Coding Plan",
+    "original": true,
+    "source": "https://models.dev/logos/umans-ai-coding-plan.svg",
+    "subscription": true
+  },
+  "unorouter": {
+    "icon": "provider-unorouter",
+    "name": "UnoRouter",
+    "original": false,
+    "source": "https://models.dev/logos/unorouter.svg",
+    "subscription": false
+  },
+  "upstage": {
+    "icon": "provider-upstage",
+    "name": "Upstage",
+    "original": false,
+    "source": "https://models.dev/logos/upstage.svg",
+    "subscription": false
+  },
+  "vancine": {
+    "icon": "provider-vancine",
+    "name": "Vancine",
+    "original": false,
+    "source": "https://models.dev/logos/vancine.svg",
+    "subscription": false
+  },
+  "venice": {
+    "icon": "provider-venice",
+    "name": "Venice AI",
+    "original": false,
+    "source": "https://models.dev/logos/venice.svg",
+    "subscription": false
+  },
+  "vercel": {
+    "icon": "provider-vercel",
+    "name": "Vercel AI Gateway",
+    "original": false,
+    "source": "https://models.dev/logos/vercel.svg",
+    "subscription": false
+  },
+  "vispark": {
+    "icon": "provider-vispark",
+    "name": "Vispark",
+    "original": false,
+    "source": "https://models.dev/logos/vispark.svg",
+    "subscription": false
+  },
+  "vivgrid": {
+    "icon": "provider-vivgrid",
+    "name": "Vivgrid",
+    "original": false,
+    "source": "https://models.dev/logos/vivgrid.svg",
+    "subscription": false
+  },
+  "volcengine": {
+    "icon": "provider-volcengine",
+    "name": "Volcengine Ark",
+    "original": false,
+    "source": "https://models.dev/logos/volcengine.svg",
+    "subscription": false
+  },
+  "volcengine-coding-plan": {
+    "icon": "provider-volcengine-coding-plan",
+    "name": "Volcengine Ark Coding Plan",
+    "original": false,
+    "source": "https://models.dev/logos/volcengine-coding-plan.svg",
+    "subscription": true
+  },
+  "vultr": {
+    "icon": "provider-vultr",
+    "name": "Vultr",
+    "original": false,
+    "source": "https://models.dev/logos/vultr.svg",
+    "subscription": false
+  },
+  "wafer.ai": {
+    "icon": "provider-wafer.ai",
+    "name": "Wafer",
+    "original": false,
+    "source": "https://models.dev/logos/wafer.ai.svg",
+    "subscription": false
+  },
+  "wallaby": {
+    "icon": "provider-wallaby",
+    "name": "Wallaby",
+    "original": false,
+    "source": "https://models.dev/logos/wallaby.svg",
+    "subscription": false
+  },
+  "wally": {
+    "icon": "provider-wally",
+    "name": "Wally",
+    "original": false,
+    "source": "https://models.dev/logos/wally.svg",
+    "subscription": false
+  },
+  "wandb": {
+    "icon": "provider-wandb",
+    "name": "CoreWeave",
+    "original": false,
+    "source": "https://models.dev/logos/wandb.svg",
+    "subscription": false
+  },
+  "watsonx": {
+    "icon": "provider-watsonx",
+    "name": "watsonx.ai",
+    "original": false,
+    "source": "https://models.dev/logos/watsonx.svg",
+    "subscription": false
+  },
+  "xai": {
+    "icon": "provider-xai",
+    "name": "xAI",
+    "original": false,
+    "source": "https://models.dev/logos/xai.svg",
+    "subscription": false
+  },
+  "xiaomi": {
+    "icon": "provider-xiaomi",
+    "name": "Xiaomi MiMo",
+    "original": false,
+    "source": "https://registry.npmmirror.com/@lobehub/icons-static-svg/latest/files/icons/xiaomimimo.svg",
+    "subscription": false
+  },
+  "xiaomi-token-plan-ams": {
+    "icon": "provider-xiaomi-token-plan-ams",
+    "name": "Xiaomi MiMo Token Plan (Europe)",
+    "original": false,
+    "source": "https://registry.npmmirror.com/@lobehub/icons-static-svg/latest/files/icons/xiaomimimo.svg",
+    "subscription": true
+  },
+  "xiaomi-token-plan-cn": {
+    "icon": "provider-xiaomi-token-plan-cn",
+    "name": "Xiaomi MiMo Token Plan (China)",
+    "original": false,
+    "source": "https://registry.npmmirror.com/@lobehub/icons-static-svg/latest/files/icons/xiaomimimo.svg",
+    "subscription": true
+  },
+  "xiaomi-token-plan-sgp": {
+    "icon": "provider-xiaomi-token-plan-sgp",
+    "name": "Xiaomi MiMo Token Plan (Singapore)",
+    "original": false,
+    "source": "https://registry.npmmirror.com/@lobehub/icons-static-svg/latest/files/icons/xiaomimimo.svg",
+    "subscription": true
+  },
+  "xpersona": {
+    "icon": "provider-xpersona",
+    "name": "Xpersona",
+    "original": false,
+    "source": "https://models.dev/logos/xpersona.svg",
+    "subscription": false
+  },
+  "zai": {
+    "icon": "provider-zai",
+    "name": "Z.AI",
+    "original": false,
+    "source": "https://models.dev/logos/zai.svg",
+    "subscription": false
+  },
+  "zai-coding-plan": {
+    "icon": "provider-zai-coding-plan",
+    "name": "Z.AI Coding Plan",
+    "original": false,
+    "source": "https://models.dev/logos/zai-coding-plan.svg",
+    "subscription": true
+  },
+  "zeldoc": {
+    "icon": "provider-zeldoc",
+    "name": "Zeldoc",
+    "original": false,
+    "source": "https://models.dev/logos/zeldoc.svg",
+    "subscription": false
+  },
+  "zenifra": {
+    "icon": "provider-zenifra",
+    "name": "Zenifra",
+    "original": false,
+    "source": "https://models.dev/logos/zenifra.svg",
+    "subscription": false
+  },
+  "zenmux": {
+    "icon": "provider-zenmux",
+    "name": "ZenMux",
+    "original": true,
+    "source": "https://models.dev/logos/zenmux.svg",
+    "subscription": false
+  },
+  "zhipuai": {
+    "icon": "provider-zhipuai",
+    "name": "Zhipu AI",
+    "original": false,
+    "source": "https://models.dev/logos/zhipuai.svg",
+    "subscription": false
+  },
+  "zhipuai-coding-plan": {
+    "icon": "provider-zhipuai-coding-plan",
+    "name": "Zhipu AI Coding Plan",
+    "original": false,
+    "source": "https://models.dev/logos/zhipuai-coding-plan.svg",
+    "subscription": true
+  }
+}
