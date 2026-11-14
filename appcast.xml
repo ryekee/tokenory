@@ -26,7 +26,7 @@
 
 目前 12 个客户端至少有一种格式可提供速度数据，包括 Codex、Claude Code 和 OpenCode。Paseo 和 Orca 使用底层客户端日志，因此筛选结果包含对应客户端的全部可用回合。其余 28 个入口暂不支持速度统计。打开支持列表可以查看图标，悬停显示名称。各格式的支持范围和限制见[覆盖详情](https://github.com/ryekee/tokenory/blob/main/docs/local/agent-speed-coverage.md)。
 </description>
-            <enclosure url="https://api.github.com/repos/ryekee/tokenory/releases/assets/747529453" length="10089883" type="application/octet-stream" sparkle:edSignature="wG990qjAtGZ90yOFDqHsOvegPQYZwPi39/+A0jQuuFTitrkERE8v6AM+E4dsdZ4N0CUkzCKVBu4S7UX9HmYsCg==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.6/Tokenory-0.1.6-macOS-arm64.zip" length="10089883" type="application/octet-stream" sparkle:edSignature="wG990qjAtGZ90yOFDqHsOvegPQYZwPi39/+A0jQuuFTitrkERE8v6AM+E4dsdZ4N0CUkzCKVBu4S7UX9HmYsCg==" />
         </item>
     </channel>
 </rss>
