@@ -6,4 +6,6 @@ EngineMessages.swift: 定义 IPC 数据值、报告与采集配置；增量分�
 UsageTrend.swift: 构造时间趋势展示数据。
 UsageActivity.swift: 补齐日历日期、使用规律和保持未知费用的模型移动平均。
 
+TurnAnalytics.swift: 解码完整能力目录及缺失原因/补采方案，校验回合协议，计算全范围平均速度、首 token 等待和思考量，提供时间排序与最近点查询。
+
 [PROTOCOL]: Update this header on change, then check AGENTS.md

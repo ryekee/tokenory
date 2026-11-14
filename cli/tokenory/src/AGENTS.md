@@ -2,11 +2,13 @@
 > L2 | Parent: ../../../AGENTS.md
 
 clients.rs: 声明客户端来源和扫描路径。
-collector.rs: 只读采集源日志并更新账本。
+collector.rs: 只读采集源日志并更新账本及独立回合分析；分析失败只影响诊断，不阻止有效用量更新。
+turn_analytics.rs / turn_analytics/: 泛化完成回合、来源能力与别名过滤；按各来源原生事务、主链或用户区间聚合，证据不足不估 token；有效来源重开回合返回精确撤销 ID。
+codex_turns.rs: 校验完成主回合、缓存未变化日志、保存无正文的统计并按日期/模型查询。
 config.rs: 保存采集配置。
-db.rs: 维护 SQLite schema、记录和备份。
+db.rs: 维护 SQLite schema、记录和备份；迁移/恢复包含独立回合表。
 import.rs: 预览、提交和撤销历史导入。
-ipc.rs: 向原生应用提供 worker JSON 协议和有效账本的已用模型集合。
+ipc.rs: 向原生应用提供 worker JSON 协议、有效账本的已用模型集合及 codexTurns / turnAnalytics 查询。
 lib.rs: 导出账本引擎模块。
 main.rs: 提供 CLI 命令和单写者锁。
 price_coverage.rs: 从缓存扩展模型覆盖，为未计价记录生成首次估算候选。

@@ -108,9 +108,9 @@ struct OverviewView: View {
 private struct TokenMixView: View {
     let tokens: TokenBreakdown
     private var parts: [(String, Int64, Color)] {
-        [("token.input", tokens.input, .blue), ("token.output", tokens.output, .teal),
+        [("token.input", tokens.input, .blue), ("token.output", tokens.output, WorkspaceStyle.outputTokens),
          ("token.cache_read", tokens.cacheRead, .orange), ("token.cache_write", tokens.cacheWrite, .purple),
-         ("token.reasoning", tokens.reasoning, .gray)]
+         ("token.reasoning", tokens.reasoning, WorkspaceStyle.reasoningTokens)]
     }
     var body: some View {
         let total = parts.reduce(Int64(0)) { $0 + $1.1 }

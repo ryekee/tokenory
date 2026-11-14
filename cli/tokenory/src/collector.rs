@@ -1,5 +1,5 @@
 // [INPUT]: 读取各客户端日志和当前价格快照。
-// [OUTPUT]: 生成并持久化规范化用量与扫描诊断。
+// [OUTPUT]: 生成并持久化规范化用量、独立多客户端完成回合与扫描诊断。
 // [POS]: 解析器与账本之间的边界；维护稳定记录身份。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -23,6 +23,8 @@ use std::{
 pub struct DiagnosticCache {
     files: HashMap<PathBuf, (u64, SystemTime, Vec<String>)>,
     persistent: bool,
+    turns: crate::codex_turns::Cache,
+    other_turns: crate::turn_analytics::Cache,
 }
 impl DiagnosticCache {
     pub fn persistent() -> Self {
@@ -62,6 +64,9 @@ pub struct ScanResult {
 }
 pub struct ScanBatch {
     pub records: Vec<UsageRecord>,
+    pub codex_turns: Vec<crate::codex_turns::CodexTurn>,
+    pub invalidated_turn_ids: Vec<String>,
+    pub timezone: String,
     pub result: ScanResult,
 }
 fn diagnose(
@@ -177,6 +182,63 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
         .iter()
         .map(|c| diagnose(config, *c, &source_paths(&scan, *c), cache))
         .collect();
+    let mut codex_turns = Vec::new();
+    let mut invalidated_turn_ids = Vec::new();
+    let mut analytics_errors = Vec::new();
+    for path in source_paths(&scan, tokens_core::ClientId::Codex) {
+        match cache.turns.read(&path) {
+            Ok(turns) => codex_turns.extend(turns),
+            Err(e) => {
+                analytics_errors.push(("codex", format!("{}: turn analytics: {e}", path.display())))
+            }
+        }
+    }
+    let mut open_code_sqlite_ids = HashSet::new();
+    for &client in crate::turn_analytics::COLLECTED_CLIENTS {
+        for path in source_paths(&scan, client) {
+            if client == tokens_core::ClientId::OpenCode
+                && !matches!(
+                    path.extension().and_then(|s| s.to_str()),
+                    Some("db" | "sqlite" | "sqlite3")
+                )
+            {
+                continue;
+            }
+            match cache.other_turns.read(client.as_str(), &path) {
+                Ok(outcome) => {
+                    if client == tokens_core::ClientId::OpenCode {
+                        open_code_sqlite_ids.extend(outcome.covered_ids);
+                    }
+                    codex_turns.extend(outcome.turns);
+                    invalidated_turn_ids.extend(outcome.invalidated_ids);
+                }
+                Err(e) => analytics_errors.push((
+                    client.as_str(),
+                    format!("{}: turn analytics: {e}", path.display()),
+                )),
+            }
+        }
+    }
+    let open_code_legacy = scan.get(tokens_core::ClientId::OpenCode);
+    if !open_code_legacy.is_empty() {
+        match crate::turn_analytics::parse_opencode_legacy(open_code_legacy) {
+            Ok(outcome) => {
+                codex_turns.extend(
+                    outcome
+                        .turns
+                        .into_iter()
+                        .filter(|t| !open_code_sqlite_ids.contains(&t.id)),
+                );
+                invalidated_turn_ids.extend(
+                    outcome
+                        .invalidated_ids
+                        .into_iter()
+                        .filter(|id| !open_code_sqlite_ids.contains(id)),
+                );
+            }
+            Err(e) => analytics_errors.push(("opencode", format!("legacy turn analytics: {e}"))),
+        }
+    }
     let mut records = Vec::new();
     {
         let mut messages = if cache.persistent {
@@ -315,6 +377,14 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
                 .any(|s| s.client == r.client && s.status == "ok")
         });
     }
+    // Analytics has a narrower schema contract than usage collection. Report
+    // its errors after deciding which usage snapshots are safe to reconcile.
+    for (client, error) in analytics_errors {
+        if let Some(source) = sources.iter_mut().find(|s| s.client == client) {
+            source.errors.push(error);
+            source.status = "partial".into();
+        }
+    }
     for source in &mut sources {
         if source.status == "ok" && source.records == 0 {
             source.status = "empty".into();
@@ -324,6 +394,9 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
     }
     Ok(ScanBatch {
         records,
+        codex_turns,
+        invalidated_turn_ids,
+        timezone: config.timezone.clone(),
         result: ScanResult {
             started_at,
             duration_ms: start.elapsed().as_millis() as u64,
@@ -427,6 +500,14 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
         }
         tx.execute("INSERT OR IGNORE INTO coverage_choices(date,client,source,batch_id) VALUES (?1,?2,'local','')",params![record.date,record.client])?;
     }
+    let invalidated: HashSet<_> = batch.invalidated_turn_ids.iter().collect();
+    batch
+        .codex_turns
+        .retain(|turn| !invalidated.contains(&turn.id));
+    for id in invalidated {
+        batch.result.changed += tx.execute("DELETE FROM codex_turns WHERE id=?1", [id])?;
+    }
+    batch.result.changed += crate::codex_turns::persist(&tx, &batch.codex_turns, &batch.timezone)?;
     batch.result.revision = if batch.result.changed > 0 {
         advance_revision(&tx)?
     } else {

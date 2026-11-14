@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 发布界面使用的统计、价格和采集状态。
+// [OUTPUT]: 发布界面使用的统计、按需加载的 多 agent 回合、价格和采集状态。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -16,6 +16,10 @@ final class UsageStore {
     let engine: EngineClient
     let dataDirectory: URL
     var today: UsageReport?
+    var todayTurns: TurnPresentation?
+    var todaySpeedError: String?
+    private var todayGeneration = 0
+    private var todayDay: String?
     var report: UsageReport?
     var reportFilter: UsageFilter?
     var activity: ActivityReport?
@@ -35,6 +39,14 @@ final class UsageStore {
         return data
     }
     var catalog: UsageReport?
+    var turnAnalytics: TurnPresentation?
+    var turnsQuery: TurnQuery?
+    var turnModel: String?
+    var turnClient: String?
+    var turnsLoading = false
+    var turnsError: String?
+    private var requestedTurnQuery: TurnQuery?
+    private var turnsGeneration = 0
     var filter = UsageFilter()
     var dateRange: UsageDateRange = .week
     var status: EngineStatus?
@@ -87,10 +99,12 @@ final class UsageStore {
     func refresh(now: Date = Date()) async {
         updateDateRange(now: now)
         refreshGeneration += 1; let generation = refreshGeneration; loading = true
+        let day = Self.day(now)
+        let quickGeneration = beginTodayRefresh(day: day)
+        async let quick: Void = loadToday(day: day, generation: quickGeneration)
         do {
             let queryFilter = filter
             let dashboardFilter = try JSONValue.encode(queryFilter)
-            let day = Self.day(now); let todayFilter = try JSONValue.encode(UsageFilter(from: day, to: day))
             var historyFilter = queryFilter
             let calendar = Localization.reportingCalendar
             let start = calendar.date(byAdding: .year, value: -1, to: calendar.startOfDay(for: now))!
@@ -99,21 +113,20 @@ final class UsageStore {
             historyFilter.offset = 0
             async let dashboard = engine.request("overview", payload: dashboardFilter)
             async let history = engine.request("activity", payload: .encode(historyFilter))
-            async let quick = engine.request("overview", payload: todayFilter)
             async let all = engine.request("overview")
             async let engineStatus = engine.request("status")
-            let results = try await (dashboard, quick, all, engineStatus, history)
+            let results = try await (dashboard, all, engineStatus, history)
             guard generation == refreshGeneration else { return }
             let newReport = try results.0.decode(UsageReport.self)
-            let newToday = try results.1.decode(UsageReport.self)
-            let newCatalog = try results.2.decode(UsageReport.self)
-            let newStatus = try results.3.decode(EngineStatus.self)
-            let newActivity = try results.4.decode(ActivityReport.self)
-            report = newReport; reportFilter = queryFilter; today = newToday; catalog = newCatalog
+            let newCatalog = try results.1.decode(UsageReport.self)
+            let newStatus = try results.2.decode(EngineStatus.self)
+            let newActivity = try results.3.decode(ActivityReport.self)
+            report = newReport; reportFilter = queryFilter; catalog = newCatalog
             activityCalendar = UsageActivity(report: newActivity)
             historyCache.removeAll(keepingCapacity: true)
             activity = newActivity; status = newStatus; scanning = newStatus.scanning; connected = true
         } catch { if generation == refreshGeneration { fail(error) } }
+        await quick
         if generation == refreshGeneration { loading = false }
     }
     func refreshToday(now: Date = Date()) async {
@@ -121,8 +134,32 @@ final class UsageStore {
         updateDateRange(now: now)
         if prior != filter { await refresh(now: now); return }
         let day = Self.day(now)
-        do { today = try await engine.request("overview", payload: .encode(UsageFilter(from: day, to: day))).decode(UsageReport.self) }
-        catch { fail(error) }
+        let generation = beginTodayRefresh(day: day)
+        await loadToday(day: day, generation: generation)
+    }
+    private func beginTodayRefresh(day: String) -> Int {
+        todayGeneration += 1
+        if todayDay != day {
+            today = nil; todayTurns = nil; todaySpeedError = nil
+            todayDay = day
+        }
+        return todayGeneration
+    }
+    private func loadToday(day: String, generation: Int) async {
+        async let usage = engine.request("overview", payload: .encode(UsageFilter(from: day, to: day)))
+        async let turns = engine.request("turnAnalytics", payload: .encode(TurnQuery(from: day, to: day)))
+        do {
+            let data = try await usage.decode(UsageReport.self)
+            if generation == todayGeneration { today = data }
+        } catch { if generation == todayGeneration { fail(error) } }
+        do {
+            let data = TurnPresentation(report: try await turns.decode(TurnReport.self))
+            guard generation == todayGeneration else { return }
+            todayTurns = data; todaySpeedError = nil
+        } catch {
+            guard generation == todayGeneration else { return }
+            todayTurns = nil; todaySpeedError = error.localizedDescription
+        }
     }
     func restore(from file: URL) async throws {
         do { try await engine.restore(from: file) }
@@ -135,6 +172,23 @@ final class UsageStore {
             let decodedClients = try response["clients"].decode([ClientInfo].self)
             sources = response; clients = decodedClients
         } catch { fail(error) }
+    }
+    func loadAgentTurns(_ query: TurnQuery, force: Bool = false) async {
+        if !force, requestedTurnQuery == query,
+           turnsLoading || (turnsQuery == query && turnsError == nil) { return }
+        requestedTurnQuery = query
+        turnsGeneration += 1
+        let generation = turnsGeneration
+        turnsLoading = true; turnsError = nil
+        do {
+            let response = try await engine.request("turnAnalytics", payload: .encode(query)).decode(TurnReport.self)
+            guard generation == turnsGeneration else { return }
+            turnAnalytics = TurnPresentation(report: response)
+            turnsQuery = query
+        } catch {
+            if generation == turnsGeneration { turnsError = error.localizedDescription }
+        }
+        if generation == turnsGeneration { turnsLoading = false }
     }
     func loadManagement() async {
         do {
@@ -162,6 +216,7 @@ final class UsageStore {
             do { status = try await engine.request("status").decode(EngineStatus.self) } catch { fail(error) }
             await refreshToday()
             if sources != .null { await loadSources() }
+            if let query = requestedTurnQuery { await loadAgentTurns(query, force: true) }
         case "usageChanged": await refresh()
         case "pricesUpdated": await loadManagement()
         case "scanFailed": scanning = false; error = event.message

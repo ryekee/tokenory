@@ -1,3 +1,7 @@
+// [INPUT]: Today-only usage and weighted turn speed, independent of dashboard filters.
+// [OUTPUT]: Compact Tokens / cost / speed menu summary and source usage.
+// [POS]: Menu bar popover; missing speed remains unavailable.
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
 import OSLog
 import SwiftUI
@@ -9,7 +13,7 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack { Text(L("range.today")).font(.headline); Spacer(); Text("Tokenory").font(.caption).foregroundStyle(.secondary) }
             if let report = store.today {
-                SummaryView(summary: report.summary, compact: true)
+                MenuBarSummary(summary: report.summary, turns: store.todayTurns, speedError: store.todaySpeedError)
                 if !report.clients.isEmpty {
                     Divider()
                     ForEach(report.clients) { group in
@@ -32,6 +36,14 @@ struct MenuBarView: View {
                 SettingsLink { Image(systemName: "gearshape") }.help(L("settings.title"))
                 Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }.help(L("action.quit"))
             }.buttonStyle(.plain)
-        }.padding(20).frame(width: 340).task { await store.refreshToday() }
+        }.padding(20).frame(width: 400).task {
+            while !Task.isCancelled {
+                let now = Date()
+                await store.refreshToday(now: now)
+                let midnight = Localization.reportingCalendar.startOfDay(for: now).addingTimeInterval(86_400)
+                do { try await Task.sleep(for: .seconds(max(0, midnight.timeIntervalSinceNow))) }
+                catch { return }
+            }
+        }
     }
 }
