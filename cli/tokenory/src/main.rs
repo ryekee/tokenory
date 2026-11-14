@@ -1,3 +1,7 @@
+// [INPUT]: CLI 参数和本地账本目录。
+// [OUTPUT]: 单写者保护的采集、导入、恢复与 compact 存储维护命令。
+// [POS]: 命令行入口。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fs2::FileExt;
@@ -25,6 +29,8 @@ enum GroupBy {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Remove expired previews, rotate automatic backups and return free pages to disk.
+    Compact,
     Restore {
         source: PathBuf,
     },
@@ -113,11 +119,17 @@ fn main() -> Result<()> {
     let mut db = Database::open(&directory)?;
     if !matches!(
         args.command,
-        Command::Report { .. } | Command::Backup { .. }
+        Command::Report { .. } | Command::Backup { .. } | Command::Compact
     ) {
         tokenory::pricing::initialize(&mut db)?;
     }
     let value = match args.command {
+        Command::Compact => {
+            db.backup_before("storage-maintenance")?;
+            db.connection
+                .execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")?;
+            serde_json::json!({"compacted": true})
+        }
         Command::Restore { source } => {
             db.restore(&source)?;
             serde_json::json!({"restored":source})

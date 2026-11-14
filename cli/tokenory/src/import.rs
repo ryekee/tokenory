@@ -1,3 +1,7 @@
+// [INPUT]: 历史导入数据、覆盖选择和账本。
+// [OUTPUT]: 限时限量的预览、导入批次与可撤销的覆盖历史；应用后清除预览。
+// [POS]: 导入边界；实际用量和撤销历史不受预览清理影响。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 pub mod cc_switch;
 pub mod tokens_ci;
 use crate::{
@@ -65,6 +69,8 @@ struct Scope {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct StoredPreview {
+    #[serde(default)]
+    created_at: i64,
     view: ImportPreview,
     records: Vec<UsageRecord>,
     scopes: Vec<Scope>,
@@ -259,27 +265,31 @@ pub fn preview_records(
             .collect(),
     };
     let state = fingerprint(&db.connection, &scopes)?;
-    db.connection.execute(
-        "INSERT INTO import_previews(source,content_hash,body) VALUES (?1,?2,'')",
-        params![source, view.content_hash],
+    let tx = db.connection.transaction()?;
+    view.id = crate::db::next_preview_id(&tx)?.to_string();
+    tx.execute(
+        "INSERT INTO import_previews(id,source,content_hash,body) VALUES (?1,?2,?3,'')",
+        params![view.id, source, view.content_hash],
     )?;
-    view.id = db.connection.last_insert_rowid().to_string();
     let stored = StoredPreview {
+        created_at: chrono::Utc::now().timestamp(),
         view: view.clone(),
         records,
         scopes,
         fingerprint: state,
     };
-    db.connection.execute(
+    tx.execute(
         "UPDATE import_previews SET body=?1 WHERE id=?2",
         params![serde_json::to_string(&stored)?, view.id],
     )?;
+    crate::db::prune_previews(&tx)?;
+    tx.commit()?;
     Ok(view)
 }
 pub fn apply_import(db: &mut Database, id: &str, options: &ApplyOptions) -> Result<ImportResult> {
     let body: String = db
         .connection
-        .query_row("SELECT body FROM import_previews WHERE id=?1", [id], |r| {
+        .query_row("SELECT body FROM import_previews WHERE id=?1 AND COALESCE(json_extract(body,'$.created_at'),0)>=unixepoch()-86400", [id], |r| {
             r.get(0)
         })
         .context("import preview does not exist")?;
@@ -293,6 +303,8 @@ pub fn apply_import(db: &mut Database, id: &str, options: &ApplyOptions) -> Resu
         )
         .optional()?
     {
+        db.connection
+            .execute("DELETE FROM import_previews WHERE id=?1", [id])?;
         return Ok(ImportResult {
             batch_id: batch.to_string(),
             already_imported: true,
@@ -366,6 +378,7 @@ pub fn apply_import(db: &mut Database, id: &str, options: &ApplyOptions) -> Resu
         ],
     )?;
     advance_revision(&tx)?;
+    tx.execute("DELETE FROM import_previews WHERE id=?1", [id])?;
     tx.commit()?;
     Ok(ImportResult {
         batch_id: batch,

@@ -1,5 +1,5 @@
 // [INPUT]: 读取 UsageRecord、官方费率和 SQLite 账本。
-// [OUTPUT]: 提供价格快照、费用估算和带备份的重估流程。
+// [OUTPUT]: 提供价格快照、费用估算和带备份的重估流程；预览限时限量且应用后删除。
 // [POS]: 在采集与查询之间保存可追溯的计价依据。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -238,7 +238,8 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
                 && r.client == "codex"
                 && (review_export || (source == "local" && e.provider == r.provider));
         }
-        e.model == r.model && e.provider == r.provider
+        e.model == r.model
+            && e.provider == r.provider
             && (e.source != COMPACTOR_REFERENCE || r.client == "devin-cli")
     }) else {
         return unknown("no verified price for this provider/model");
@@ -548,7 +549,11 @@ pub fn snapshot_from_service(db: &Database, service: &PricingService) -> Result<
         }
         let provider_unknown = matches!(provider.as_str(), "unknown" | "_session");
         let subscription = crate::price_catalog::subscription_provider(&provider);
-        let reference_model = if subscription { model.rsplit('/').next().unwrap_or(&model) } else { &model };
+        let reference_model = if subscription {
+            model.rsplit('/').next().unwrap_or(&model)
+        } else {
+            &model
+        };
         let lookup_provider = if provider_unknown || subscription {
             // 明确渠道前缀及本地部署标识不能推断为原厂调用。
             if reference_model.contains('/') || reference_model.contains(':') {
@@ -591,19 +596,33 @@ pub fn snapshot_from_service(db: &Database, service: &PricingService) -> Result<
             continue;
         }
         let resolved = if provider_unknown || subscription {
-            ["litellm", "models.dev"].into_iter().filter_map(|source| {
-                service.lookup_with_source_and_provider(reference_model, Some(source), Some(lookup_provider))
-            }).find(|found| {
-                let root = found.matched_key.split('/').next().unwrap_or("");
-                let root = match root { "moonshot" => "moonshotai", "x-ai" => "xai", "z-ai" => "zai", other => other };
-                found.evidence.is_submission_safe() && root == lookup_provider
-            })
+            ["litellm", "models.dev"]
+                .into_iter()
+                .filter_map(|source| {
+                    service.lookup_with_source_and_provider(
+                        reference_model,
+                        Some(source),
+                        Some(lookup_provider),
+                    )
+                })
+                .find(|found| {
+                    let root = found.matched_key.split('/').next().unwrap_or("");
+                    let root = match root {
+                        "moonshot" => "moonshotai",
+                        "x-ai" => "xai",
+                        "z-ai" => "zai",
+                        other => other,
+                    };
+                    found.evidence.is_submission_safe() && root == lookup_provider
+                })
         } else {
             service.resolve_for_usage_with_provider(&model, Some(lookup_provider), &usage)
         };
         if let Some(found) = resolved {
             // 缺少某个 token 类别费率时，只让使用该类别的记录待计价。
-            if !found.evidence.is_submission_safe() { continue; }
+            if !found.evidence.is_submission_safe() {
+                continue;
+            }
             p.entries.push(PriceEntry {
                 schedule: None,
                 provider,
@@ -640,6 +659,8 @@ struct Change {
 }
 #[derive(Serialize, Deserialize)]
 struct Stored {
+    #[serde(default)]
+    created_at: i64,
     view: RepricePreview,
     changes: Vec<Change>,
 }
@@ -695,25 +716,30 @@ pub fn preview_reprice(db: &mut Database, filter: &Filter, id: &str) -> Result<R
         unpriced_tokens: unpriced,
     };
     let tx = db.connection.transaction()?;
-    tx.execute("INSERT INTO reprice_previews(body) VALUES ('')", [])?;
-    view.id = tx.last_insert_rowid().to_string();
+    view.id = crate::db::next_preview_id(&tx)?.to_string();
+    tx.execute(
+        "INSERT INTO reprice_previews(id,body) VALUES (?1,'')",
+        [&view.id],
+    )?;
     tx.execute(
         "UPDATE reprice_previews SET body=?1 WHERE id=?2",
         params![
             serde_json::to_string(&Stored {
+                created_at: chrono::Utc::now().timestamp(),
                 view: view.clone(),
                 changes
             })?,
             view.id
         ],
     )?;
+    crate::db::prune_previews(&tx)?;
     tx.commit()?;
     Ok(view)
 }
 pub fn apply_reprice(db: &mut Database, id: &str) -> Result<RepricePreview> {
     let body: String =
         db.connection
-            .query_row("SELECT body FROM reprice_previews WHERE id=?1", [id], |r| {
+            .query_row("SELECT body FROM reprice_previews WHERE id=?1 AND COALESCE(json_extract(body,'$.created_at'),0)>=unixepoch()-86400", [id], |r| {
                 r.get(0)
             })?;
     let p: Stored = serde_json::from_str(&body)?;
@@ -739,6 +765,7 @@ pub fn apply_reprice(db: &mut Database, id: &str) -> Result<RepricePreview> {
     if changed {
         advance_revision(&tx)?;
     }
+    tx.execute("DELETE FROM reprice_previews WHERE id=?1", [id])?;
     tx.commit()?;
     Ok(p.view)
 }

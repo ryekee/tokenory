@@ -1,5 +1,5 @@
 // [INPUT]: Ledger records, completed Codex turns and SQLite backups.
-// [OUTPUT]: Migrated schema and consistent validated restore.
+// [OUTPUT]: Migrated schema, consistent restore and bounded transient storage.
 // [POS]: SQLite persistence and backup boundary.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::usage::UsageRecord;
@@ -35,20 +35,23 @@ impl Database {
             connection,
             directory: directory.to_owned(),
         };
+        if (1..5).contains(&version) {
+            db.backup_before("schema-5")?;
+        }
         if version < 3 {
-            if version > 0 {
-                db.backup_before("schema-3")?;
-            }
             db.migrate_local_keys()?;
         }
         if version < 4 {
-            if version > 0 { db.backup_before("schema-4")?; }
-            db.connection.execute_batch(include_str!("../migrations/004_codex_turns.sql"))?;
+            db.connection
+                .execute_batch(include_str!("../migrations/004_codex_turns.sql"))?;
         }
         if version < 5 {
-            if version > 0 { db.backup_before("schema-5")?; }
-            db.connection.execute_batch(include_str!("../migrations/005_turn_clients.sql"))?;
+            db.connection
+                .execute_batch(include_str!("../migrations/005_turn_clients.sql"))?;
         }
+        next_preview_id(&db.connection)?;
+        prune_previews(&db.connection)?;
+        db.prune_automatic_backups()?;
         Ok(db)
     }
     fn migrate_local_keys(&mut self) -> Result<()> {
@@ -156,11 +159,15 @@ impl Database {
             self.migrate_local_keys()?;
         }
         if version < 4 {
-            self.connection.execute_batch(include_str!("../migrations/004_codex_turns.sql"))?;
+            self.connection
+                .execute_batch(include_str!("../migrations/004_codex_turns.sql"))?;
         }
         if version < 5 {
-            self.connection.execute_batch(include_str!("../migrations/005_turn_clients.sql"))?;
+            self.connection
+                .execute_batch(include_str!("../migrations/005_turn_clients.sql"))?;
         }
+        next_preview_id(&self.connection)?;
+        prune_previews(&self.connection)?;
         advance_revision(&self.connection)?;
         Ok(())
     }
@@ -170,8 +177,73 @@ impl Database {
             chrono::Utc::now().format("%Y%m%dT%H%M%S%.9f")
         ));
         self.backup(&target)?;
+        self.prune_automatic_backups()?;
         Ok(target)
     }
+    /// Only exact app-generated names qualify; user-named backups remain untouched.
+    pub fn prune_automatic_backups(&self) -> Result<()> {
+        let folder = self.directory.join("backups");
+        if !folder.exists() {
+            return Ok(());
+        }
+        let mut backups = Vec::new();
+        for entry in std::fs::read_dir(folder)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let Some(stem) = name.strip_suffix(".sqlite3") else {
+                continue;
+            };
+            let Some((timestamp, action)) = stem.split_once('-') else {
+                continue;
+            };
+            if timestamp.len() != 25
+                || chrono::NaiveDateTime::parse_from_str(timestamp, "%Y%m%dT%H%M%S%.9f").is_err()
+            {
+                continue;
+            }
+            if !matches!(
+                action,
+                "import"
+                    | "reprice"
+                    | "price-coverage"
+                    | "restore"
+                    | "storage-maintenance"
+                    | "schema-3"
+                    | "schema-4"
+                    | "schema-5"
+            ) {
+                continue;
+            }
+            backups.push(entry.path());
+        }
+        backups.sort();
+        let remove = backups.len().saturating_sub(3);
+        for path in backups.into_iter().take(remove) {
+            std::fs::remove_file(path)?;
+        }
+        Ok(())
+    }
+}
+
+/// IDs must not be reused after a consumed preview is deleted.
+pub fn next_preview_id(connection: &Connection) -> Result<i64> {
+    Ok(connection.query_row(
+        "INSERT INTO app_state(key,value) VALUES ('preview_sequence', CAST(MAX(COALESCE((SELECT MAX(id) FROM import_previews),0), COALESCE((SELECT MAX(id) FROM reprice_previews),0)) + 1 AS TEXT)) ON CONFLICT(key) DO UPDATE SET value=CAST(MAX(CAST(value AS INTEGER), COALESCE((SELECT MAX(id) FROM import_previews),0), COALESCE((SELECT MAX(id) FROM reprice_previews),0)) + 1 AS TEXT) RETURNING CAST(value AS INTEGER)",
+        [], |r| r.get(0))?)
+}
+
+pub fn prune_previews(connection: &Connection) -> Result<()> {
+    // Legacy previews have no creation time. They are disposable proposals, not ledger history.
+    for table in ["import_previews", "reprice_previews"] {
+        connection.execute(&format!("DELETE FROM {table} WHERE COALESCE(json_extract(body,'$.created_at'),0) < unixepoch()-86400 OR id NOT IN (SELECT id FROM {table} ORDER BY id DESC LIMIT 3)"), [])?;
+    }
+    Ok(())
 }
 
 pub fn revision(connection: &Connection) -> Result<i64> {

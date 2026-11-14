@@ -13,6 +13,7 @@ pricing.md: 估算口径。
 releases.md: macOS 发布。
 source-audit.md: 来源探查与基线。
 sources.md: 客户端与来源。
+storage-maintenance.md: 自动备份、预览留存和本地存储维护。
 ui-layout-audit.md: 记录布局根因、修复和视觉验证范围。
 upstream.md: 上游与本地构建。
 

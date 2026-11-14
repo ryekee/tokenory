@@ -183,6 +183,7 @@ fn refresh_fills_missing_prices_but_preserves_known_costs_and_rejects_stale_prev
         Some(0.006)
     );
     apply_reprice(&mut db, &p.id).unwrap();
+    assert_eq!(db.connection.query_row("SELECT count(*) FROM reprice_previews WHERE id=?1", [&p.id], |r| r.get::<_, i64>(0)).unwrap(), 0);
     let id2 = save_snapshot(&mut db, snapshot(4., 16.)).unwrap();
     assert!(
         (report(&mut db, &Filter::default())
