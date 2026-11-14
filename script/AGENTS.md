@@ -6,7 +6,7 @@ build_and_run.sh: 停止旧进程，构建并启动应用。
 generate_brand_icons.py: 从品牌源生成模板 SVG 和原色位图资源。
 generate_icons.py: 生成应用图标资源。
 package_release.sh: 签名、公证并生成发布产物。
-publish_release.py: 发布版本和更新元数据。
+publish_release.py: 发布版本和更新元数据；更新包使用公开 Release 下载地址，避免匿名 API 配额。
 tests/: 发布脚本测试。
 update-smoke/: 更新验收记录和工具。
 
