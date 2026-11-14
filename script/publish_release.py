@@ -49,7 +49,11 @@ def finalize_feed(feed, asset, version, build):
             or asset.get('size') != int(enclosure.get('length', '0'))):
         raise ValueError('Uploaded asset does not match the signed enclosure')
     # The EdDSA signature covers archive bytes, so changing the download URL preserves it.
-    enclosure.set('url', expected_url)
+    download_url = f'https://github.com/{REPO}/releases/download/v{version}/{expected_name}'
+    if asset.get('browser_download_url') != download_url:
+        raise ValueError('Public download URL does not match the release')
+    # App downloads must not depend on the anonymous REST API rate limit.
+    enclosure.set('url', download_url)
     ET.register_namespace('sparkle', SPARKLE)
     return ET.tostring(root, encoding='utf-8', xml_declaration=True)
 
@@ -84,10 +88,10 @@ def main():
     asset = next((a for a in release['assets'] if a['name'] == archive.name), None)
     if asset is None or asset.get('digest') != expected_digest:
         raise ValueError('Remote archive is missing or has a different SHA256; do not overwrite a published binary')
-    # Keep the Release attachment compatible with v0.1.3 (no API Accept header).
-    # New clients use this separately generated API feed from the stable raw branch.
-    api_feed = finalize_feed(feed.read_bytes(), asset, version, build)
-    (folder / "appcast-api.xml").write_bytes(api_feed)
+    # Both old and current clients use the public Release download route.
+    # The REST API remains authenticated publishing infrastructure only.
+    public_feed = finalize_feed(feed.read_bytes(), asset, version, build)
+    (folder / "appcast-public.xml").write_bytes(public_feed)
     sums = folder / 'SHA256SUMS.txt'
     sums.write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in [archive, feed]))
     if release['draft']:
@@ -105,7 +109,7 @@ def main():
     refs = api(f'git/matching-refs/heads/{FEED_BRANCH}')
     ref = next((r for r in refs if r['ref'] == f'refs/heads/{FEED_BRANCH}'), None)
     parent = ref['object']['sha'] if ref else None
-    tree_args = {'tree': [{'path': 'appcast.xml', 'mode': '100644', 'type': 'blob', 'content': api_feed.decode('utf-8')}]}
+    tree_args = {'tree': [{'path': 'appcast.xml', 'mode': '100644', 'type': 'blob', 'content': public_feed.decode('utf-8')}]}
     if parent:
         tree_args['base_tree'] = api(f'git/commits/{parent}')['tree']['sha']
     tree = api('git/trees', tree_args)
