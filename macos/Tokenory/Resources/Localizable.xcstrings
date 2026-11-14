@@ -4154,6 +4154,1082 @@
           }
         }
       }
+    },
+    "nav.turns": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "速度"
+          }
+        }
+      }
+    },
+    "turns.scope": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed main turns from supported local agent logs. Subagents and turns without reliable timing or usage are excluded. ≈ marks time and speed estimated from log timestamps."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来自受支持 agent 本地日志的已完成主回合；排除子 agent 及缺少可靠时间或用量的回合。≈ 表示按日志时间估算的耗时和速度。"
+          }
+        }
+      }
+    },
+    "turns.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No completed Codex turns in this period"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此范围暂无已完成的 Codex 回合"
+          }
+        }
+      }
+    },
+    "turns.load_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t load turn analysis"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法加载回合分析"
+          }
+        }
+      }
+    },
+    "turns.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试"
+          }
+        }
+      }
+    },
+    "turns.average_speed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Average speed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均速度"
+          }
+        }
+      }
+    },
+    "turns.average_ttft": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Average first-token wait"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均首 token 等待"
+          }
+        }
+      }
+    },
+    "turns.average_reasoning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Average reasoning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均推理量"
+          }
+        }
+      }
+    },
+    "turns.average_speed_help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total generated tokens divided by total turn time, including tools and waiting. Generated tokens include reasoning, but exclude input and cache. ≈ means this range includes durations estimated from logs."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "总生成 tokens ÷ 总回合耗时，包含工具和等待。生成量含推理，不含输入与缓存。≈ 表示范围内包含按日志时间估算的回合。"
+          }
+        }
+      }
+    },
+    "turns.average_ttft_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mean first-token wait for %lld of %lld turns with a recorded value. Missing values are excluded."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对 %lld / %lld 个有记录的回合取首 token 等待时间的算术平均；缺失值不按零计算。"
+          }
+        }
+      }
+    },
+    "turns.average_reasoning_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mean reasoning tokens for %lld of %lld turns with a recorded value. Compare this with speed to see whether longer turns also involve more reasoning."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对 %lld / %lld 个有记录的回合取平均推理量。与速度对照，可观察较长回合是否伴随更多思考。"
+          }
+        }
+      }
+    },
+    "turns.seconds_unit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "s"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秒"
+          }
+        }
+      }
+    },
+    "turns.tokens_per_turn": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tokens / turn"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tokens / 回合"
+          }
+        }
+      }
+    },
+    "turns.sort.duration": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Longest first"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "耗时最长"
+          }
+        }
+      }
+    },
+    "turns.sort.newest": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Newest first"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最新回合"
+          }
+        }
+      }
+    },
+    "turns.sort.oldest": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oldest first"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最早回合"
+          }
+        }
+      }
+    },
+    "turns.sort.speed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lowest throughput"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "吞吐最低"
+          }
+        }
+      }
+    },
+    "turns.sort.reasoning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Most reasoning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推理量最多"
+          }
+        }
+      }
+    },
+    "turns.project": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project / turn"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目 / 回合"
+          }
+        }
+      }
+    },
+    "turns.duration": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duration"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "耗时"
+          }
+        }
+      }
+    },
+    "turns.speed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn throughput"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回合吞吐"
+          }
+        }
+      }
+    },
+    "turns.ttft": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First-token wait"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首 token 等待"
+          }
+        }
+      }
+    },
+    "turns.speed_value": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ tokens/s"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ tokens/s"
+          }
+        }
+      }
+    },
+    "turns.seconds_value": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ s"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 秒"
+          }
+        }
+      }
+    },
+    "turns.page": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page %lld of %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %lld / %lld 页"
+          }
+        }
+      }
+    },
+    "turns.wait_value": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tool wait %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具等待 %@"
+          }
+        }
+      }
+    },
+    "turns.remaining_value": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other time %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其余时间 %@"
+          }
+        }
+      }
+    },
+    "turns.wait_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tool wait runs from the completed call to its returned result. Parallel waits count once. It includes execution, approval and scheduling, but excludes argument generation and background work after the tool returns. Other time still includes network, queueing and input processing."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具等待从完整调用提交算到对应结果返回，并行等待只计一次。包含执行、审批与调度，不包含参数生成或工具返回后的后台运行。其余时间仍包含网络、排队和输入处理。"
+          }
+        }
+      }
+    },
+    "turns.ttft_help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First-token waiting time recorded by the client, when available. It is not necessarily the wait for the first visible character."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首 token 等待使用客户端明确记录的值；没有记录时显示 —。它不一定等于首个可见字符的等待时间。"
+          }
+        }
+      }
+    },
+    "turns.responses_tools": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model responses: %@ · Tool calls: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型响应 %@ · 工具调用 %@"
+          }
+        }
+      }
+    },
+    "turns.generated": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generated tokens"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成 tokens"
+          }
+        }
+      }
+    },
+    "turns.reasoning_split": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reasoning %@ · Other output %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推理 %@ · 其他输出 %@"
+          }
+        }
+      }
+    },
+    "turns.basis": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About these metrics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据口径"
+          }
+        }
+      }
+    },
+    "turns.session": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会话"
+          }
+        }
+      }
+    },
+    "turns.turn": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回合"
+          }
+        }
+      }
+    },
+    "turns.trend": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speed over time"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "速度趋势"
+          }
+        }
+      }
+    },
+    "turns.chart_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each point is a completed turn at its start time. The curve connects observed values across gaps; it does not fill missing time with zero or add observations."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个点是一个已完成回合，按开始时间排列。曲线跨空档连接真实观测值，不补零，也不生成额外数据点。"
+          }
+        }
+      }
+    },
+    "turns.chart_keyboard": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Left and Right to inspect turns, then Return to show details."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按左右方向键查看回合，按回车显示详情。"
+          }
+        }
+      }
+    },
+    "turns.count": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld turn"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld turns"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个回合"
+          }
+        }
+      }
+    },
+    "turns.other_output": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other output"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他输出"
+          }
+        }
+      }
+    },
+    "turns.support": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent support"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent 支持情况"
+          }
+        }
+      }
+    },
+    "turns.unsupported": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn analysis is not yet available for these agents. Usage and cost tracking are unchanged."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以下 agent 暂不支持回合分析，用量与费用统计不受影响。"
+          }
+        }
+      }
+    },
+    "turns.estimated_help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duration is estimated from the user-input timestamp to the completed final-response timestamp. Log writes and client scheduling can affect this interval; speed inherits that estimate."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "耗时按用户输入至最终回复完成的日志时间差估算。日志落盘和客户端调度会影响该区间；速度也属于估算。"
+          }
+        }
+      }
+    },
+    "menubar.cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cost"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "费用"
+          }
+        }
+      }
+    },
+    "menubar.speed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "速度"
+          }
+        }
+      }
+    },
+    "turns.coverage.reason.missing_boundaries": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The available log schema does not establish user-turn start and completion boundaries."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现有日志结构无法确认用户回合的开始和完成边界。"
+          }
+        }
+      }
+    },
+    "turns.coverage.reason.missing_timing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The available records lack a start time, end time or duration for each turn."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现有记录缺少每个回合的开始时间、结束时间或耗时。"
+          }
+        }
+      }
+    },
+    "turns.coverage.reason.missing_usage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The available records lack attributable generated-token counts."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现有记录缺少可归属到回合的生成 token 数。"
+          }
+        }
+      }
+    },
+    "turns.coverage.reason.missing_attribution": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage cannot be reliably linked to a main user turn."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用量无法可靠关联到用户主回合。"
+          }
+        }
+      }
+    },
+    "turns.coverage.reason.request_only": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The log records individual requests without a reliable user-turn boundary."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日志记录了单次请求，但没有可靠的用户回合边界。"
+          }
+        }
+      }
+    },
+    "turns.coverage.reason.session_totals": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source provides session totals, not per-turn usage and timing."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源提供会话汇总，未提供回合级用量和时间。"
+          }
+        }
+      }
+    },
+    "turns.coverage.reason.schema_unverified": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The available schema evidence is insufficient to verify completed-turn metrics."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现有结构证据不足，无法确认完成回合的统计口径。"
+          }
+        }
+      }
+    },
+    "turns.coverage.reason.delegated": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These entries use their underlying agents’ logs. Filtering includes all matching underlying-agent turns because the launcher is not recorded."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些入口复用底层 agent 的日志。日志未记录启动入口，筛选会包含对应底层 agent 的全部回合。"
+          }
+        }
+      }
+    },
+    "turns.coverage.remedy.record_boundaries": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture prompt submission and turn completion with a stable turn ID; link each request’s usage to that ID."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "补采用户提交、回合完成及稳定回合 ID，并关联各请求用量。"
+          }
+        }
+      }
+    },
+    "turns.coverage.remedy.record_timing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture monotonic start/end timestamps or elapsed duration alongside each turn’s usage."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为每个回合补采单调时钟的起止时间或耗时，并与用量关联。"
+          }
+        }
+      }
+    },
+    "turns.coverage.remedy.record_usage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture final request usage, including output/reasoning semantics, and link it to a turn ID."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "补采请求最终用量及输出/推理口径，并关联回合 ID。"
+          }
+        }
+      }
+    },
+    "turns.coverage.remedy.record_attribution": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record main-turn, request and parent-agent IDs so child work can be separated."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "补采主回合、请求和父 agent ID，以分离子 agent 工作。"
+          }
+        }
+      }
+    },
+    "turns.coverage.remedy.link_turn_requests": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add turn-start/finish events and request-to-turn IDs; request timing alone is insufficient."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "补采回合起止事件及请求与回合的关联 ID；仅有请求耗时还不够。"
+          }
+        }
+      }
+    },
+    "turns.coverage.remedy.export_turn_events": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export per-turn start, finish and final token usage; session totals cannot reconstruct historical turn speed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出逐回合起止事件和最终 token 用量；会话汇总无法还原历史回合速度。"
+          }
+        }
+      }
+    },
+    "turns.coverage.remedy.verify_schema": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtain a documented schema or a complete redacted transcript containing timing, usage and completion events before enabling analysis."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取得明确的结构文档或包含时间、用量、完成事件的完整脱敏日志，再启用分析。"
+          }
+        }
+      }
+    },
+    "turns.coverage.remedy.filter_delegates": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the underlying-agent filter; recording launcher identity would allow this entry to be separated."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可按底层 agent 筛选；若需区分该入口，应补采启动来源身份。"
+          }
+        }
+      }
+    },
+    "turns.coverage.supported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supported"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持"
+          }
+        }
+      }
+    },
+    "turns.coverage.unsupported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not supported"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

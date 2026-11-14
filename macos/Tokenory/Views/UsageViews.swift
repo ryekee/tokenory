@@ -1,3 +1,7 @@
+// [INPUT]: Typed usage summaries and today-only turn statistics.
+// [OUTPUT]: Locale-aware formats, tool names and the three-column menu summary.
+// [POS]: Shared native usage presentation; speed does not depend on dashboard filters.
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 func compactTokens(_ value: Int64, locale: Locale = Localization.locale) -> String {
@@ -24,17 +28,19 @@ func clientName(_ value: String) -> String {
      "trae": "Trae", "warp": "Warp", "workbuddy": "WorkBuddy", "zcode": "ZCode", "zed": "Zed Agent"][value] ?? value
 }
 
-struct SummaryView: View {
+struct MenuBarSummary: View {
     let summary: UsageSummary
-    var compact = false
+    let turns: TurnPresentation?
+    let speedError: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: compact ? 20 : 36) {
+            HStack(alignment: .top, spacing: 14) {
                 metric(L("usage.tokens"), compactTokens(summary.tokens))
                     .help(summary.tokens.formatted(.number.locale(Localization.locale)))
-                if !compact { Divider().frame(height: 50) }
-                metric(L(summary.costStatus == "partial" ? "cost.known" : "cost.estimate"), usd(summary.knownEstimatedCostUsd))
-                if !compact { Spacer(minLength: 0) }
+                metric(L("menubar.cost"), usd(summary.knownEstimatedCostUsd))
+                    .help(L(summary.costStatus == "partial" ? "cost.known" : "cost.estimate"))
+                metric(L("menubar.speed"), (turns?.containsEstimates == true ? "≈ " : "") + TurnFormat.number(turns?.averageSpeed), unit: turns?.averageSpeed == nil ? "" : "tokens/s")
+                    .help(speedError ?? L("turns.average_speed_help"))
             }
             if let partial = summary.partialDays, partial > 0 {
                 Label(LF("usage.partial_days", partial), systemImage: "clock.badge.exclamationmark").font(.caption).foregroundStyle(.secondary)
@@ -44,11 +50,12 @@ struct SummaryView: View {
             }
         }.accessibilityElement(children: .contain)
     }
-    private func metric(_ title: String, _ value: String) -> some View {
+    private func metric(_ title: String, _ value: String, unit: String = "") -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.subheadline).foregroundStyle(.secondary)
-            Text(value).font(.system(size: compact ? 25 : 30, weight: .semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
-        }.accessibilityElement(children: .combine)
+            (Text(value).font(.system(size: 25, weight: .semibold)) + Text(unit.isEmpty ? "" : " " + unit).font(.caption).foregroundColor(.secondary))
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+        }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
     }
 }
 struct ErrorBanner: View {

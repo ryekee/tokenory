@@ -1,13 +1,13 @@
 // [INPUT]: 接收统计报告、筛选状态和记录详情。
-// [OUTPUT]: 提供主窗口导航和可滚动的记录详情弹窗。
+// [OUTPUT]: 提供主窗口导航、按需加载的慢回合页和可滚动的记录详情弹窗。
 // [POS]: 主工作区入口；详情操作区独立于长内容滚动。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 private enum DashboardSection: String, CaseIterable {
-    case overview, details, imports, sources
+    case overview, details, turns, imports, sources
     var title: String { L("nav." + rawValue) }
-    var icon: String { switch self { case .overview: "chart.bar.xaxis"; case .details: "list.bullet.rectangle"; case .imports: "square.and.arrow.down"; case .sources: "externaldrive" } }
+    var icon: String { switch self { case .overview: "chart.bar.xaxis"; case .details: "list.bullet.rectangle"; case .turns: "stopwatch"; case .imports: "square.and.arrow.down"; case .sources: "externaldrive" } }
 }
 struct DashboardView: View {
     @Environment(UsageStore.self) private var store
@@ -45,6 +45,13 @@ struct DashboardView: View {
                     .disabled(section != .overview)
                     .accessibilityHidden(section != .overview)
                     if section == .imports { ImportView() }
+                    if section == .turns || visited.contains(.turns) {
+                        TurnsView()
+                            .opacity(section == .turns ? 1 : 0)
+                            .allowsHitTesting(section == .turns)
+                            .disabled(section != .turns)
+                            .accessibilityHidden(section != .turns)
+                    }
                     if section == .sources || visited.contains(.sources) {
                         SourcesView()
                             .opacity(section == .sources ? 1 : 0)
@@ -68,7 +75,7 @@ struct DashboardView: View {
             }.background(WorkspaceStyle.canvas(scheme)).navigationTitle(section.title)
                 .toolbar {
                     ToolbarItemGroup {
-                        if section == .overview || section == .details { UsageDatePicker() }
+                        if section == .overview || section == .details || section == .turns { UsageDatePicker() }
                         if store.loading { ProgressView().controlSize(.small) }
                         Button { store.scan() } label: { Label(L("action.scan"), systemImage: "arrow.clockwise") }.disabled(store.scanning || !store.connected)
                         if !store.connected { Button(L("action.reconnect")) { store.start() } }

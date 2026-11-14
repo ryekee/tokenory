@@ -61,6 +61,16 @@ fn worker_queries_errors_writer_lock_and_eof_are_real_process_behaviors() {
     assert_eq!(v["result"]["summary"]["tokens"], 0);
     request(&mut input, "bad", "overview", json!({"from":"2026-02-30"}));
     assert!(response("bad")["error"].is_object());
+    request(&mut input, "turns", "codexTurns", json!({"from":"2026-11-14","to":"2026-11-14"}));
+    let turns = response("turns");
+    assert_eq!(turns["result"]["turns"], json!([]));
+    assert_eq!(turns["result"]["models"], json!([]));
+    request(&mut input, "badTurns", "codexTurns", json!({"from":"2026-02-30"}));
+    assert!(response("badTurns")["error"].is_object());
+    request(&mut input, "turnAnalytics", "turnAnalytics", json!({}));
+    let turns = response("turnAnalytics");
+    assert_eq!(turns["result"]["clients"], json!([]));
+    assert!(turns["result"]["capabilities"].is_array());
     request(&mut input, "unknown", "invented", json!({}));
     assert_eq!(response("unknown")["error"]["code"], "invalidRequest");
     request(&mut input, "status", "status", json!({}));

@@ -16,4 +16,8 @@ sources.md: 客户端与来源。
 ui-layout-audit.md: 记录布局根因、修复和视觉验证范围。
 upstream.md: 上游与本地构建。
 
+agent-speed-coverage.md: 逐一记录42个入口的速度格式证据、支持条件及补采方案。
+
+codex-turns.md: 多 Agent 回合采集、指标口径、支持边界和验收记录。
+
 [PROTOCOL]: Update this header on change, then check AGENTS.md

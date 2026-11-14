@@ -4,6 +4,12 @@ enum WorkspaceStyle {
     static let panelRadius: CGFloat = 12
     static let fieldRadius: CGFloat = 8
 
+    // Token meanings are shared with the overview; time components use separate colors.
+    static let outputTokens = Color.teal
+    static let reasoningTokens = Color.gray
+    static let toolWait = Color.brown
+    static let otherTurnTime = Color.indigo
+
     static func canvas(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 0.085, green: 0.09, blue: 0.105)

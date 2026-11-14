@@ -139,7 +139,7 @@ pub(crate) fn codex_mirror_turn_from_dedup_key(dedup_key: &str) -> Option<CodexM
 
 /// What one JSONL file found under an OpenClaw agents root is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum OpenClawJsonlKind {
+pub enum OpenClawJsonlKind {
     /// A session transcript or published archive: the OpenClaw event format.
     Transcript,
     /// A Codex rollout inside an agent-owned Codex home: Codex's own format,
@@ -152,7 +152,7 @@ pub(crate) enum OpenClawJsonlKind {
 
 /// Classify a JSONL path the OpenClaw scan produced. The agents root is walked
 /// whole, so agent-owned Codex homes come along with the transcripts.
-pub(crate) fn classify_openclaw_jsonl(path: &Path) -> OpenClawJsonlKind {
+pub fn classify_openclaw_jsonl(path: &Path) -> OpenClawJsonlKind {
     let components: Vec<&std::ffi::OsStr> = path.components().map(|c| c.as_os_str()).collect();
     for index in 1..components.len() {
         if components[index] == OPENCLAW_CODEX_HOME_DIRNAME && components[index - 1] == "agent" {

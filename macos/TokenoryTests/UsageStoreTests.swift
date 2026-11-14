@@ -18,6 +18,21 @@ final class UsageStoreTests: XCTestCase {
         try JSONEncoder().encode(settings).write(to: data.appending(path: "settings.json"))
         let row = #"{"type":"assistant","timestamp":"2026-11-05T01:00:00Z","message":{"id":"msg_test","role":"assistant","model":"deepseek-flash","usage":{"input_tokens":1000,"output_tokens":0}}}"# + "\n"
         try Data(row.utf8).write(to: logs.appending(path: "session.jsonl"))
+        let codexLogs = home.appending(path: ".codex/sessions")
+        try FileManager.default.createDirectory(at: codexLogs, withIntermediateDirectories: true)
+        let codex = """
+        {"type":"session_meta","payload":{"id":"s","cwd":"/test/project","source":"cli"}}
+        {"type":"event_msg","payload":{"type":"task_started","turn_id":"t"}}
+        {"type":"turn_context","payload":{"turn_id":"t","model":"model-a","effort":"medium"}}
+        {"type":"token_usage_record","payload":{"turn_id":"t","response_id":"r","usage":{"output_tokens":100,"reasoning_output_tokens":20},"turn_token_usage":{"output_tokens":100,"reasoning_output_tokens":20}}}
+        {"type":"event_msg","timestamp":"2026-11-14T00:00:10Z","payload":{"type":"task_complete","turn_id":"t","duration_ms":10000,"time_to_first_token_ms":200}}
+        """
+        try Data(codex.utf8).write(to: codexLogs.appending(path: "rollout-turn-test.jsonl"))
+        let claudeTurn = """
+        {"type":"user","uuid":"u","sessionId":"claude-test","cwd":"/test/project","timestamp":"2026-11-14T00:00:00Z","message":{"role":"user","content":"test"}}
+        {"type":"assistant","sessionId":"claude-test","timestamp":"2026-11-14T00:00:10Z","message":{"id":"claude-response","role":"assistant","model":"deepseek-flash","content":[],"stop_reason":"end_turn","usage":{"input_tokens":0,"output_tokens":0}}}
+        """
+        try Data(claudeTurn.utf8).write(to: logs.appending(path: "turn-session.jsonl"))
         let engine = EngineClient(helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/tokenory"), directory: data)
         let store = UsageStore(engine: engine, directory: data)
         XCTAssertEqual(store.dateRange, .week)
@@ -31,8 +46,39 @@ final class UsageStoreTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(100))
             }
             XCTAssertEqual(store.report?.summary.tokens, 1000)
+            XCTAssertNil(store.turnAnalytics)
+            let turnQuery = TurnQuery(from: "2026-11-14", to: "2026-11-14", model: nil, client: "codex")
+            await store.loadAgentTurns(turnQuery)
+            XCTAssertNil(store.turnsError)
+            XCTAssertEqual(store.turnAnalytics?.points.count, 1)
+            XCTAssertEqual(store.turnAnalytics?.averageSpeed, 10)
+            XCTAssertEqual(store.turnAnalytics?.averageTTFTSeconds, 0.2)
+            await store.loadAgentTurns(TurnQuery(from: "2026-11-14", to: "2026-11-14", model: "missing", client: "codex"))
+            XCTAssertTrue(store.turnAnalytics?.points.isEmpty == true)
+            XCTAssertEqual(store.turnAnalytics?.models, ["model-a"])
+            await store.loadAgentTurns(turnQuery)
+            XCTAssertEqual(store.turnAnalytics?.points.count, 1)
+            await store.loadAgentTurns(TurnQuery(from: "2026-11-14", to: "2026-11-14", model: nil, client: "claude"))
+            XCTAssertEqual(store.turnAnalytics?.points.map(\.client), ["claude"])
+            XCTAssertTrue(store.turnAnalytics?.containsEstimates == true)
+            XCTAssertNil(store.turnAnalytics?.averageTTFTSeconds)
+            XCTAssertNil(store.turnAnalytics?.averageReasoning)
+            XCTAssertTrue(store.turnAnalytics?.capabilities.contains { $0.client == "claude" && $0.supported } == true)
+            // Menu speed uses the whole reporting day, even when the page selects one agent/model.
+            store.turnClient = "codex"; store.turnModel = "missing"
+            await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-14T01:00:00Z")!)
+            XCTAssertEqual(store.todayTurns?.averageSpeed, 5)
+            XCTAssertEqual(store.todayTurns?.points.count, 2)
+            XCTAssertTrue(store.todayTurns?.containsEstimates == true)
+            XCTAssertNil(store.todaySpeedError)
+            XCTAssertEqual(store.turnAnalytics?.points.map(\.client), ["claude"])
+            await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-14T16:00:00Z")!)
+            XCTAssertNil(store.todayTurns?.averageSpeed)
+            XCTAssertTrue(store.todayTurns?.points.isEmpty == true)
+            store.turnClient = nil; store.turnModel = nil
             await store.loadSources()
             XCTAssertEqual(store.clients.count, 42)
+            XCTAssertEqual(Set(store.turnAnalytics?.capabilities.map(\.client) ?? []), Set(store.clients.map(\.id)))
             XCTAssertTrue(store.priceProviders.isEmpty)
             XCTAssertNil(store.settings)
             await store.loadManagement()
@@ -108,4 +154,62 @@ final class UsageStoreTests: XCTestCase {
             throw error
         }
     }
+    func testOlderFullRefreshCannotReplaceNewDayMenuMetrics() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "Tokenory-today-race-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let helper = root.appending(path: "worker.py")
+        // Hold yesterday's replies until today's refresh has committed, then release them.
+        let script = #"""
+        #!/usr/bin/python3
+        import json, pathlib, sys, threading, time
+        root = pathlib.Path(sys.argv[2])
+        lock = threading.Lock()
+        threads = []
+        def reply(r):
+            p = r['payload']; op = r['operation']; day = p.get('from')
+            old = day == '2026-11-14' and p.get('to') == day
+            if old and op in ('overview', 'turnAnalytics'):
+                (root / 'waiting').touch()
+                while not (root / 'release').exists(): time.sleep(.01)
+            tokens = 100 if old else 200
+            summary = dict(tokens=tokens, tokenBreakdown=dict(input=0,output=tokens,cacheRead=0,cacheWrite=0,reasoning=0), knownEstimatedCostUsd=0, unpricedTokens=0, costStatus='priced',recordCount=1,activeDays=1)
+            if op == 'overview':
+                result = dict(revision=1,summary=summary,daily=[],clients=[],providers=[],models=[],details=[])
+            elif op == 'activity':
+                result = dict(revision=1,from_=p.get('from'),to=p.get('to'),daily=[],modelDays=[])
+                result['from'] = result.pop('from_')
+            elif op == 'status':
+                result = dict(scanning=False,dataDirectory=str(root),revision=1,refreshingPrices=False)
+            else:
+                turn = dict(client='codex',durationEstimated=False,id=day,sessionId='s',turnId=day,project='p',model='m',startMs=1,endMs=1001,durationMs=1000,generatedTokens=tokens,requests=1,toolCalls=0)
+                result = dict(revision=1,models=['m'],clients=['codex'],capabilities=[],turns=[turn])
+            with lock:
+                print(json.dumps(dict(version=1,id=r['id'],result=result)),flush=True)
+        for line in sys.stdin:
+            t = threading.Thread(target=reply,args=(json.loads(line),));t.start();threads.append(t)
+        for t in threads: t.join()
+        """#
+        try Data(script.utf8).write(to: helper)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+        let engine = EngineClient(helper: helper, directory: root)
+        let store = UsageStore(engine: engine, directory: root)
+        store.dateRange = .all
+        try await engine.start()
+        let old = Task { await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-14T15:59:00Z")!) }
+        for _ in 0..<100 {
+            if FileManager.default.fileExists(atPath: root.appending(path: "waiting").path) { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.appending(path: "waiting").path))
+        await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-14T16:01:00Z")!)
+        XCTAssertEqual(store.today?.summary.tokens, 200)
+        XCTAssertEqual(store.todayTurns?.averageSpeed, 200)
+        try Data().write(to: root.appending(path: "release"))
+        await old.value
+        XCTAssertEqual(store.today?.summary.tokens, 200)
+        XCTAssertEqual(store.todayTurns?.averageSpeed, 200)
+        await engine.stop()
+        try FileManager.default.removeItem(at: root)
+    }
+
 }

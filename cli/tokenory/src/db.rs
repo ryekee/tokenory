@@ -1,3 +1,7 @@
+// [INPUT]: Ledger records, completed Codex turns and SQLite backups.
+// [OUTPUT]: Migrated schema and consistent validated restore.
+// [POS]: SQLite persistence and backup boundary.
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::usage::UsageRecord;
 use anyhow::{ensure, Context, Result};
 use rusqlite::{params, Connection};
@@ -18,7 +22,7 @@ impl Database {
         connection.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;")?;
         let version: i64 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(
-            version <= 3,
+            version <= 5,
             "database was created by a newer Tokenory version"
         );
         if version == 0 {
@@ -36,6 +40,14 @@ impl Database {
                 db.backup_before("schema-3")?;
             }
             db.migrate_local_keys()?;
+        }
+        if version < 4 {
+            if version > 0 { db.backup_before("schema-4")?; }
+            db.connection.execute_batch(include_str!("../migrations/004_codex_turns.sql"))?;
+        }
+        if version < 5 {
+            if version > 0 { db.backup_before("schema-5")?; }
+            db.connection.execute_batch(include_str!("../migrations/005_turn_clients.sql"))?;
         }
         Ok(db)
     }
@@ -98,7 +110,7 @@ impl Database {
         ensure!(integrity == "ok", "backup integrity check failed");
         let version: i64 = source.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(
-            (1..=3).contains(&version),
+            (1..=5).contains(&version),
             "unsupported backup schema version"
         );
         {
@@ -121,6 +133,13 @@ impl Database {
                 r.get::<_, i64>(0)
             })?;
         }
+        if version >= 4 {
+            let mut statement = source.prepare("SELECT body FROM codex_turns")?;
+            for row in statement.query_map([], |r| r.get::<_, String>(0))? {
+                let turn: crate::codex_turns::CodexTurn = serde_json::from_str(&row?)?;
+                turn.validate()?;
+            }
+        }
         self.backup_before("restore")?;
         // Keep the validated source read transaction open while copying it.
         // SQLite applies the replacement as one destination transaction.
@@ -135,6 +154,12 @@ impl Database {
         }
         if version < 3 {
             self.migrate_local_keys()?;
+        }
+        if version < 4 {
+            self.connection.execute_batch(include_str!("../migrations/004_codex_turns.sql"))?;
+        }
+        if version < 5 {
+            self.connection.execute_batch(include_str!("../migrations/005_turn_clients.sql"))?;
         }
         advance_revision(&self.connection)?;
         Ok(())
