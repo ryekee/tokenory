@@ -1,6 +1,8 @@
 # Mechanical HUD
 
-Enable **Show HUD / 显示 HUD** from the menu bar or Settings → HUD. Drag the orange shell to move it. Right-click to hide. Position, visibility, selected metric and audio preferences persist.
+Enable **Show HUD / 显示 HUD** from the menu bar or Settings → HUD. Drag the orange shell to move it. Right-click to hide. Settings offers six positions in a 2 × 3 grid. The selected position, visibility, metric and audio preferences persist. Placement uses the current display’s visible frame to avoid the menu bar and Dock; the case sits 5 pt inside that frame. Dragging temporarily adjusts the position; reopening the HUD or changing display geometry reapplies the selected position.
+
+The native counter uses 50% of the original dimensions: 210 × 82 pt for the case, 220 × 92 pt including transparent margins. The audio popover stays at normal size. Older saved window dimensions are replaced with this compact size.
 
 The text-fragment button selects Tokens; the coin selects USD cost. Values use `UsageStore.today`, an all-agent query independent of dashboard date/model/tool filters. Updates arrive after ledger scans, not per generated token. The HUD refreshes at Beijing midnight and when the Mac wakes. Unknown estimates display —; partial prices display ≈ with the known subtotal and explanatory help. A failed today query displays unavailable until a successful refresh.
 

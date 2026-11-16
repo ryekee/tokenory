@@ -1,5 +1,5 @@
 // [INPUT]: HUD preferences and the shared usage store.
-// [OUTPUT]: Nonactivating floating panel with persisted, screen-clamped position.
+// [OUTPUT]: Compact nonactivating floating panel with six safe-area edge placements and draggable positioning.
 // [POS]: App lifecycle owner; a HUD never changes the app's Dock activation policy.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -13,6 +13,7 @@ final class HUDController {
     private(set) var panel: NSPanel?
     private let preferences: HUDPreferences
     private let store: UsageStore
+    private var appliedPlacement: HUDPlacement?
     private var observing = false
     private var screenObserver: NSObjectProtocol?
 
@@ -30,7 +31,7 @@ final class HUDController {
         observing = true
         _ = Self.fontRegistered
         screenObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.keepOnScreen() }
+            Task { @MainActor in self?.placeOnScreen() }
         }
         observePreferences()
     }
@@ -41,6 +42,10 @@ final class HUDController {
             if preferences.enabled {
                 if panel?.isVisible != true { show() }
             } else if panel?.isVisible == true { hide() }
+            let placement = preferences.placement
+            if preferences.enabled, appliedPlacement != placement {
+                placeOnScreen()
+            }
             HUDSound.shared.update(preferences: preferences)
         } onChange: { [weak self] in
             Task { @MainActor in self?.observePreferences() }
@@ -49,7 +54,7 @@ final class HUDController {
 
     private func show() {
         if panel == nil {
-            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 440, height: 184),
+            let panel = NSPanel(contentRect: NSRect(origin: .zero, size: MechanicalHUDView.windowSize),
                                 styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.identifier = NSUserInterfaceItemIdentifier("mechanical-hud")
             panel.title = L("hud.title")
@@ -62,6 +67,10 @@ final class HUDController {
             // NSPanel starts with an empty NSView; replace it with hosted content on first show too.
             panel.contentView = nil
             let restored = panel.setFrameUsingName("MechanicalHUD")
+            // Restore the position, but replace older saved dimensions with the compact size.
+            let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
+            panel.setContentSize(MechanicalHUDView.windowSize)
+            panel.setFrameTopLeftPoint(topLeft)
             panel.setFrameAutosaveName("MechanicalHUD")
             if !restored, let screen = NSScreen.main {
                 panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.maxX - panel.frame.width - 28,
@@ -74,7 +83,7 @@ final class HUDController {
             panel.contentView = NSHostingView(rootView: MechanicalHUDView()
                 .environment(store).environment(preferences).focusEffectDisabled())
         }
-        keepOnScreen()
+        placeOnScreen()
         panel.orderFrontRegardless()
     }
 
@@ -92,10 +101,10 @@ final class HUDController {
         screenObserver = nil
     }
 
-    private func keepOnScreen() {
-        guard let panel, let screen = NSScreen.screens.first(where: { $0.visibleFrame.intersects(panel.frame) }) ?? NSScreen.main else { return }
-        let bounds = screen.visibleFrame
-        panel.setFrameOrigin(NSPoint(x: max(bounds.minX, min(panel.frame.minX, bounds.maxX - panel.frame.width)),
-                                     y: max(bounds.minY, min(panel.frame.minY, bounds.maxY - panel.frame.height))))
+    private func placeOnScreen() {
+        guard let panel, let screen = panel.screen ?? NSScreen.main else { return }
+        // visibleFrame excludes the menu bar and the Dock on any edge.
+        panel.setFrameOrigin(preferences.placement.origin(in: screen.visibleFrame, size: panel.frame.size))
+        appliedPlacement = preferences.placement
     }
 }
