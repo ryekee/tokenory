@@ -19,6 +19,15 @@ final class HUDTests: XCTestCase {
         XCTAssertFalse(reading(10, status: "partial").partial)
         XCTAssertNil(reading(10, metric: .cost, cost: .infinity).value)
     }
+    func testTokensDisplayInMillionsWithoutLosingSingleTokenPrecision() {
+        XCTAssertEqual(reading(0).formatted, "0.000000M")
+        XCTAssertEqual(reading(1).formatted, "0.000001M")
+        XCTAssertEqual(reading(999_999).formatted, "0.999999M")
+        XCTAssertEqual(reading(1_000_000).formatted, "1.000000M")
+        XCTAssertEqual(reading(163_704_355).formatted, "163.704355M")
+        XCTAssertEqual(reading(9_007_199_254_740_993).formatted, "9007199254.740993M")
+        XCTAssertEqual(reading(1, metric: .cost).formatted, "$18.65")
+    }
     func testRollCarriesAndDeceleratesToExactTarget() {
         let roll = HUDRoll(from: 999_999, to: 1_000_008)
         XCTAssertEqual(roll.positions(at: 0).map { Int($0) % 10 }, [0, 9, 9, 9, 9, 9, 9])
