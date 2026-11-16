@@ -20,6 +20,8 @@ upstream.md: 上游与本地构建。
 
 agent-speed-coverage.md: 逐一记录42个入口的速度格式证据、支持条件及补采方案。
 
+codex-realtime-usage.md: Codex 用量产生时机、日志与 hook/app-server 方案证据及尚未实施的实时采集建议。
+
 codex-turns.md: 多 Agent 回合采集、指标口径、支持边界和验收记录。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md

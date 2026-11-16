@@ -4,7 +4,7 @@ Enable **Show HUD / 显示 HUD** from the menu bar or Settings → HUD. Drag the
 
 The native counter uses 50% of the original dimensions: 210 × 82 pt for the case, 220 × 92 pt including transparent margins. The audio popover stays at normal size. Older saved window dimensions are replaced with this compact size.
 
-The text-fragment button selects Tokens; the coin selects USD cost. Values use `UsageStore.today`, an all-agent query independent of dashboard date/model/tool filters. Updates arrive after ledger scans, not per generated token. The HUD refreshes at Beijing midnight and when the Mac wakes. Unknown estimates display —; partial prices display ≈ with the known subtotal and explanatory help. A failed today query displays unavailable until a successful refresh.
+The text-fragment button selects Tokens in millions (M) with six decimals, preserving each individual token; the coin selects USD cost. M appears after the drums; $ appears before them. The menu bar visibility row shows its checkmark after the label. Values use `UsageStore.today`, an all-agent query independent of dashboard date/model/tool filters. Updates arrive after ledger scans, not per generated token. The HUD refreshes at Beijing midnight and when the Mac wakes. Unknown estimates display —; partial prices display ≈ with the known subtotal and explanatory help. A failed today query displays unavailable until a successful refresh.
 
 The speaker button opens audio controls. Sound has its own switch and 0–100% volume; both persist. The same controls and sound preview are in Settings. First use defaults to HUD off, sound off, 35% volume.
 

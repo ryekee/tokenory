@@ -33,8 +33,8 @@ struct MenuBarView: View {
             if !store.connected, let error = store.error { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(3) }
             Button { hud.enabled.toggle() } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "checkmark").opacity(hud.enabled ? 1 : 0).frame(width: 14)
                     Text(L("hud.show"))
+                    Image(systemName: "checkmark").opacity(hud.enabled ? 1 : 0).frame(width: 14)
                     Spacer()
                 }.contentShape(Rectangle())
             }

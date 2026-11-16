@@ -1,6 +1,6 @@
 // [INPUT]: Today's all-agent summary and selected display metric.
 // [OUTPUT]: Exact drum targets, approved braking curve and velocity-continuous retargeting.
-// [POS]: Pure HUD presentation and motion model; amounts are display-only cents.
+// [POS]: Pure HUD presentation and motion model; tokens display as millions with six decimals; costs use display-only cents.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
 
@@ -27,7 +27,7 @@ struct HUDReading: Equatable {
 
     var formatted: String {
         guard let value else { return "—" }
-        if metric == .tokens { return value.formatted(.number.locale(Locale(identifier: "en_US"))) }
+        if metric == .tokens { return String(value / 1_000_000) + String(format: ".%06lldM", value % 1_000_000) }
         return "$" + (value / 100).formatted(.number.locale(Locale(identifier: "en_US"))) + String(format: ".%02lld", value % 100)
     }
 }

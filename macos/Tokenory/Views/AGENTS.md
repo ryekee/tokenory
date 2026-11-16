@@ -4,7 +4,7 @@
 BrandIcon.swift: 统一工具、提供方、模型的品牌映射；保留彩色标志和背景细节。
 DashboardView.swift: 组织统计窗口导航；保留总览以及首次访问后的明细、回合、来源视图和滚动位置；详情内容滚动，完成按钮保持可见。
 ImportView.swift: 展示导入预览、来源冲突和自适应来源卡片；来源页懒加载并仅请求来源数据。
-MenuBarView.swift: HUD 显隐使用文案前的勾选菜单项； 展示今日 Tokens、费用、加权速度及来源用量，保留未知/估算标记。
+MenuBarView.swift: HUD 显隐使用文案后的勾选菜单项； 展示今日 Tokens、费用、加权速度及来源用量，保留未知/估算标记。
 OverviewView.swift: 展示紧凑摘要、Token 构成和由组顶部共用分段控件切换 Tokens/费用的工具与模型排行。
 PriceCatalogView.swift: 展示默认收起、按供应商独立折叠的完整价格目录；支持全部和账本已用模型切换，搜索展开匹配项，标明 compactor 参考估算，在 DeepSeek 表内展示峰谷价格和时段说明。
 RecordsView.swift: 展示筛选后的用量明细；同页重复日期只格式化一次。

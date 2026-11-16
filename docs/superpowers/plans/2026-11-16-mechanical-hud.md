@@ -70,3 +70,9 @@ Full native suite: 40 tests, zero failures (`/tmp/tokenory-hud-placement-tests.l
 MenuBarView now uses a plain clickable row with a leading checkmark for HUD visibility. Corner placement calculates side case margins as bottom case margin × full screen width / height, including the bottom Dock reservation; visibleFrame containment takes precedence for a side Dock or an ideal margin smaller than transparent padding. Center positions stay unchanged. Full native suite passed (40 tests), then focused HUD suite passed (12 tests) after adding portrait/side-Dock coverage. Build-and-run passed; this follow-up was not manually inspected in the menu popover.
 
 Realtime investigation: Config defaults to 60 seconds between completed scans; IPC collects then persists before scanFinished/usageChanged, and UsageStore refreshes the HUD data from those events. Hook or file-watch driven collection is a proposed next step, not implemented here. Hooks can reduce scheduling latency but accuracy and cadence still depend on when each agent publishes usage.
+
+## Follow-up: trailing checkmark, M units and Codex research
+
+Moved the menu-row checkmark after its label. Token drums now show millions with six decimals and a trailing M, retaining exact Int64 animation values and single-token precision; sub-million values get a fixed leading zero drum. Cost remains dollar-prefixed. Focused HUD suite passed (13 tests), including zero, one-token, million carry, large values and unchanged cost formatting. Build-and-run passed; real HUD inspected and captured at `local-data/hud-validation/native-hud-millions.png`. Menu popup placement was not manually inspected.
+
+Codex source and local event-metadata investigation is in `docs/local/codex-realtime-usage.md`; realtime ingestion is a proposal only, with no hook installation or ledger changes.
