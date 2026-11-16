@@ -220,6 +220,7 @@ final class UsageStore {
             await refreshToday()
             if sources != .null { await loadSources() }
             if let query = requestedTurnQuery { await loadAgentTurns(query, force: true) }
+        case "todayUsageChanged": await refreshToday()
         case "usageChanged": await refresh()
         case "pricesUpdated": await loadManagement()
         case "scanFailed": scanning = false; error = event.message

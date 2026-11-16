@@ -20,4 +20,6 @@ pricing.rs: 验证 pricing 的账本接口和行为。
 
 price_catalog.rs: 验证未使用供应商、峰谷与参考规则、订阅价格边界。
 
+codex_live.rs: 真正的 worker 文件监听、打开句柄追加、半行、重复、归档副本与全扫描对账。
+
 [PROTOCOL]: Update this header on change, then check AGENTS.md

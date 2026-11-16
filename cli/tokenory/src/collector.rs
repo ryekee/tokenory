@@ -1,5 +1,5 @@
 // [INPUT]: 读取各客户端日志和当前价格快照。
-// [OUTPUT]: 生成并持久化规范化用量、独立多客户端完成回合与扫描诊断。
+// [OUTPUT]: 全量或变更 Codex 文件增量采集，生成规范化用量、完成回合与诊断。
 // [POS]: 解析器与账本之间的边界；维护稳定记录身份。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -27,6 +27,13 @@ pub struct DiagnosticCache {
     other_turns: crate::turn_analytics::Cache,
 }
 impl DiagnosticCache {
+    pub fn recent_files(&self) -> Vec<PathBuf> {
+        self.files
+            .iter()
+            .filter(|(_, (_, modified, _))| modified.elapsed().unwrap_or_default().as_secs() < 120)
+            .map(|(path, _)| path.clone())
+            .collect()
+    }
     pub fn persistent() -> Self {
         Self {
             persistent: true,
@@ -154,10 +161,42 @@ fn diagnose_file(path: &Path, cache: &mut DiagnosticCache) -> Result<Vec<String>
     Ok(errors)
 }
 pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Result<ScanBatch> {
+    collect(config, cache, CLIENTS, None).await
+}
+
+pub async fn collect_codex_changes(
+    config: &Config,
+    cache: &mut DiagnosticCache,
+    paths: Option<Vec<PathBuf>>,
+) -> Result<ScanBatch> {
+    // Exec captures are superseded by matching rollouts in other files. Keep that
+    // cross-file lookup when a capture changes, or it could be charged twice.
+    let headless = tokens_core::scanner::headless_roots_with_env_strategy(
+        &config.home_dir.to_string_lossy(),
+        false,
+    );
+    let capture_changed = paths.as_ref().is_some_and(|paths| {
+        paths.iter().any(|path| {
+            let path = path.canonicalize().unwrap_or_else(|_| path.clone());
+            headless
+                .iter()
+                .any(|root| path.starts_with(root.canonicalize().unwrap_or_else(|_| root.clone())))
+        })
+    });
+    let paths = if capture_changed { None } else { paths };
+    collect(config, cache, &[tokens_core::ClientId::Codex], paths).await
+}
+
+async fn collect(
+    config: &Config,
+    cache: &mut DiagnosticCache,
+    selected: &[tokens_core::ClientId],
+    paths: Option<Vec<PathBuf>>,
+) -> Result<ScanBatch> {
     config.validate()?;
     let start = Instant::now();
     let started_at = chrono::Utc::now().to_rfc3339();
-    let clients: Vec<_> = CLIENTS.iter().map(|c| c.as_str().to_string()).collect();
+    let clients: Vec<_> = selected.iter().map(|c| c.as_str().to_string()).collect();
     let options = tokens_core::LocalParseOptions {
         home_dir: Some(config.home_dir.to_string_lossy().into_owned()),
         use_env_roots: false,
@@ -170,6 +209,11 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
         ..Default::default()
     };
     let discover = || {
+        if let Some(paths) = &paths {
+            let mut scan = tokens_core::scanner::ScanResult::default();
+            *scan.get_mut(tokens_core::ClientId::Codex) = paths.clone();
+            return scan;
+        }
         tokens_core::scanner::scan_all_clients_with_scanner_settings(
             &config.home_dir.to_string_lossy(),
             &clients,
@@ -178,7 +222,7 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
         )
     };
     let scan = discover();
-    let mut sources: Vec<_> = CLIENTS
+    let mut sources: Vec<_> = selected
         .iter()
         .map(|c| diagnose(config, *c, &source_paths(&scan, *c), cache))
         .collect();
@@ -195,6 +239,9 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
     }
     let mut open_code_sqlite_ids = HashSet::new();
     for &client in crate::turn_analytics::COLLECTED_CLIENTS {
+        if !selected.contains(&client) {
+            continue;
+        }
         for path in source_paths(&scan, client) {
             if client == tokens_core::ClientId::OpenCode
                 && !matches!(
@@ -241,7 +288,9 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
     }
     let mut records = Vec::new();
     {
-        let mut messages = if cache.persistent {
+        let mut messages = if let Some(paths) = &paths {
+            tokens_core::parse_changed_codex_files(options.clone(), paths.clone(), cache.persistent)
+        } else if cache.persistent {
             tokens_core::parse_local_unified_messages_with_pricing(options.clone(), None).await
         } else {
             tokens_core::parse_local_unified_messages_with_pricing_uncached(options.clone(), None)
@@ -362,7 +411,7 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
         // Logs can change while the parser is working. Recheck changed files
         // before accepting a cumulative source snapshot.
         let after_scan = discover();
-        for (source, client) in sources.iter_mut().zip(CLIENTS) {
+        for (source, client) in sources.iter_mut().zip(selected) {
             let after = diagnose(config, *client, &source_paths(&after_scan, *client), cache);
             if after.status == "partial" {
                 source.status = after.status;

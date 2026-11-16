@@ -983,11 +983,13 @@ fn parse_all_messages_with_pricing_with_cache_policy(
         use_env_roots,
         scanner_settings,
         cache_policy,
+        None,
         &mut messages,
     );
     messages
 }
 
+#[allow(clippy::too_many_arguments)]
 fn parse_all_messages_streaming<S: MessageSink>(
     home_dir: &str,
     clients: &[String],
@@ -995,6 +997,7 @@ fn parse_all_messages_streaming<S: MessageSink>(
     use_env_roots: bool,
     scanner_settings: &scanner::ScannerSettings,
     cache_policy: SourceCachePolicy,
+    explicit_scan: Option<scanner::ScanResult>,
     sink: &mut S,
 ) {
     #[derive(Debug)]
@@ -1950,12 +1953,9 @@ fn parse_all_messages_streaming<S: MessageSink>(
         unreachable!("uncached Codex sources return before fingerprint validation")
     }
 
-    let scan_result = scanner::scan_all_clients_with_scanner_settings(
-        home_dir,
-        clients,
-        use_env_roots,
-        scanner_settings,
-    );
+    let scan_result = explicit_scan.unwrap_or_else(|| {
+        scanner::scan_all_clients_with_scanner_settings(home_dir, clients, use_env_roots, scanner_settings)
+    });
     let headless_roots = scanner::headless_roots_with_env_strategy(home_dir, use_env_roots);
     // `load` reads no shard: each namespace is deserialized the first time a
     // lane asks for one of its sources, and entries whose file is gone are
@@ -4644,6 +4644,7 @@ fn parse_all_messages_streaming_with_env_strategy<S: MessageSink>(
         use_env_roots,
         scanner_settings,
         SourceCachePolicy::Persistent,
+        None,
         sink,
     );
 }
@@ -6441,6 +6442,25 @@ pub async fn parse_local_unified_messages_with_pricing(
         pricing,
         SourceCachePolicy::Persistent,
     )
+}
+
+/// Parse only changed Codex sources, retaining the normal append cache, attribution and dedup keys.
+/// Callers supply paths already restricted to configured Codex roots.
+pub fn parse_changed_codex_files(
+    options: LocalParseOptions,
+    paths: Vec<PathBuf>,
+    persistent: bool,
+) -> Result<Vec<UnifiedMessage>, String> {
+    let (home_dir, _) = resolve_local_parse_request(&options)?;
+    let mut scan = scanner::ScanResult::default();
+    *scan.get_mut(ClientId::Codex) = paths;
+    let mut messages = Vec::new();
+    parse_all_messages_streaming(
+        &home_dir, &["codex".into()], None, false, &options.scanner_settings,
+        if persistent { SourceCachePolicy::Persistent } else { SourceCachePolicy::InMemory },
+        Some(scan), &mut messages,
+    );
+    Ok(filter_unified_messages(messages, &options))
 }
 
 /// Parse local messages without reading or writing the persistent source cache.

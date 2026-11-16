@@ -1,0 +1,236 @@
+use serde_json::{json, Value};
+use std::{
+    fs,
+    io::{BufRead, BufReader, Write},
+    process::{Command, Stdio},
+    sync::mpsc,
+    time::{Duration, Instant},
+};
+use tokenory::{
+    collector::{collect_codex_changes, collect_once, persist, DiagnosticCache},
+    config::Config,
+    db::Database,
+    queries::{report, Filter},
+};
+
+fn header() -> String {
+    format!(
+        "{}\n{}\n",
+        json!({"timestamp":"2026-11-16T01:00:00Z","type":"session_meta","payload":{"id":"live-session","model_provider":"openai"}}),
+        json!({"timestamp":"2026-11-16T01:00:00Z","type":"turn_context","payload":{"model":"gpt-5-codex"}})
+    )
+}
+fn count(total: i64, minute: i32) -> String {
+    json!({"timestamp":format!("2026-11-16T01:{minute:02}:00Z"),"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":total,"output_tokens":0,"cached_input_tokens":0,"reasoning_output_tokens":0,"total_tokens":total}}}}).to_string()+"\n"
+}
+
+#[tokio::test]
+async fn changed_files_preserve_identity_partial_tail_and_confirmed_history() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let dir = home.path().join(".codex/sessions");
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("active.jsonl");
+    fs::write(&path, header() + &count(100, 1)).unwrap();
+    let config = Config {
+        home_dir: home.path().into(),
+        ..Default::default()
+    };
+    let mut cache = DiagnosticCache::default();
+    let mut db = Database::open(data.path()).unwrap();
+    persist(&mut db, collect_once(&config, &mut cache).await.unwrap()).unwrap();
+    let next = count(150, 2);
+    let mut file = fs::OpenOptions::new().append(true).open(&path).unwrap();
+    file.write_all(&next.as_bytes()[..20]).unwrap();
+    persist(
+        &mut db,
+        collect_codex_changes(&config, &mut cache, Some(vec![path.clone()]))
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        report(&mut db, &Filter::default()).unwrap().summary.tokens,
+        100
+    );
+    file.write_all(&next.as_bytes()[20..]).unwrap();
+    let result = persist(
+        &mut db,
+        collect_codex_changes(&config, &mut cache, Some(vec![path.clone()]))
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(result.added, 1);
+    assert_eq!(
+        report(&mut db, &Filter::default()).unwrap().summary.tokens,
+        150
+    );
+    // A copied archive is collected independently: stable event keys still count once.
+    let copy = dir.join("copy.jsonl");
+    fs::copy(&path, &copy).unwrap();
+    persist(
+        &mut db,
+        collect_codex_changes(&config, &mut cache, Some(vec![copy]))
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        report(&mut db, &Filter::default()).unwrap().summary.tokens,
+        150
+    );
+    // Rewriting a file invalidates append state; already confirmed history remains in the ledger.
+    fs::write(&path, header() + &count(100, 1)).unwrap();
+    persist(
+        &mut db,
+        collect_codex_changes(&config, &mut cache, Some(vec![path]))
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        report(&mut db, &Filter::default()).unwrap().summary.tokens,
+        150
+    );
+}
+
+#[test]
+fn worker_watches_new_roots_and_appends_without_waiting_for_periodic_scan() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    Config {
+        home_dir: home.path().into(),
+        interval_seconds: 86400,
+        ..Default::default()
+    }
+    .save(data.path())
+    .unwrap();
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("tokenory"))
+        .args([
+            "--data-dir",
+            data.path().to_str().unwrap(),
+            "worker",
+            "--stdio",
+        ])
+        .env("XDG_CACHE_HOME", data.path().join("cache"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    let output = child.stdout.take().unwrap();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(output).lines() {
+            if tx
+                .send(serde_json::from_str::<Value>(&line.unwrap()).unwrap())
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+    let wait_for = |field: &str, value: &str| -> Value {
+        let deadline = Instant::now() + Duration::from_secs(12);
+        loop {
+            let message = rx
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .unwrap_or_else(|error| panic!("waiting for {field}={value}: {error}"));
+            if message[field] == value {
+                return message;
+            }
+        }
+    };
+    wait_for("event", "scanFinished");
+    let dir = home.path().join(".codex/sessions/new/day");
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("active.jsonl");
+    let start = Instant::now();
+    fs::write(&path, header() + &count(100, 1)).unwrap();
+    wait_for("event", "todayUsageChanged");
+    eprintln!("new Codex root visible in {:?}", start.elapsed());
+    let report = |input: &mut std::process::ChildStdin, id: &str| -> i64 {
+        writeln!(
+            input,
+            "{}",
+            json!({"version":1,"id":id,"operation":"overview","payload":{}})
+        )
+        .unwrap();
+        input.flush().unwrap();
+        wait_for("id", id)["result"]["summary"]["tokens"]
+            .as_i64()
+            .unwrap()
+    };
+    assert_eq!(report(&mut input, "first"), 100);
+    let next = count(150, 2);
+    let mut file = fs::OpenOptions::new().append(true).open(&path).unwrap();
+    file.write_all(&next.as_bytes()[..20]).unwrap();
+    file.flush().unwrap();
+    std::thread::sleep(Duration::from_millis(1400));
+    assert_eq!(report(&mut input, "partial"), 100);
+    let start = Instant::now();
+    file.write_all(&next.as_bytes()[20..]).unwrap();
+    file.flush().unwrap();
+    wait_for("event", "todayUsageChanged");
+    eprintln!("Codex append visible in {:?}", start.elapsed());
+    assert_eq!(report(&mut input, "completed"), 150);
+    // Replayed cumulative usage must not be charged twice, including after a full reconciliation.
+    file.write_all(next.as_bytes()).unwrap();
+    file.flush().unwrap();
+    std::thread::sleep(Duration::from_millis(1400));
+    assert_eq!(report(&mut input, "duplicate"), 150);
+    writeln!(
+        input,
+        "{}",
+        json!({"version":1,"id":"scan","operation":"scan"})
+    )
+    .unwrap();
+    input.flush().unwrap();
+    wait_for("event", "scanFinished");
+    assert_eq!(report(&mut input, "reconciled"), 150);
+    drop(input);
+    assert!(child.wait().unwrap().success());
+}
+
+#[tokio::test]
+async fn changed_headless_capture_does_not_duplicate_existing_rollout() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let thread = "01a0b007-2e53-70a0-8b1f-04212dd8dd11";
+    let sessions = home.path().join(".codex/sessions");
+    let captures = home.path().join(".config/tokens/headless/codex");
+    fs::create_dir_all(&sessions).unwrap();
+    fs::create_dir_all(&captures).unwrap();
+    let rollout = sessions.join(format!("rollout-2026-11-16T01-00-00-{thread}.jsonl"));
+    fs::write(rollout, format!("{}\n{}\n{}",
+        json!({"timestamp":"2026-11-16T01:00:00Z","type":"session_meta","payload":{"id":thread,"source":"exec","originator":"codex_exec"}}),
+        json!({"timestamp":"2026-11-16T01:00:00Z","type":"turn_context","payload":{"model":"gpt-5-codex"}}),count(100,1))).unwrap();
+    let capture = captures.join("exec.jsonl");
+    fs::write(&capture, format!("{}\n{}\n{}\n",
+        json!({"type":"thread.started","thread_id":thread}),json!({"type":"turn.started"}),
+        json!({"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":0}}))).unwrap();
+    let config = Config {
+        home_dir: home.path().into(),
+        ..Default::default()
+    };
+    let mut cache = DiagnosticCache::default();
+    let mut db = Database::open(data.path()).unwrap();
+    persist(&mut db, collect_once(&config, &mut cache).await.unwrap()).unwrap();
+    assert_eq!(
+        report(&mut db, &Filter::default()).unwrap().summary.tokens,
+        100
+    );
+    persist(
+        &mut db,
+        collect_codex_changes(&config, &mut cache, Some(vec![capture]))
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        report(&mut db, &Filter::default()).unwrap().summary.tokens,
+        100
+    );
+}
