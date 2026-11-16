@@ -56,6 +56,7 @@ struct EngineError: Decodable, Error, LocalizedError, Sendable {
 struct EngineRequest: Encodable { let version = 1; let id: String; let operation: String; let payload: JSONValue }
 struct UsageFilter: Codable, Sendable, Equatable {
     var from: String?; var to: String?; var client: String?; var provider: String?; var model: String?; var source: String?
+    var timestampFromMs: Int64? = nil; var timestampToMs: Int64? = nil
     var offset = 0; var limit = 50
 }
 struct TokenBreakdown: Codable, Sendable { let input: Int64; let output: Int64; let cacheRead: Int64; let cacheWrite: Int64; let reasoning: Int64 }

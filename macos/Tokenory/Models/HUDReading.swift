@@ -1,8 +1,29 @@
 // [INPUT]: Today's all-agent summary and selected display metric.
-// [OUTPUT]: Exact drum targets, approved braking curve and velocity-continuous retargeting.
+// [OUTPUT]: Device-local day windows, exact drum targets, approved braking curve and velocity-continuous retargeting.
 // [POS]: Pure HUD presentation and motion model; tokens remain exact integers; costs use display-only cents.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
+
+struct LocalUsageDay {
+    let day: String
+    let timeZone: String
+    let start: Date
+    let end: Date
+    var startMs: Int64 { Int64(start.timeIntervalSince1970 * 1000) }
+    var endMs: Int64 { Int64(end.timeIntervalSince1970 * 1000) }
+
+    init(now: Date, timeZone: TimeZone = .autoupdatingCurrent) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        start = calendar.startOfDay(for: now)
+        end = calendar.date(byAdding: .day, value: 1, to: start)!
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone; formatter.dateFormat = "yyyy-MM-dd"
+        day = formatter.string(from: now)
+        self.timeZone = timeZone.identifier
+    }
+}
 
 enum HUDMetric: String, CaseIterable { case tokens, cost }
 

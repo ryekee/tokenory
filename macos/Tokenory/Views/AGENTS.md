@@ -10,7 +10,7 @@ PriceCatalogView.swift: 展示默认收起、按供应商独立折叠的完整�
 RecordsView.swift: 展示筛选后的用量明细；同页重复日期只格式化一次。
 SettingsView.swift: 配置通用、HUD、采集、价格和数据维护。
 MechanicalHUDView.swift: 原生橙色机械计数器按原型 50% 显示（220×92 pt 窗口），音效弹窗保持正常尺寸；文本片段/费用图标、渐停数字轮；复用当日汇总，跨日与唤醒刷新。
-HUDSettingsView.swift: 六种位置的 2 × 3 选择器； HUD 显隐、指标和独立音效开关、音量、试听；音效控件供 HUD 弹窗复用。
+HUDSettingsView.swift: 六种位置的 2 × 3 选择器； HUD 显隐、指标和独立音效开关、音量；音效控件供 HUD 弹窗复用。
 UsageDatePicker.swift: 选择统计日期范围。
 UsageFiltersView.swift: 选择工具、提供方和模型。
 UsageTrendChart.swift: 绘制 Tokens 柱状与费用折线的双轴日/小时趋势。

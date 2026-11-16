@@ -9,6 +9,8 @@ struct TurnQuery: Codable, Hashable, Sendable {
     var to: String?
     var model: String?
     var client: String? = nil
+    var timestampFromMs: Int64? = nil
+    var timestampToMs: Int64? = nil
 }
 
 struct TurnCapability: Decodable, Sendable {

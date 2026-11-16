@@ -13,7 +13,6 @@ final class HUDSound {
     @ObservationIgnored private var player: AVAudioPlayerNode?
     @ObservationIgnored private var buffer: AVAudioPCMBuffer?
     @ObservationIgnored private var lastClick: TimeInterval = 0
-    @ObservationIgnored private var previewTask: Task<Void, Never>?
 
     func update(preferences: HUDPreferences) {
         player?.volume = Float(preferences.volume)
@@ -54,20 +53,7 @@ final class HUDSound {
         }
     }
 
-    func preview(preferences: HUDPreferences) {
-        stop()
-        previewTask = Task { [weak self] in
-            for interval in [180, 160, 130, 100, 80, 70, 70, 80, 100, 130, 160, 180] {
-                guard !Task.isCancelled else { return }
-                self?.tick(preferences: preferences)
-                do { try await Task.sleep(for: .milliseconds(interval)) } catch { return }
-            }
-            self?.stop()
-        }
-    }
-
     func stop() {
-        previewTask?.cancel(); previewTask = nil
         player?.stop(); engine?.stop()
     }
 }

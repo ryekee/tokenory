@@ -44,12 +44,9 @@ struct HUDSettingsView: View {
                             }
                         }
                     }
-                    Text(L("hud.today_help")).font(.callout).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             WorkspacePanel { HUDAudioControls().environment(preferences) }
-            Text(L("hud.drag_help")).font(.callout).foregroundStyle(.secondary)
         }
     }
 }
@@ -70,8 +67,6 @@ struct HUDAudioControls: View {
                 Text(preferences.volume.formatted(.percent.precision(.fractionLength(0))))
                     .monospacedDigit().foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
             }
-            Button(L("hud.preview_sound")) { sound.preview(preferences: preferences) }
-                .disabled(!preferences.soundEnabled || preferences.volume == 0)
             if let error = sound.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
         }
         .onChange(of: preferences.soundEnabled) { _, _ in sound.update(preferences: preferences) }
