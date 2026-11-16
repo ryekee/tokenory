@@ -94,3 +94,7 @@ HUD and menu-bar Today now query exact device-local timestamp bounds instead of 
 Rust full suite and 44 native tests passed, including LA/Tokyo date divergence, New York DST, local-day event/cost selection across stored dates, half-open midnight bounds and unchanged historical queries.
 
 Final verification: 92 Rust tests and 44 native tests passed. Rebuilt and launched; Chinese HUD Settings visually confirmed without either footer or the preview button. Screenshot: `local-data/hud-validation/hud-settings-clean.png`.
+
+## Follow-up: direct sound toggle
+
+Removed the HUD context menu. The speaker button directly toggles the shared sound preference and updates audio immediately; its icon, pressed state and accessible action follow the current state. Volume remains in Settings. Build-and-run passed. In the running HUD, clicked sound on and off, confirmed no popover, and right-clicked the readout with no menu or visibility change.

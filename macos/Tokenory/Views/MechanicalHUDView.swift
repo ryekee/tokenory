@@ -13,7 +13,6 @@ struct MechanicalHUDView: View {
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
     @State private var dayClock = 0
     @State private var animator = HUDAnimator()
-    @State private var showAudio = false
 
     private var reading: HUDReading {
         HUDReading(day: (store.todayDay ?? LocalUsageDay(now: Date()).day) + ":" + (store.todayTimeZone ?? TimeZone.autoupdatingCurrent.identifier), metric: preferences.metric,
@@ -47,15 +46,13 @@ struct MechanicalHUDView: View {
                 HStack(spacing: 3) {
                     ForEach(0..<13) { _ in Capsule().fill(Color(red: 0.62, green: 0.30, blue: 0.10).opacity(0.5)).frame(width: 2, height: 7) }
                 }.shadow(color: .white.opacity(0.25), radius: 0, y: 1).accessibilityHidden(true)
-                Button { showAudio.toggle() } label: {
+                Button { preferences.soundEnabled.toggle(); HUDSound.shared.update(preferences: preferences) } label: {
                     Image(systemName: preferences.soundEnabled ? "speaker.wave.2" : "speaker.slash").font(.system(size: 13))
                 }
-                .buttonStyle(HUDMechanicalButton(selected: showAudio, round: true))
-                .accessibilityLabel(L("hud.sound_settings")).help(L("hud.sound_settings"))
-                .popover(isPresented: $showAudio) {
-                    HUDAudioControls().environment(preferences).padding(18).frame(width: 290)
-                        .environment(\.locale, Localization.locale)
-                }
+                .buttonStyle(HUDMechanicalButton(selected: preferences.soundEnabled, round: true))
+                .accessibilityLabel(L(preferences.soundEnabled ? "hud.mute" : "hud.unmute"))
+                .help(L(preferences.soundEnabled ? "hud.mute" : "hud.unmute"))
+                .accessibilityAddTraits(preferences.soundEnabled ? .isSelected : [])
             }.padding(.horizontal, 6)
         }
         .padding(.horizontal, 18).padding(.top, 17).padding(.bottom, 12)
@@ -67,9 +64,6 @@ struct MechanicalHUDView: View {
         .scaleEffect(0.5)
         .frame(width: Self.windowSize.width, height: Self.windowSize.height)
         .environment(\.locale, Locale(identifier: language == AppLanguage.system.rawValue ? Localization.identifier : language))
-        .contextMenu {
-            Button(L("hud.hide")) { preferences.enabled = false }
-        }
         .onChange(of: reading, initial: true) { _, next in animator.receive(next, animated: !reduceMotion) }
         .onChange(of: reduceMotion) { _, enabled in if enabled { animator.settle(); HUDSound.shared.stop() } }
         .task(id: animator.generation) {
