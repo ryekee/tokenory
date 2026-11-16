@@ -1,5 +1,5 @@
 // [INPUT]: Shared, persisted HUD preferences and local audio service.
-// [OUTPUT]: Visibility, display metric and independent sound controls.
+// [OUTPUT]: Visibility, six screen positions, display metric and independent sound controls.
 // [POS]: Settings section and the floating counter's audio popover.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -21,6 +21,28 @@ struct HUDSettingsView: View {
                             Text(L("usage.tokens")).tag(HUDMetric.tokens)
                             Text(L("hud.cost")).tag(HUDMetric.cost)
                         }.pickerStyle(.segmented).labelsHidden().frame(width: 200)
+                    }
+                    HStack(alignment: .top) {
+                        Text(L("hud.position")); Spacer()
+                        Grid(horizontalSpacing: 6, verticalSpacing: 6) {
+                            ForEach(0..<2) { row in
+                                GridRow {
+                                    ForEach(0..<3) { column in
+                                        let placement = HUDPlacement.allCases[row * 3 + column]
+                                        Button { preferences.placement = placement } label: {
+                                            Text(placement.label).frame(width: 82, height: 28)
+                                                .background(preferences.placement == placement ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                                                .overlay {
+                                                    RoundedRectangle(cornerRadius: 6)
+                                                        .strokeBorder(preferences.placement == placement ? Color.accentColor : .clear, lineWidth: 1.5)
+                                                }
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityAddTraits(preferences.placement == placement ? .isSelected : [])
+                                    }
+                                }
+                            }
+                        }
                     }
                     Text(L("hud.today_help")).font(.callout).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)

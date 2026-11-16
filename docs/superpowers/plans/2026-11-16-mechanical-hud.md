@@ -58,3 +58,9 @@
 User requested new totals extend the active roll. Replaced the pending-next-roll queue with per-drum paths that preserve sampled position/velocity and the existing animation clock. Unchanged drums keep their original trajectory; updated drums use monotone Hermite braking with bounded remaining revolutions. Sound follows actual digit-boundary crossings.
 
 Regression tests first failed on delayed reading updates and the second-roll reset. Updated tests pass for unchanged generation, exact position continuity, finite-difference velocity continuity, carry into a new digit, monotone travel, 30 rapid increments without a backlog or phantom clicks, and exact final values. Full native suite: 39 tests, zero failures (`/tmp/tokenory-hud-retarget-suite.log`). The retained website prototype remains intact.
+
+## Follow-up: compact dimensions and edge placement
+
+Scaled the native HUD to 50% on each axis (220 × 92 pt window, 210 × 82 pt case). Settings now offers six persisted positions in a 2 × 3 grid. Placement uses the current display's visibleFrame, keeping the case 5 pt inside the menu bar/Dock-safe area. Display changes and reopening reapply the selected position; dragging remains available within the session.
+
+Full native suite: 40 tests, zero failures (`/tmp/tokenory-hud-placement-tests.log`), including all six coordinates on an offset display, preference persistence and live panel relocation. Build-and-run passed. Actual Chinese/dark Settings verified selection highlighting and switching top-center/bottom-right; the compact HUD and normal-size audio popover were inspected. Evidence: `local-data/hud-validation/placement-settings.png`, `native-hud-compact.png`. English/light placement layout and physical multi-display/Dock changes were not manually exercised. The website prototype remains intact.

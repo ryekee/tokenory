@@ -1,11 +1,12 @@
 // [INPUT]: Today's real ledger summary, persisted HUD preferences, accessibility settings.
-// [OUTPUT]: Approved orange mechanical counter with synchronized rolling and sound.
+// [OUTPUT]: Half-size orange mechanical counter with synchronized rolling and sound.
 // [POS]: Floating panel content; no dashboard filters or simulated increments.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
 import SwiftUI
 
 struct MechanicalHUDView: View {
+    static let windowSize = CGSize(width: 220, height: 92)
     @Environment(UsageStore.self) private var store
     @Environment(HUDPreferences.self) private var preferences
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -62,6 +63,8 @@ struct MechanicalHUDView: View {
         .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color(red: 0.66, green: 0.33, blue: 0.12), lineWidth: 1))
         .overlay(RoundedRectangle(cornerRadius: 27).inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.65), .clear, .black.opacity(0.20)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2))
         .padding(10)
+        .scaleEffect(0.5)
+        .frame(width: Self.windowSize.width, height: Self.windowSize.height)
         .environment(\.locale, Locale(identifier: language == AppLanguage.system.rawValue ? Localization.identifier : language))
         .contextMenu {
             Button(L("hud.hide")) { preferences.enabled = false }
