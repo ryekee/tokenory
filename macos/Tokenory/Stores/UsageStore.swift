@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 发布界面使用的统计、按需加载的 多 agent 回合、价格和采集状态。
+// [OUTPUT]: 发布统计、独立当日用量及其日期/错误、回合、价格和采集状态。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -16,10 +16,11 @@ final class UsageStore {
     let engine: EngineClient
     let dataDirectory: URL
     var today: UsageReport?
+    private(set) var todayUsageError: String?
     var todayTurns: TurnPresentation?
     var todaySpeedError: String?
     private var todayGeneration = 0
-    private var todayDay: String?
+    private(set) var todayDay: String?
     var report: UsageReport?
     var reportFilter: UsageFilter?
     var activity: ActivityReport?
@@ -140,7 +141,7 @@ final class UsageStore {
     private func beginTodayRefresh(day: String) -> Int {
         todayGeneration += 1
         if todayDay != day {
-            today = nil; todayTurns = nil; todaySpeedError = nil
+            today = nil; todayTurns = nil; todaySpeedError = nil; todayUsageError = nil
             todayDay = day
         }
         return todayGeneration
@@ -150,8 +151,10 @@ final class UsageStore {
         async let turns = engine.request("turnAnalytics", payload: .encode(TurnQuery(from: day, to: day)))
         do {
             let data = try await usage.decode(UsageReport.self)
-            if generation == todayGeneration { today = data }
-        } catch { if generation == todayGeneration { fail(error) } }
+            if generation == todayGeneration { today = data; todayUsageError = nil }
+        } catch {
+            if generation == todayGeneration { todayUsageError = error.localizedDescription; fail(error) }
+        }
         do {
             let data = TurnPresentation(report: try await turns.decode(TurnReport.self))
             guard generation == todayGeneration else { return }

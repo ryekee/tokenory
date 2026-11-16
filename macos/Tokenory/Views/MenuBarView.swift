@@ -1,5 +1,5 @@
 // [INPUT]: Today-only usage and weighted turn speed, independent of dashboard filters.
-// [OUTPUT]: Compact Tokens / cost / speed menu summary and source usage.
+// [OUTPUT]: Compact Tokens / cost / speed summary, source usage and HUD visibility.
 // [POS]: Menu bar popover; missing speed remains unavailable.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -9,6 +9,7 @@ import SwiftUI
 struct MenuBarView: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.openWindow) private var openWindow
+    @State private var hud = HUDPreferences.shared
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack { Text(L("range.today")).font(.headline); Spacer(); Text("Tokenory").font(.caption).foregroundStyle(.secondary) }
@@ -30,6 +31,7 @@ struct MenuBarView: View {
                     .buttonStyle(.plain).disabled(store.scanning).help(store.connected ? L("action.scan") : L("action.reconnect"))
             }
             if !store.connected, let error = store.error { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(3) }
+            Toggle(L("hud.show"), isOn: $hud.enabled).toggleStyle(.switch).controlSize(.small)
             HStack {
                 Button(L("action.open_stats")) { Logger(subsystem: "ee.ryek.tokenory", category: "windows").info("Opening dashboard"); openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }.keyboardShortcut("o")
                 Spacer()

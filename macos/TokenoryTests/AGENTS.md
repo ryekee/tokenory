@@ -3,6 +3,7 @@
 
 BrandPresentationTests.swift: 验证品牌映射、模板资源及金额格式。
 EngineClientTests.swift: 验证引擎协议客户端和分块大目录解析。
+HUDTests.swift: 验证整数与金额读数、未知/部分价格、进位和渐停、跨日/切换/减少动态效果、更新合并、设置持久化及字体/双语资源。
 LocalizationTests.swift: 验证本地化资源。
 UsageActivityTests.swift: 验证日历、按工具区分模型、移动平均及未知费用。
 PresentationDataTests.swift: 验证统计展示数据。

@@ -5,9 +5,16 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard ProcessInfo.processInfo.environment["TOKENORY_TESTING"] != "1" else { return }
+        #if DEBUG
+        // Inspect light/dark native surfaces without changing the user's system appearance.
+        if ProcessInfo.processInfo.arguments.contains("--light-appearance") {
+            NSApp.appearance = NSAppearance(named: .aqua)
+        }
+        #endif
         NotificationCenter.default.addObserver(self, selector: #selector(workspaceOpened(_:)), name: NSWindow.didBecomeMainNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(workspaceClosed(_:)), name: NSWindow.willCloseNotification, object: nil)
         UsageStore.shared.start()
+        HUDController.shared.start()
         UpdateChecker.shared.start()
     }
     @objc private func workspaceOpened(_ notification: Notification) {
@@ -32,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        HUDController.shared.stop()
         Task { await UsageStore.shared.engine.stop(); NSApp.reply(toApplicationShouldTerminate: true) }
         return .terminateLater
     }

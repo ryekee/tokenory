@@ -1,5 +1,5 @@
 // [INPUT]: 接收用量存储、更新服务及系统登录项状态。
-// [OUTPUT]: 提供通用、价格、采集和数据设置界面。
+// [OUTPUT]: 提供通用、HUD、价格、采集和数据设置界面。
 // [POS]: 设置窗口入口；价格目录交给 PriceCatalogView 展示。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -7,11 +7,12 @@ import SwiftUI
 import ServiceManagement
 
 private enum SettingsSection: String, CaseIterable {
-    case general, prices, collection, data
+    case general, hud, prices, collection, data
     var title: String { L("settings." + rawValue) }
     var icon: String {
         switch self {
         case .general: "gearshape"
+        case .hud: "rectangle.on.rectangle"
         case .prices: "dollarsign.circle"
         case .collection: "arrow.triangle.2.circlepath"
         case .data: "externaldrive"
@@ -49,6 +50,7 @@ struct SettingsView: View {
                         ErrorBanner()
                         switch tab {
                         case .general: generalSettings
+                        case .hud: HUDSettingsView()
                         case .prices: priceSettings
                         case .collection: collectionSettings
                         case .data: dataSettings

@@ -11,9 +11,11 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 - `script/`：构建、资源生成、签名和发布入口。
 - `DESIGN.md`：UI/UX 设计规范与验收清单。
 - `docs/design/`：文案审阅和历史设计记录。
+- `docs/prototypes/mechanical-hud/`：已确认的独立网页原型，保留供未来官网使用。
 - `docs/local/`：计价口径、数据来源和维护说明。
 - `web/`、`packages/`、`scripts/`、`deploy/`：保留的上游 Web、包及部署工具。
 - `local-data/`：本地开发数据。
+- 原生 HUD：`Views/MechanicalHUDView.swift`、`Services/HUDController.swift`；数据口径与音效见 `docs/local/mechanical-hud.md`。
 
 ## 入口和约束
 - `macos/project.yml`：XcodeGen 项目源。不要手改生成的 Xcode 项目。
