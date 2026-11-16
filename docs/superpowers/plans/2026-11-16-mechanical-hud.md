@@ -52,3 +52,9 @@
 - Restored Chinese, system appearance, HUD visible, sound off and volume 35%. Local screenshot evidence: `local-data/hud-validation/`.
 - Approved HTML and SIL font license retained in tracked `docs/prototypes/mechanical-hud/` for future website reuse.
 - Scope decision: native SwiftUI/AppKit implementation and standalone demo remain separate. No Rust/ledger schema changes. Work stays on `codex/mechanical-hud`; unrelated earlier plan is untouched.
+
+## Follow-up: continuous in-flight increments
+
+User requested new totals extend the active roll. Replaced the pending-next-roll queue with per-drum paths that preserve sampled position/velocity and the existing animation clock. Unchanged drums keep their original trajectory; updated drums use monotone Hermite braking with bounded remaining revolutions. Sound follows actual digit-boundary crossings.
+
+Regression tests first failed on delayed reading updates and the second-roll reset. Updated tests pass for unchanged generation, exact position continuity, finite-difference velocity continuity, carry into a new digit, monotone travel, 30 rapid increments without a backlog or phantom clicks, and exact final values. Full native suite: 39 tests, zero failures (`/tmp/tokenory-hud-retarget-suite.log`). The retained website prototype remains intact.

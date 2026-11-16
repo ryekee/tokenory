@@ -49,15 +49,21 @@ final class HUDTests: XCTestCase {
         model.receive(reading(1, day: "2026-11-17", metric: .cost), animated: true)
         XCTAssertFalse(model.isRolling)
     }
-    func testUpdatesCoalesceAndHideStopsWork() {
+    func testUpdatesExtendCurrentRollWithoutRestartAndHideStopsWork() {
         let model = HUDAnimator()
         model.receive(reading(100), animated: true)
         model.receive(reading(110), animated: true)
+        model.advance(elapsed: 1)
+        let positions = model.positions
+        let generation = model.generation
         model.receive(reading(130), animated: true)
         model.receive(reading(150), animated: true)
-        model.advance(elapsed: 5)
+        XCTAssertEqual(model.reading?.value, 150)
+        XCTAssertEqual(model.positions, positions)
+        XCTAssertEqual(model.generation, generation)
+        model.advance(elapsed: 4.3)
         XCTAssertTrue(model.isRolling)
-        model.advance(elapsed: 5)
+        model.advance(elapsed: 6)
         XCTAssertFalse(model.isRolling)
         XCTAssertEqual(model.reading?.value, 150)
         model.receive(reading(200), animated: true)
@@ -65,6 +71,51 @@ final class HUDTests: XCTestCase {
         XCTAssertFalse(model.isRolling)
         XCTAssertEqual(model.reading?.value, 200)
         XCTAssertEqual(model.positions.map { Int($0) % 10 }, [0, 0, 0, 2, 0, 0])
+    }
+    func testMidRollUpdatePreservesVelocityAndNewDigitCarry() {
+        let model = HUDAnimator()
+        model.receive(reading(999_900), animated: true)
+        model.receive(reading(999_999), animated: true)
+        model.advance(elapsed: 1.4999)
+        let before = model.positions
+        model.advance(elapsed: 1.5)
+        let atUpdate = model.positions
+        model.receive(reading(1_000_017), animated: true)
+        XCTAssertEqual(Array(model.positions.suffix(6)), atUpdate)
+        model.advance(elapsed: 1.5001)
+        let after = Array(model.positions.suffix(6))
+        for index in before.indices {
+            XCTAssertEqual((after[index] - atUpdate[index]) / 0.0001,
+                           (atUpdate[index] - before[index]) / 0.0001, accuracy: 0.02)
+        }
+        var previous = model.positions
+        for step in 151...700 {
+            model.advance(elapsed: Double(step) / 100)
+            for (old, new) in zip(previous, model.positions) { XCTAssertGreaterThanOrEqual(new + 1e-10, old) }
+            previous = model.positions
+        }
+        XCTAssertFalse(model.isRolling)
+        XCTAssertEqual(model.positions.map { Int($0) % 10 }, [1, 0, 0, 0, 0, 1, 7])
+    }
+    func testFrequentIncrementsDoNotQueueExtraRollsOrPhantomClicks() {
+        let model = HUDAnimator()
+        model.receive(reading(100), animated: true)
+        model.receive(reading(200), animated: true)
+        let generation = model.generation
+        for update in 1...30 {
+            let time = Double(update) / 10
+            model.advance(elapsed: time)
+            let positions = model.positions
+            model.receive(reading(200 + Int64(update) * 8400), animated: true)
+            XCTAssertEqual(model.positions, positions)
+            XCTAssertEqual(model.generation, generation)
+            XCTAssertFalse(model.advance(elapsed: time))
+            XCTAssertTrue(model.positions.allSatisfy(\.isFinite))
+        }
+        model.advance(elapsed: 7.3)
+        XCTAssertFalse(model.isRolling)
+        XCTAssertEqual(model.positions.map { Int($0) % 10 }, [2, 5, 2, 2, 0, 0])
+        XCTAssertEqual(model.reading?.value, 252_200)
     }
     func testPreferencesPersistAndValidateStoredValues() {
         let name = "Tokenory-HUD-tests-\(UUID())"

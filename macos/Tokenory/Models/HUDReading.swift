@@ -1,5 +1,5 @@
 // [INPUT]: Today's all-agent summary and selected display metric.
-// [OUTPUT]: Exact integer drum targets and the approved braking curve.
+// [OUTPUT]: Exact drum targets, approved braking curve and velocity-continuous retargeting.
 // [POS]: Pure HUD presentation and motion model; amounts are display-only cents.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -36,7 +36,6 @@ struct HUDRoll {
     let starts: [Double]
     let travel: [Double]
     var duration: TimeInterval { 4.2 }
-    var maxTravel: Double { travel.max() ?? 0 }
 
     init(from: Int64, to: Int64) {
         let count = max(6, String(max(from, to)).count)
@@ -64,5 +63,44 @@ struct HUDRoll {
     func positions(at time: Double) -> [Double] {
         let progress = Self.curve(time).progress
         return zip(starts, travel).map { $0 + $1 * progress }
+    }
+}
+
+struct HUDDrumMotion {
+    let start: Double
+    let target: Double
+    let startTime: TimeInterval
+    let duration: TimeInterval
+    let initialSpeed: Double?
+    var endTime: TimeInterval { startTime + duration }
+
+    func sample(at elapsed: TimeInterval) -> (position: Double, speed: Double) {
+        let t = min(1, max(0, (elapsed - startTime) / duration))
+        if t >= 1 { return (target, 0) }
+        let distance = target - start
+        guard let initialSpeed, distance > 0 else {
+            let curve = HUDRoll.curve(t)
+            return (start + distance * curve.progress, distance * curve.speed / duration)
+        }
+        let slope = initialSpeed * duration / distance
+        // Hermite interpolation matches the current velocity and ends at rest.
+        let progress = (slope - 2) * t * t * t + (3 - 2 * slope) * t * t + slope * t
+        let speed = (3 * (slope - 2) * t * t + 2 * (3 - 2 * slope) * t + slope) * distance / duration
+        return (start + distance * progress, speed)
+    }
+
+    func extending(by increment: Double, at elapsed: TimeInterval, duration: TimeInterval) -> HUDDrumMotion {
+        guard increment > 0 else { return self }
+        let current = sample(at: elapsed)
+        var destination = target + increment
+        // Repeated updates must not accumulate a queue of whole revolutions.
+        if destination - current.position > 40 {
+            destination -= floor((destination - current.position - 20) / 10) * 10
+        }
+        let distance = destination - current.position
+        // A normalized initial slope <= 3 keeps the entire path forward and prevents overshoot.
+        let brakingDuration = current.speed > 0 ? min(duration, 3 * distance / current.speed) : duration
+        return HUDDrumMotion(start: current.position, target: destination, startTime: elapsed,
+                             duration: brakingDuration, initialSpeed: current.speed)
     }
 }
