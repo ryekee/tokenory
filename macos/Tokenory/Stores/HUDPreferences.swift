@@ -10,13 +10,17 @@ enum HUDPlacement: String, CaseIterable {
 
     var label: String { L("hud.position." + rawValue) }
 
-    func origin(in bounds: CGRect, size: CGSize) -> CGPoint {
-        // The window already includes 5 pt of transparent padding around the case.
+    func origin(in bounds: CGRect, screenFrame: CGRect, size: CGSize) -> CGPoint {
+        // Match visible case-edge margins as fractions of the full screen dimensions.
+        // The bottom reference includes the Dock and the window's 5 pt transparent padding.
+        let sideMargin = (bounds.minY - screenFrame.minY + 5) * screenFrame.width / screenFrame.height
+        let left = max(bounds.minX, screenFrame.minX + sideMargin - 5)
+        let right = min(bounds.maxX - size.width, screenFrame.maxX - sideMargin + 5 - size.width)
         let x: CGFloat
         switch self {
-        case .topLeft, .bottomLeft: x = bounds.minX
+        case .topLeft, .bottomLeft: x = left
         case .topCenter, .bottomCenter: x = bounds.midX - size.width / 2
-        case .topRight, .bottomRight: x = bounds.maxX - size.width
+        case .topRight, .bottomRight: x = right
         }
         let top = self == .topLeft || self == .topCenter || self == .topRight
         return CGPoint(x: x, y: top ? bounds.maxY - size.height : bounds.minY)

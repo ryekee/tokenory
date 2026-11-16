@@ -104,7 +104,7 @@ final class HUDController {
     private func placeOnScreen() {
         guard let panel, let screen = panel.screen ?? NSScreen.main else { return }
         // visibleFrame excludes the menu bar and the Dock on any edge.
-        panel.setFrameOrigin(preferences.placement.origin(in: screen.visibleFrame, size: panel.frame.size))
+        panel.setFrameOrigin(preferences.placement.origin(in: screen.visibleFrame, screenFrame: screen.frame, size: panel.frame.size))
         appliedPlacement = preferences.placement
     }
 }

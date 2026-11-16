@@ -138,13 +138,26 @@ final class HUDTests: XCTestCase {
         let bounds = CGRect(x: -1440, y: 80, width: 1440, height: 790)
         let size = CGSize(width: 220, height: 92)
         let expected: [CGPoint] = [
-            CGPoint(x: -1440, y: 778), CGPoint(x: -830, y: 778), CGPoint(x: -220, y: 778),
-            CGPoint(x: -1440, y: 80), CGPoint(x: -830, y: 80), CGPoint(x: -220, y: 80)
+            CGPoint(x: -1309, y: 778), CGPoint(x: -830, y: 778), CGPoint(x: -351, y: 778),
+            CGPoint(x: -1309, y: 80), CGPoint(x: -830, y: 80), CGPoint(x: -351, y: 80)
         ]
         for (placement, origin) in zip(HUDPlacement.allCases, expected) {
-            XCTAssertEqual(placement.origin(in: bounds, size: size), origin)
+            XCTAssertEqual(placement.origin(in: bounds, screenFrame: CGRect(x: -1440, y: 0, width: 1440, height: 900), size: size), origin)
             XCTAssertTrue(bounds.contains(CGRect(origin: origin, size: size)))
         }
+    }
+    func testCornerMarginsMatchScreenAspectRatioAndAvoidSideDock() {
+        let screen = CGRect(x: 0, y: 0, width: 900, height: 1600)
+        let visible = CGRect(x: 80, y: 0, width: 820, height: 1570)
+        let size = CGSize(width: 220, height: 92)
+        let left = HUDPlacement.bottomLeft.origin(in: visible, screenFrame: screen, size: size)
+        XCTAssertEqual(left.x, 80)
+        let right = HUDPlacement.bottomRight.origin(in: visible, screenFrame: screen, size: size)
+        XCTAssertEqual(right.x, 680) // Keep the entire panel inside the usable area.
+        let bottomDock = CGRect(x: 0, y: 80, width: 900, height: 1490)
+        let corner = HUDPlacement.bottomRight.origin(in: bottomDock, screenFrame: screen, size: size)
+        XCTAssertEqual((screen.maxX - (corner.x + size.width - 5)) / screen.width,
+                       (corner.y + 5 - screen.minY) / screen.height, accuracy: 0.000001)
     }
     func testReducedMotionUnavailableAndLargestCounterSettleExactly() {
         let model = HUDAnimator()
@@ -182,10 +195,12 @@ final class HUDTests: XCTestCase {
         let panel = try XCTUnwrap(controller.panel)
         let screen = try XCTUnwrap(panel.screen)
         XCTAssertEqual(panel.frame.size, MechanicalHUDView.windowSize)
-        XCTAssertEqual(panel.frame.origin, CGPoint(x: screen.visibleFrame.minX, y: screen.visibleFrame.maxY - panel.frame.height))
+        XCTAssertEqual(panel.frame.maxY, screen.visibleFrame.maxY)
+        XCTAssertGreaterThanOrEqual(panel.frame.minX, screen.visibleFrame.minX)
+        let originalOrigin = panel.frame.origin
         preferences.volume = 0.2
         try await Task.sleep(for: .milliseconds(50))
-        XCTAssertEqual(panel.frame.minX, screen.visibleFrame.minX)
+        XCTAssertEqual(panel.frame.origin, originalOrigin)
         preferences.enabled = false
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertNil(controller.panel?.contentView)

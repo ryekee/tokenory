@@ -5,7 +5,7 @@ Native macOS utility for checking AI usage and USD cost estimates. Preserve the 
 ## Mechanical HUD
 
 - Optional draggable floating counter, enabled in the menu bar or Settings → HUD. It does not take focus or create a Dock workspace entry. Persist the selected placement and keep it on an available screen.
-- HUD 位置在设置页用 2 × 3 布局选择左上／中上／右上／左下／中下／右下；以当前屏幕 visibleFrame 贴边放置，避开菜单栏与 Dock，外壳保留 5 pt 内边距。
+- HUD 位置在设置页用 2 × 3 布局选择左上／中上／右上／左下／中下／右下；以当前屏幕 visibleFrame 贴边放置，避开菜单栏与 Dock，上下外壳保留 5 pt 内边距，四角左右外壳边距按底部边距（含 Dock）乘屏幕宽高比计算，并优先避让侧边 Dock。
 - Render the counter at 50% of the original prototype dimensions: a 210 × 82 pt case inside a 220 × 92 pt window. Preserve full-size native audio popover controls. Restoring position must not restore the old larger dimensions.
 - Follow the approved `docs/prototypes/mechanical-hud/index.html`: orange enamel case, recessed dark drums, blue units digit, no header text, Saira Extra Condensed SemiBold, mechanical text-fragment / coin icon buttons. The speaker opens a compact sound popover.
 - Display all-agent today totals independently of dashboard filters, using Beijing midnight. Tokens remain full integers; USD uses two decimal places. Unavailable cost is —; partially priced cost has ≈ and a hover explanation.
