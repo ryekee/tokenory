@@ -1,6 +1,6 @@
 // [INPUT]: Shared, persisted HUD preferences and local audio service.
 // [OUTPUT]: Visibility, six screen positions, display metric and independent sound controls.
-// [POS]: Settings section and the floating counter's audio popover.
+// [POS]: Settings section and its sound controls.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 

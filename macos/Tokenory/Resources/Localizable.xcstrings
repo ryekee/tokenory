@@ -5367,23 +5367,6 @@
         }
       }
     },
-    "hud.sound_settings": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sound settings"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "音效设置"
-          }
-        }
-      }
-    },
     "hud.today_help": {
       "extractionState": "manual",
       "localizations": {
@@ -5577,6 +5560,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "右下"
+          }
+        }
+      }
+    },
+    "hud.mute": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mute roller sound"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭滚轮音效"
+          }
+        }
+      }
+    },
+    "hud.unmute": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable roller sound"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启滚轮音效"
           }
         }
       }
