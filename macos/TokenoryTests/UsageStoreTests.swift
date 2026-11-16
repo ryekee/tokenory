@@ -209,6 +209,11 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(store.today?.summary.tokens, 200)
         XCTAssertEqual(store.todayTurns?.averageSpeed, 200)
         await engine.stop()
+        XCTAssertEqual(store.todayDay, "2026-11-15")
+        XCTAssertNil(store.todayUsageError)
+        await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-14T16:02:00Z")!)
+        XCTAssertNotNil(store.todayUsageError)
+        XCTAssertEqual(store.todayDay, "2026-11-15")
         try FileManager.default.removeItem(at: root)
     }
 

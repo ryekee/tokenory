@@ -8,7 +8,9 @@ MenuBarView.swift: 展示今日 Tokens、费用、加权速度及来源用量，
 OverviewView.swift: 展示紧凑摘要、Token 构成和由组顶部共用分段控件切换 Tokens/费用的工具与模型排行。
 PriceCatalogView.swift: 展示默认收起、按供应商独立折叠的完整价格目录；支持全部和账本已用模型切换，搜索展开匹配项，标明 compactor 参考估算，在 DeepSeek 表内展示峰谷价格和时段说明。
 RecordsView.swift: 展示筛选后的用量明细；同页重复日期只格式化一次。
-SettingsView.swift: 配置采集、价格和数据维护。
+SettingsView.swift: 配置通用、HUD、采集、价格和数据维护。
+MechanicalHUDView.swift: 原生橙色机械计数器、文本片段/费用图标、渐停数字轮及音效弹窗；复用当日汇总，跨日与唤醒刷新。
+HUDSettingsView.swift: HUD 显隐、指标和独立音效开关、音量、试听；音效控件供 HUD 弹窗复用。
 UsageDatePicker.swift: 选择统计日期范围。
 UsageFiltersView.swift: 选择工具、提供方和模型。
 UsageTrendChart.swift: 绘制 Tokens 柱状与费用折线的双轴日/小时趋势。

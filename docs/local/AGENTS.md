@@ -9,6 +9,7 @@ history-verification.md: CC Switch 历史导入验证。
 implementation-decisions.md: 实施决策与审查。
 migration.md: 历史迁移对账。
 operations.md: 使用与维护。
+mechanical-hud.md: HUD 启用、当日累计口径、滚轮音效、窗口行为及官网原型保留位置。
 pricing.md: 估算口径。
 releases.md: macOS 发布。
 source-audit.md: 来源探查与基线。
