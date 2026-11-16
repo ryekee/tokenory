@@ -8,7 +8,7 @@ LocalizationTests.swift: 验证本地化资源。
 UsageActivityTests.swift: 验证日历、按工具区分模型、移动平均及未知费用。
 PresentationDataTests.swift: 验证统计展示数据。
 UpdateCheckerTests.swift: 验证更新检查状态。
-UsageStoreTests.swift: 验证今日速度独立筛选、跨日旧响应不覆盖、完整来源能力目录； 验证用量状态与查询更新。
+UsageStoreTests.swift: 真实 Codex 文件追加经 worker 更新当日用量并连续追加当前滚动； 验证今日速度独立筛选、跨日旧响应不覆盖、完整来源能力目录； 验证用量状态与查询更新。
 
 TurnAnalyticsTests.swift: 验证速度加权、跨 agent 估算标记、缺失值、时间排序、稀疏点和协议校验。
 

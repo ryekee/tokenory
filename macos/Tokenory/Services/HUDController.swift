@@ -1,5 +1,5 @@
 // [INPUT]: HUD preferences and the shared usage store.
-// [OUTPUT]: Compact nonactivating floating panel with six safe-area edge placements and draggable positioning.
+// [OUTPUT]: Compact nonactivating floating panel with six safe-area placements, following the pointer display without focus changes.
 // [POS]: App lifecycle owner; a HUD never changes the app's Dock activation policy.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -15,6 +15,8 @@ final class HUDController {
     private let store: UsageStore
     private var appliedPlacement: HUDPlacement?
     private var observing = false
+    private var screenTask: Task<Void, Never>?
+    private var activeScreenFrame: CGRect?
     private var screenObserver: NSObjectProtocol?
 
     init(preferences: HUDPreferences = .shared, store: UsageStore = .shared) {
@@ -34,6 +36,12 @@ final class HUDController {
             Task { @MainActor in self?.placeOnScreen() }
         }
         observePreferences()
+        screenTask = Task { [weak self] in
+            while !Task.isCancelled {
+                self?.followActiveScreen()
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            }
+        }
     }
 
     private func observePreferences() {
@@ -96,13 +104,34 @@ final class HUDController {
 
     func stop() {
         observing = false
+        screenTask?.cancel(); screenTask = nil
         hide()
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
     }
 
+    // Mouse location is available without Accessibility or screen-recording permissions.
+    static func activeScreenIndex(pointer: CGPoint, frames: [CGRect]) -> Int? {
+        frames.firstIndex(where: { $0.contains(pointer) })
+    }
+
+    private var activeScreen: NSScreen? {
+        let screens = NSScreen.screens
+        if let index = Self.activeScreenIndex(pointer: NSEvent.mouseLocation, frames: screens.map(\.frame)) {
+            return screens[index]
+        }
+        return NSScreen.main
+    }
+
+    private func followActiveScreen() {
+        guard panel?.isVisible == true, let screen = activeScreen,
+              screen.frame != activeScreenFrame else { return }
+        placeOnScreen()
+    }
+
     private func placeOnScreen() {
-        guard let panel, let screen = panel.screen ?? NSScreen.main else { return }
+        guard let panel, let screen = activeScreen else { return }
+        activeScreenFrame = screen.frame
         // visibleFrame excludes the menu bar and the Dock on any edge.
         panel.setFrameOrigin(preferences.placement.origin(in: screen.visibleFrame, screenFrame: screen.frame, size: panel.frame.size))
         appliedPlacement = preferences.placement

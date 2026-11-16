@@ -19,14 +19,16 @@ final class HUDTests: XCTestCase {
         XCTAssertFalse(reading(10, status: "partial").partial)
         XCTAssertNil(reading(10, metric: .cost, cost: .infinity).value)
     }
-    func testTokensDisplayInMillionsWithoutLosingSingleTokenPrecision() {
-        XCTAssertEqual(reading(0).formatted, "0.000000M")
-        XCTAssertEqual(reading(1).formatted, "0.000001M")
-        XCTAssertEqual(reading(999_999).formatted, "0.999999M")
-        XCTAssertEqual(reading(1_000_000).formatted, "1.000000M")
-        XCTAssertEqual(reading(163_704_355).formatted, "163.704355M")
-        XCTAssertEqual(reading(9_007_199_254_740_993).formatted, "9007199254.740993M")
-        XCTAssertEqual(reading(1, metric: .cost).formatted, "$18.65")
+    func testIntegerTokensAndPointerSelectedScreen() {
+        XCTAssertEqual(reading(163_704_355).formatted, "163,704,355")
+        XCTAssertEqual(reading(1).formatted, "1")
+        let frames = [CGRect(x: 0, y: 0, width: 1440, height: 900),
+                      CGRect(x: -1920, y: 0, width: 1920, height: 1080),
+                      CGRect(x: 0, y: 900, width: 1440, height: 900)]
+        XCTAssertEqual(HUDController.activeScreenIndex(pointer: CGPoint(x: 50, y: 50), frames: frames), 0)
+        XCTAssertEqual(HUDController.activeScreenIndex(pointer: CGPoint(x: -50, y: 50), frames: frames), 1)
+        XCTAssertEqual(HUDController.activeScreenIndex(pointer: CGPoint(x: 50, y: 1000), frames: frames), 2)
+        XCTAssertNil(HUDController.activeScreenIndex(pointer: CGPoint(x: 2000, y: 2000), frames: frames))
     }
     func testRollCarriesAndDeceleratesToExactTarget() {
         let roll = HUDRoll(from: 999_999, to: 1_000_008)

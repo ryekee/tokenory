@@ -1,6 +1,6 @@
 // [INPUT]: 接收原生应用的 JSON 请求，读取采集和价格数据。
 // [OUTPUT]: 输出协议响应、多客户端回合查询、扫描状态和账本更新事件。
-// [POS]: 单写者 worker 协调采集、计价和查询。
+// [POS]: 单写者 worker 合并日志事件与活跃文件检查，协调全量/增量采集、计价和查询。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
     collector::{self, DiagnosticCache, ScanBatch},
@@ -124,8 +124,14 @@ pub fn sources(db: &Database) -> Result<Value> {
 pub fn prices(db: &Database) -> Result<Value> {
     let mut stmt=db.connection.prepare("SELECT provider,model,sum(tokens) FROM effective_usage WHERE estimated_cost IS NULL GROUP BY provider,model ORDER BY sum(tokens) DESC")?;
     let missing=stmt.query_map([],|r|Ok(json!({"provider":r.get::<_,String>(0)?,"model":r.get::<_,String>(1)?,"tokens":r.get::<_,i64>(2)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
-    let mut used_stmt = db.connection.prepare("SELECT DISTINCT provider,model FROM effective_usage ORDER BY provider,model")?;
-    let used_models = used_stmt.query_map([], |r| Ok(json!({"provider":r.get::<_,String>(0)?,"model":r.get::<_,String>(1)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut used_stmt = db
+        .connection
+        .prepare("SELECT DISTINCT provider,model FROM effective_usage ORDER BY provider,model")?;
+    let used_models = used_stmt
+        .query_map([], |r| {
+            Ok(json!({"provider":r.get::<_,String>(0)?,"model":r.get::<_,String>(1)?}))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
     let active = pricing::active_snapshot(&db.connection)?;
     let catalog = crate::price_catalog::entries(active.as_ref().map(|(_, snapshot)| snapshot))?;
     let current = active.map(|(id, snapshot)| json!({"id":id,"snapshot":snapshot}));
@@ -137,7 +143,9 @@ pub fn prices(db: &Database) -> Result<Value> {
             Ok(json!({"id":r.get::<_,String>(0)?,"createdAt":r.get::<_,String>(1)?}))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(json!({"current":current,"catalog":catalog,"usedModels":used_models,"missing":missing,"history":history}))
+    Ok(
+        json!({"current":current,"catalog":catalog,"usedModels":used_models,"missing":missing,"history":history}),
+    )
 }
 pub fn export(
     db: &mut Database,
@@ -201,8 +209,14 @@ pub fn export(
 fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result<Value> {
     match op {
         "overview" => Ok(serde_json::to_value(queries::report(db, &payload(v)?)?)?),
-        "turnAnalytics" => Ok(serde_json::to_value(crate::turn_analytics::query(db, &payload(v)?)?)?),
-        "codexTurns" => Ok(serde_json::to_value(crate::codex_turns::query(db, &payload(v)?)?)?),
+        "turnAnalytics" => Ok(serde_json::to_value(crate::turn_analytics::query(
+            db,
+            &payload(v)?,
+        )?)?),
+        "codexTurns" => Ok(serde_json::to_value(crate::codex_turns::query(
+            db,
+            &payload(v)?,
+        )?)?),
         "activity" => Ok(serde_json::to_value(queries::activity(db, &payload(v)?)?)?),
         "daily" => Ok(serde_json::to_value(
             queries::report(db, &payload(v)?)?.daily,
@@ -294,17 +308,39 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
 fn start_scan(
     config: Config,
     mut cache: DiagnosticCache,
+    live_paths: Option<Option<Vec<PathBuf>>>,
 ) -> JoinHandle<(DiagnosticCache, Result<ScanBatch>)> {
     tokio::task::spawn_blocking(move || {
-        let r = tokio::runtime::Handle::current()
-            .block_on(collector::collect_once(&config, &mut cache));
+        let r = tokio::runtime::Handle::current().block_on(async {
+            match live_paths {
+                Some(paths) => collector::collect_codex_changes(&config, &mut cache, paths).await,
+                None => collector::collect_once(&config, &mut cache).await,
+            }
+        });
         (cache, r)
     })
 }
 pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
+    let mut watcher = crate::codex_watch::start(&config)
+        .map_err(|error| {
+            eprintln!("Codex live watch unavailable; periodic scanning remains active: {error}");
+            error
+        })
+        .ok();
+    let mut active_files = crate::codex_watch::ActiveFiles::new(&config);
+    let mut active_poll = tokio::time::interval(Duration::from_millis(500));
+    active_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut live_paths = std::collections::HashSet::new();
+    let mut live_rescan = false;
+    let mut live_due: Option<Instant> = None;
+    let mut scan_is_live = false;
     let mut cache = None;
-    let mut scan = Some(start_scan(config.clone(), DiagnosticCache::persistent()));
+    let mut scan = Some(start_scan(
+        config.clone(),
+        DiagnosticCache::persistent(),
+        None,
+    ));
     let mut next_scan = Instant::now() + Duration::from_secs(config.interval_seconds);
     let mut price_task: Option<
         JoinHandle<(String, Result<tokens_core::pricing::PricingService, String>)>,
@@ -337,18 +373,37 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
           let before=revision(&db.connection)?;
           match r.operation.as_str() {
            "shutdown"=>{reply(&r.id,Ok(json!({"stopped":true})))?;break;},
-           "scan"=>{let started=scan.is_none();if started {scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent)));send(json!({"version":1,"event":"scanStarted"}))?;}reply(&r.id,Ok(json!({"started":started})))?;},
+           "scan"=>{let started=scan.is_none();if started {scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent), None));send(json!({"version":1,"event":"scanStarted"}))?;}reply(&r.id,Ok(json!({"started":started})))?;},
            "status"=>reply(&r.id,Ok(json!({"scanning":scan.is_some(),"lastScan":last_scan,"dataDirectory":db.directory,"revision":before,"refreshingPrices":price_task.is_some()})))?,
            "refreshPrices"=>{
             if price_task.is_some(){reply(&r.id,Err(anyhow!("price refresh already running")))?;}else{price_task=Some(tokio::spawn(async move{(r.id,tokens_core::pricing::PricingService::fetch_snapshot().await)}));}
            },
-           _=>{let result=execute(db,&mut config,&r.operation,r.payload);reply(&r.id,result)?;},
+           _=>{let result=execute(db,&mut config,&r.operation,r.payload);
+               if r.operation == "updateSettings" && result.is_ok() {
+                   watcher = crate::codex_watch::start(&config).map_err(|error| { eprintln!("Codex watch reconfiguration failed: {error}"); error }).ok();
+                   active_files = crate::codex_watch::ActiveFiles::new(&config);
+                   live_rescan = true; live_due = Some(Instant::now());
+               }
+               reply(&r.id,result)?;},
           }
           let after=revision(&db.connection)?;if before!=after{send(json!({"version":1,"event":"usageChanged","revision":after}))?;}
          },
          result=async {match &mut scan {Some(task)=>task.await,None=>std::future::pending().await}},if scan.is_some()=>{
-          scan=None;next_scan=Instant::now()+Duration::from_secs(config.interval_seconds);
-          let result=match result {Ok((c,b))=>{cache=Some(c);b.and_then(|b|collector::persist(db,b))},Err(e)=>Err(e.into())};
+          scan=None;
+          let was_live = scan_is_live;
+          scan_is_live = false;
+          if !was_live { next_scan=Instant::now()+Duration::from_secs(config.interval_seconds); }
+
+          let result=match result {Ok((c,b))=>{active_files.track(c.recent_files());cache=Some(c);b.and_then(|b|collector::persist(db,b))},Err(e)=>Err(e.into())};
+          if was_live {
+              match result {
+                  Ok(r) => {
+                      if r.changed > 0 { send(json!({"version":1,"event":"todayUsageChanged","revision":r.revision,"durationMs":r.duration_ms}))?; }
+                  }
+                  Err(error) => { eprintln!("Codex live collection failed; periodic scan will retry: {error}"); }
+              }
+              continue;
+          }
           match result {Ok(mut r)=>{
             let before_prices = revision(&db.connection)?;
             {
@@ -362,7 +417,28 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
             if r.revision != before_prices { send(json!({"version":1,"event":"usageChanged","revision":r.revision}))?; }
             last_scan=Some(serde_json::to_value(&r)?);send(json!({"version":1,"event":"scanFinished","payload":r}))?;if r.changed>0 {send(json!({"version":1,"event":"usageChanged","revision":r.revision}))?;}},Err(e)=>send(json!({"version":1,"event":"scanFailed","message":format!("{e:#}")}))?}
          },
-         _=tokio::time::sleep_until(next_scan),if scan.is_none()=>{scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent)));send(json!({"version":1,"event":"scanStarted"}))?;},
+         _=active_poll.tick()=>{
+             let changed = active_files.changed();
+             if !changed.is_empty() {
+                 live_paths.extend(changed);
+                 if live_due.is_none() { live_due = Some(Instant::now()); }
+             }
+         },
+         change=async { match &mut watcher { Some((_, rx)) => rx.recv().await, None => std::future::pending().await } }=>{
+             match change {
+                 Some(crate::codex_watch::Change::Paths(paths)) => { active_files.track(paths.clone()); live_paths.extend(paths); },
+                 Some(crate::codex_watch::Change::Rescan) => live_rescan = true,
+                 None => { watcher = None; }
+             }
+             if live_due.is_none() { live_due = Some(Instant::now()+Duration::from_millis(250)); }
+         },
+         _=async { match live_due { Some(due) => tokio::time::sleep_until(due).await, None => std::future::pending().await } },if scan.is_none()=>{
+             let paths = if live_rescan { None } else { Some(live_paths.drain().collect()) };
+             live_paths.clear(); live_rescan = false; live_due = None;
+             scan_is_live = true;
+             scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent),Some(paths)));
+         },
+         _=tokio::time::sleep_until(next_scan),if scan.is_none()=>{scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent), None));send(json!({"version":1,"event":"scanStarted"}))?;},
          _=tokio::time::sleep_until(next_price_refresh),if scan.is_none() && price_task.is_none()=>{
           next_price_refresh=Instant::now()+Duration::from_secs(86400);
           price_task=Some(tokio::spawn(async {(String::new(),tokens_core::pricing::PricingService::fetch_snapshot().await)}));

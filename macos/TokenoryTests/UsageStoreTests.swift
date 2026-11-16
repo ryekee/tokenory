@@ -8,6 +8,64 @@ import XCTest
 
 @MainActor
 final class UsageStoreTests: XCTestCase {
+    func testCodexLiveAppendUpdatesTodayAndExtendsActiveHUDRoll() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "Tokenory-live-\(UUID())")
+        let home = root.appending(path: "home"), data = root.appending(path: "data")
+        let logs = home.appending(path: ".codex/sessions")
+        try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        let settings = EngineSettings(homeDir: home.path, intervalSeconds: 86400, timezone: "Asia/Shanghai", extraScanPaths: [:])
+        try JSONEncoder().encode(settings).write(to: data.appending(path: "settings.json"))
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        func usage(_ count: Int) -> String {
+            "{\"timestamp\":\"\(stamp)\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":\(count),\"output_tokens\":0,\"cached_input_tokens\":0,\"reasoning_output_tokens\":0,\"total_tokens\":\(count)}}}}\n"
+        }
+        let file = logs.appending(path: "active.jsonl")
+        let header = """
+        {"type":"session_meta","payload":{"id":"native-live-session","model_provider":"openai"}}
+        {"type":"turn_context","payload":{"model":"gpt-5-codex"}}
+        """ + "\n"
+        try Data((header + usage(100)).utf8).write(to: file)
+        let engine = EngineClient(helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/tokenory"), directory: data)
+        let store = UsageStore(engine: engine, directory: data)
+        do {
+            store.start()
+            func waitForTokens(_ value: Int64) async throws {
+                for _ in 0..<160 {
+                    if store.today?.summary.tokens == value { return }
+                    try await Task.sleep(for: .milliseconds(50))
+                }
+                XCTFail("Live total did not reach \(value); actual \(String(describing: store.today?.summary.tokens))")
+            }
+            try await waitForTokens(100)
+            let animator = HUDAnimator()
+            func receive() {
+                animator.receive(HUDReading(day: store.todayDay ?? "", metric: .tokens, summary: store.today?.summary), animated: true)
+            }
+            receive()
+            let handle = try FileHandle(forWritingTo: file)
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data(usage(150).utf8))
+            try await waitForTokens(150)
+            receive(); animator.advance(elapsed: 1)
+            XCTAssertTrue(animator.isRolling)
+            let positions = animator.positions, generation = animator.generation
+            try handle.write(contentsOf: Data(usage(200).utf8))
+            try await waitForTokens(200)
+            receive()
+            XCTAssertEqual(animator.generation, generation)
+            XCTAssertEqual(animator.positions, positions)
+            XCTAssertEqual(animator.reading?.value, 200)
+            await engine.stop()
+            try FileManager.default.removeItem(at: root)
+        } catch {
+            await engine.stop()
+            try? FileManager.default.removeItem(at: root)
+            throw error
+        }
+    }
+
     func testRealEngineRestartAndInvalidFilterPreserveKnownUsage() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "Tokenory-tests-\(UUID())")
         let home = root.appending(path: "home"); let data = root.appending(path: "data")

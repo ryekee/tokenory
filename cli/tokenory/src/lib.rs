@@ -21,3 +21,5 @@ pub mod price_catalog;
 pub mod codex_turns;
 
 pub mod turn_analytics;
+
+pub mod codex_watch;

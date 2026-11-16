@@ -101,37 +101,25 @@ struct MechanicalHUDView: View {
         .onDisappear { animator.settle(); HUDSound.shared.stop() }
     }
 
-    private var displayPositions: [Double] {
-        let positions = animator.positions
-        if preferences.metric == .tokens, !positions.isEmpty, positions.count < 7 {
-            return Array(repeating: 0, count: 7 - positions.count) + positions
-        }
-        return positions
-    }
-
     private var readout: some View {
         HStack(spacing: 2) {
             if preferences.metric == .cost {
                 Text(reading.partial ? "≈$" : "$").font(.custom("SairaExtraCondensed-SemiBold", size: 24))
                     .foregroundStyle(Color(red: 0.72, green: 0.79, blue: 0.86)).padding(.horizontal, 3)
             }
-            if displayPositions.isEmpty {
+            if animator.positions.isEmpty {
                 Text("—").font(.custom("SairaExtraCondensed-SemiBold", size: 48))
                     .foregroundStyle(Color(red: 0.94, green: 0.94, blue: 0.87)).frame(maxWidth: .infinity)
             } else {
-                ForEach(displayPositions.indices, id: \.self) { index in
-                    HUDDrum(position: displayPositions[index], blue: index == displayPositions.count - 1,
-                            count: displayPositions.count)
-                    let remaining = displayPositions.count - index - 1
-                    if remaining > 0, (preferences.metric == .tokens && remaining == 6) || (preferences.metric == .cost && remaining == 2) {
-                        Text(".").font(.custom("SairaExtraCondensed-SemiBold", size: 25))
+                ForEach(animator.positions.indices, id: \.self) { index in
+                    HUDDrum(position: animator.positions[index], blue: index == animator.positions.count - 1,
+                            count: animator.positions.count)
+                    let remaining = animator.positions.count - index - 1
+                    if remaining > 0, (preferences.metric == .tokens && remaining.isMultiple(of: 3)) || (preferences.metric == .cost && remaining == 2) {
+                        Text(preferences.metric == .cost ? "." : ",").font(.custom("SairaExtraCondensed-SemiBold", size: 25))
                             .foregroundStyle(.white.opacity(0.8)).frame(width: 5).offset(y: 15)
                     }
                 }
-            }
-            if preferences.metric == .tokens {
-                Text("M").font(.custom("SairaExtraCondensed-SemiBold", size: 24))
-                    .foregroundStyle(Color(red: 0.72, green: 0.79, blue: 0.86)).padding(.horizontal, 3)
             }
         }
         .padding(.horizontal, 5).frame(height: 76)
