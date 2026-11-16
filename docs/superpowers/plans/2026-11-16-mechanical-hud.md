@@ -84,3 +84,13 @@ Implemented Codex default/extra/headless root watching, 250 ms event coalescing,
 Removed M and restored grouped integer Tokens. The visible panel checks pointer display every 250 ms and reapplies the selected safe-area placement only when the display changes; no Accessibility or screen-recording permission is used.
 
 Validation: full tokenory suite passed 90 tests before the final headless regression; final codex_live suite passed all 3 tests. The new-root and open-handle append test measured 274 ms and 328 ms respectively, using temporary fixtures (not production end-to-end latency). Existing tokens-core Codex tests: 124 passed. Native suite: 43 passed, including real log append → worker event → today summary → active roll continuity, plus pointer selection across horizontally and vertically arranged screen rectangles. Build-and-run passed. Live production scan diagnostics showed changed-file collection around 0.36–1.6 seconds in the inspected samples; the startup full scan took about 19 seconds. These are collection durations, not display latency guarantees. Integer HUD inspected in the real app. Physical cursor transfer between monitors has not been manually exercised.
+
+## Follow-up: device-local Today and minimal settings
+
+User confirmed hands-on acceptance of the previous HUD changes, including the active-display behavior. Removed the two Settings footers and the sound-preview control from both Settings and the audio popover; removed preview playback code and disabled background window dragging. Position presets remain.
+
+HUD and menu-bar Today now query exact device-local timestamp bounds instead of selecting the saved Beijing date bucket. LocalUsageDay computes the next midnight through calendar arithmetic, supports 23/25-hour DST days, and restarts visible refresh tasks on timezone/calendar-day notifications. Changing timezone resets the HUD reading identity silently. Daily imported aggregates retain their recorded date; historical stored buckets are not rewritten. Matching menu-bar turn analytics uses local timestamp bounds too.
+
+Rust full suite and 44 native tests passed, including LA/Tokyo date divergence, New York DST, local-day event/cost selection across stored dates, half-open midnight bounds and unchanged historical queries.
+
+Final verification: 92 Rust tests and 44 native tests passed. Rebuilt and launched; Chinese HUD Settings visually confirmed without either footer or the preview button. Screenshot: `local-data/hud-validation/hud-settings-clean.png`.

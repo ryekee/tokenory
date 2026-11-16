@@ -7,6 +7,6 @@ UsageStore.swift: 今日速度独立于统计页筛选，扫描/弹窗/跨日刷
 
 Codex todayUsageChanged 事件只刷新当日汇总，实时传给 HUD，完整统计沿用全扫描刷新。
 
-UsageStore 的 todayDay / todayUsageError 供 HUD 识别跨日与不可用读数，沿用今日独立查询与代际保护。
+UsageStore 的 todayDay / todayTimeZone / todayUsageError 供 HUD 识别跨日与不可用读数，沿用今日独立查询与代际保护。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md

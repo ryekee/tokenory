@@ -70,7 +70,7 @@ final class HUDController {
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = true
             panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
-            panel.isMovableByWindowBackground = true
+            panel.isMovableByWindowBackground = false
             panel.becomesKeyOnlyIfNeeded = true
             // NSPanel starts with an empty NSView; replace it with hosted content on first show too.
             panel.contentView = nil

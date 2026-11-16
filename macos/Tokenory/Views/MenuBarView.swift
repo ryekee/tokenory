@@ -9,6 +9,7 @@ import SwiftUI
 struct MenuBarView: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.openWindow) private var openWindow
+    @State private var dayClock = 0
     @State private var hud = HUDPreferences.shared
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -46,11 +47,14 @@ struct MenuBarView: View {
                 SettingsLink { Image(systemName: "gearshape") }.help(L("settings.title"))
                 Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }.help(L("action.quit"))
             }.buttonStyle(.plain)
-        }.padding(20).frame(width: 400).task {
+        }.padding(20).frame(width: 400)
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in dayClock += 1 }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in dayClock += 1 }
+        .task(id: dayClock) {
             while !Task.isCancelled {
                 let now = Date()
                 await store.refreshToday(now: now)
-                let midnight = Localization.reportingCalendar.startOfDay(for: now).addingTimeInterval(86_400)
+                let midnight = LocalUsageDay(now: now).end
                 do { try await Task.sleep(for: .seconds(max(0, midnight.timeIntervalSinceNow))) }
                 catch { return }
             }

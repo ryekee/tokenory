@@ -1,5 +1,5 @@
 // [INPUT]: Validated filters and the effective ledger view.
-// [OUTPUT]: Selected-range reports, complete daily client/model activity and timestamp-qualified hourly patterns.
+// [OUTPUT]: Local-day timestamp windows, selected-range reports, complete daily client/model activity and timestamp-qualified hourly patterns.
 // [POS]: Read-only aggregation boundary; never aggregate paginated details.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -19,6 +19,8 @@ pub struct Filter {
     pub provider: Option<String>,
     pub model: Option<String>,
     pub source: Option<String>,
+    pub timestamp_from_ms: Option<i64>,
+    pub timestamp_to_ms: Option<i64>,
     pub offset: u32,
     pub limit: Option<u32>,
 }
@@ -32,6 +34,11 @@ impl Filter {
         }
         if let (Some(a), Some(b)) = (&self.from, &self.to) {
             ensure!(a <= b, "start date must not follow end date");
+        }
+        match (self.timestamp_from_ms, self.timestamp_to_ms) {
+            (Some(from), Some(to)) => ensure!(from < to && self.from.is_some() && self.to.is_some(), "timestamp range needs ordered bounds and fallback dates"),
+            (None, None) => {},
+            _ => anyhow::bail!("both timestamp bounds are required"),
         }
         if let Some(n) = self.limit {
             ensure!((1..=500).contains(&n), "detail limit must be 1–500");
@@ -113,7 +120,7 @@ pub fn activity(db: &mut Database, f: &Filter) -> Result<ActivityReport> {
     let tx = db.connection.transaction()?;
     let daily = grouped(&tx, f, "date")?;
     let model_days = tx.prepare(&format!("SELECT date,client,model,{SUMMARY_SQL} FROM effective_usage{WHERE_SQL} GROUP BY date,client,model ORDER BY date,client,model"))?
-        .query_map(params![f.from, f.to, f.client, f.provider, f.model, f.source], |r| {
+        .query_map(params![f.from, f.to, f.client, f.provider, f.model, f.source, f.timestamp_from_ms, f.timestamp_to_ms], |r| {
             Ok(ModelDay { date: r.get(0)?, client: r.get(1)?, model: r.get(2)?, summary: read_summary(r, 3)? })
         })?.collect::<rusqlite::Result<Vec<_>>>()?;
     let hourly = hourly_aggregate(&tx, f, "%H")?;
@@ -121,7 +128,7 @@ pub fn activity(db: &mut Database, f: &Filter) -> Result<ActivityReport> {
     tx.commit()?;
     Ok(result)
 }
-const WHERE_SQL:&str=" WHERE (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) AND (?3 IS NULL OR client=?3) AND (?4 IS NULL OR provider=?4) AND (?5 IS NULL OR model=?5) AND (?6 IS NULL OR source=?6)";
+const WHERE_SQL:&str=" WHERE (CASE WHEN ?7 IS NOT NULL AND json_extract(body,'$.timestampMs') IS NOT NULL AND coalesce(json_extract(body,'$.metadata.granularity')!='day',1) THEN json_extract(body,'$.timestampMs')>=?7 AND json_extract(body,'$.timestampMs')<?8 ELSE (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) END) AND (?3 IS NULL OR client=?3) AND (?4 IS NULL OR provider=?4) AND (?5 IS NULL OR model=?5) AND (?6 IS NULL OR source=?6)";
 const SUMMARY_SQL:&str="coalesce(sum(tokens),0),coalesce(sum(input),0),coalesce(sum(output),0),coalesce(sum(cache_read),0),coalesce(sum(cache_write),0),coalesce(sum(reasoning),0),sum(estimated_cost),coalesce(sum(CASE WHEN estimated_cost IS NULL THEN tokens ELSE 0 END),0),count(*),count(DISTINCT CASE WHEN tokens>0 THEN date END),sum(requests),count(DISTINCT CASE WHEN json_extract(body, '$.metadata.partialDay')=1 THEN date END)";
 fn read_summary(row: &Row<'_>, start: usize) -> rusqlite::Result<Summary> {
     let known: Option<f64> = row.get(start + 6)?;
@@ -159,7 +166,7 @@ fn grouped(c: &Connection, f: &Filter, column: &str) -> Result<Vec<Group>> {
     let sql=format!("SELECT {column},{SUMMARY_SQL} FROM effective_usage{WHERE_SQL} GROUP BY {column} ORDER BY {}",if column=="date" {"date ASC"}else{"sum(tokens) DESC"});
     Ok(c.prepare(&sql)?
         .query_map(
-            params![f.from, f.to, f.client, f.provider, f.model, f.source],
+            params![f.from, f.to, f.client, f.provider, f.model, f.source, f.timestamp_from_ms, f.timestamp_to_ms],
             |r| {
                 Ok(Group {
                     key: r.get(0)?,
@@ -170,7 +177,7 @@ fn grouped(c: &Connection, f: &Filter, column: &str) -> Result<Vec<Group>> {
         .collect::<rusqlite::Result<_>>()?)
 }
 fn hourly(c: &Connection, f: &Filter) -> Result<Option<HourlyReport>> {
-    if f.from.is_none() || f.from != f.to {
+    if f.timestamp_from_ms.is_some() || f.from.is_none() || f.from != f.to {
         return Ok(None);
     }
     Ok(Some(hourly_aggregate(c, f, "%Y-%m-%dT%H:00:00+08:00")?))
@@ -183,12 +190,12 @@ fn hourly_aggregate(c: &Connection, f: &Filter, format: &str) -> Result<HourlyRe
     let key =
         format!("strftime('{format}', {timestamp}, 'unixepoch', '+8 hours')");
     let buckets = c.prepare(&format!("SELECT {key} AS hour, {SUMMARY_SQL} FROM effective_usage{WHERE_SQL} AND ({timed}) GROUP BY hour ORDER BY hour"))?
-        .query_map(params![f.from, f.to, f.client, f.provider, f.model, f.source], |r| {
+        .query_map(params![f.from, f.to, f.client, f.provider, f.model, f.source, f.timestamp_from_ms, f.timestamp_to_ms], |r| {
             Ok(Group { key: r.get(0)?, summary: read_summary(r, 1)? })
         })?.collect::<rusqlite::Result<Vec<_>>>()?;
     let unallocated = c.query_row(
         &format!("SELECT {SUMMARY_SQL} FROM effective_usage{WHERE_SQL} AND NOT ({timed})"),
-        params![f.from, f.to, f.client, f.provider, f.model, f.source],
+        params![f.from, f.to, f.client, f.provider, f.model, f.source, f.timestamp_from_ms, f.timestamp_to_ms],
         |r| read_summary(r, 0),
     )?;
     Ok(HourlyReport { buckets, unallocated })
@@ -198,11 +205,11 @@ pub fn report(db: &mut Database, f: &Filter) -> Result<Report> {
     let tx = db.connection.transaction()?;
     let summary = tx.query_row(
         &format!("SELECT {SUMMARY_SQL} FROM effective_usage{WHERE_SQL}"),
-        params![f.from, f.to, f.client, f.provider, f.model, f.source],
+        params![f.from, f.to, f.client, f.provider, f.model, f.source, f.timestamp_from_ms, f.timestamp_to_ms],
         |r| read_summary(r, 0),
     )?;
     let rows = {
-        let mut stmt=tx.prepare(&format!("SELECT source,batch_id,body FROM effective_usage{WHERE_SQL} ORDER BY date DESC,client,source,batch_id,item_key LIMIT ?7 OFFSET ?8"))?;
+        let mut stmt=tx.prepare(&format!("SELECT source,batch_id,body FROM effective_usage{WHERE_SQL} ORDER BY date DESC,client,source,batch_id,item_key LIMIT ?9 OFFSET ?10"))?;
         let rows = stmt
             .query_map(
                 params![
@@ -212,6 +219,8 @@ pub fn report(db: &mut Database, f: &Filter) -> Result<Report> {
                     f.provider,
                     f.model,
                     f.source,
+                    f.timestamp_from_ms,
+                    f.timestamp_to_ms,
                     f.limit.unwrap_or(200),
                     f.offset
                 ],

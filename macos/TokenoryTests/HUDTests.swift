@@ -19,6 +19,21 @@ final class HUDTests: XCTestCase {
         XCTAssertFalse(reading(10, status: "partial").partial)
         XCTAssertNil(reading(10, metric: .cost, cost: .infinity).value)
     }
+    func testLocalDayUsesDeviceZoneAndDSTMidnights() {
+        let parse = ISO8601DateFormatter()
+        let instant = parse.date(from: "2026-11-06T02:00:00Z")!
+        let la = LocalUsageDay(now: instant, timeZone: TimeZone(identifier: "America/Los_Angeles")!)
+        let tokyo = LocalUsageDay(now: instant, timeZone: TimeZone(identifier: "Asia/Tokyo")!)
+        XCTAssertEqual(la.day, "2026-11-05")
+        XCTAssertEqual(tokyo.day, "2026-11-06")
+        XCTAssertEqual(parse.string(from: la.start), "2026-11-05T08:00:00Z")
+        XCTAssertEqual(parse.string(from: la.end), "2026-11-06T08:00:00Z")
+        let ny = TimeZone(identifier: "America/New_York")!
+        let spring = LocalUsageDay(now: parse.date(from: "2026-03-08T12:00:00Z")!, timeZone: ny)
+        let autumn = LocalUsageDay(now: parse.date(from: "2026-11-01T12:00:00Z")!, timeZone: ny)
+        XCTAssertEqual(spring.end.timeIntervalSince(spring.start), 23 * 3600)
+        XCTAssertEqual(autumn.end.timeIntervalSince(autumn.start), 25 * 3600)
+    }
     func testIntegerTokensAndPointerSelectedScreen() {
         XCTAssertEqual(reading(163_704_355).formatted, "163,704,355")
         XCTAssertEqual(reading(1).formatted, "1")

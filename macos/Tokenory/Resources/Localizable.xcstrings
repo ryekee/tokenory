@@ -5367,23 +5367,6 @@
         }
       }
     },
-    "hud.preview_sound": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preview sound"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "试听"
-          }
-        }
-      }
-    },
     "hud.sound_settings": {
       "extractionState": "manual",
       "localizations": {
@@ -5407,30 +5390,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Today’s total across all agents. Updates after log scans; resets at midnight Beijing time."
+            "value": "Today’s total across all agents, using your device’s time zone."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "所有 Agent 的当日累计。扫描日志后更新，每天北京时间零点归零。"
-          }
-        }
-      }
-    },
-    "hud.drag_help": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drag the orange case to move the HUD. Right-click to hide it."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "拖动橙色外壳可移动 HUD，右键可隐藏。"
+            "value": "所有 Agent 的当日累计，按设备当前时区计算。"
           }
         }
       }

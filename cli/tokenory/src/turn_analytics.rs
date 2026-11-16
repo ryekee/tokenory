@@ -1089,23 +1089,23 @@ pub fn query(db: &mut Database, f: &Filter) -> Result<Report> {
     let second = delegates.and_then(|ids| ids.get(1).copied());
     let tx = db.connection.transaction()?;
     let clients = {
-        let mut s=tx.prepare("SELECT DISTINCT client FROM codex_turns WHERE (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) ORDER BY client")?;
+        let mut s=tx.prepare("SELECT DISTINCT client FROM codex_turns WHERE (CASE WHEN ?6 IS NULL THEN (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) ELSE json_extract(body,'$.startMs')>=?6 AND json_extract(body,'$.startMs')<?7 END) ORDER BY client")?;
         let rows = s
-            .query_map(params![f.from, f.to], |r| r.get(0))?
+            .query_map(params![f.from, f.to, first, f.model, second, f.timestamp_from_ms, f.timestamp_to_ms], |r| r.get(0))?
             .collect::<rusqlite::Result<Vec<String>>>()?;
         rows
     };
     let models = {
-        let mut s=tx.prepare("SELECT DISTINCT model FROM codex_turns WHERE (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) AND (?3 IS NULL OR client IN (?3,?4)) ORDER BY model")?;
+        let mut s=tx.prepare("SELECT DISTINCT model FROM codex_turns WHERE (CASE WHEN ?6 IS NULL THEN (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) ELSE json_extract(body,'$.startMs')>=?6 AND json_extract(body,'$.startMs')<?7 END) AND (?3 IS NULL OR client IN (?3,?4)) ORDER BY model")?;
         let rows = s
-            .query_map(params![f.from, f.to, first, second], |r| r.get(0))?
+            .query_map(params![f.from, f.to, first, second, second, f.timestamp_from_ms, f.timestamp_to_ms], |r| r.get(0))?
             .collect::<rusqlite::Result<Vec<String>>>()?;
         rows
     };
     let turns = {
-        let mut s=tx.prepare("SELECT body FROM codex_turns WHERE (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) AND (?3 IS NULL OR client IN (?3,?5)) AND (?4 IS NULL OR model=?4) ORDER BY json_extract(body,'$.startMs'),id")?;
+        let mut s=tx.prepare("SELECT body FROM codex_turns WHERE (CASE WHEN ?6 IS NULL THEN (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) ELSE json_extract(body,'$.startMs')>=?6 AND json_extract(body,'$.startMs')<?7 END) AND (?3 IS NULL OR client IN (?3,?5)) AND (?4 IS NULL OR model=?4) ORDER BY json_extract(body,'$.startMs'),id")?;
         let rows = s
-            .query_map(params![f.from, f.to, first, f.model, second], |r| {
+            .query_map(params![f.from, f.to, first, f.model, second, f.timestamp_from_ms, f.timestamp_to_ms], |r| {
                 r.get::<_, String>(0)
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;

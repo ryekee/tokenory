@@ -22,4 +22,6 @@ price_catalog.rs: 验证未使用供应商、峰谷与参考规则、订阅价�
 
 codex_live.rs: 真正的 worker 文件监听、打开句柄追加、半行、重复、归档副本与全扫描对账。
 
+local_day.rs: 跨账本日期的本地午夜范围、包含起点/排除终点、日汇总回退与历史不变。
+
 [PROTOCOL]: Update this header on change, then check AGENTS.md

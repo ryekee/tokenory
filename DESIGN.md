@@ -4,13 +4,13 @@ Native macOS utility for checking AI usage and USD cost estimates. Preserve the 
 
 ## Mechanical HUD
 
-- Tokens use exact grouped integers without a unit suffix; costs retain a leading $. Menu bar HUD visibility uses a trailing checkmark.
+- Tokens use exact grouped integers without a unit suffix; costs retain a leading $. Menu bar HUD visibility uses a trailing checkmark. HUD Settings contains only controls: no explanatory footers or sound-preview button.
 
-- Optional draggable floating counter, enabled in the menu bar or Settings → HUD. It does not take focus or create a Dock workspace entry. Persist the selected placement and follow the display containing the pointer, checked every 250 ms while visible.
+- Optional floating counter with preset positions, enabled in the menu bar or Settings → HUD. It does not take focus or create a Dock workspace entry. Persist the selected placement and follow the display containing the pointer, checked every 250 ms while visible.
 - HUD 位置在设置页用 2 × 3 布局选择左上／中上／右上／左下／中下／右下；以鼠标所在屏幕 visibleFrame 贴边放置，避开菜单栏与 Dock，上下外壳保留 5 pt 内边距，四角左右外壳边距按底部边距（含 Dock）乘屏幕宽高比计算，并优先避让侧边 Dock。
 - Render the counter at 50% of the original prototype dimensions: a 210 × 82 pt case inside a 220 × 92 pt window. Preserve full-size native audio popover controls. Restoring position must not restore the old larger dimensions.
 - Follow the approved `docs/prototypes/mechanical-hud/index.html`: orange enamel case, recessed dark drums, blue units digit, no header text, Saira Extra Condensed SemiBold, mechanical text-fragment / coin icon buttons. The speaker opens a compact sound popover.
-- Display all-agent today totals independently of dashboard filters, using Beijing midnight. Tokens remain full integers; USD uses two decimal places. Unavailable cost is —; partially priced cost has ≈ and a hover explanation.
+- Display all-agent today totals independently of dashboard filters, using the device’s current timezone and local midnight. Tokens remain full integers; USD uses two decimal places. Unavailable cost is —; partially priced cost has ≈ and a hover explanation.
 - New increases accelerate briefly and decelerate over the last 66% of the movement. Sound follows drum crossings. First display, metric/day changes, decreases and Reduce Motion settle silently. Add incoming increments to the current roll without resetting its position, velocity or animation clock. Changed drums use monotone velocity-matched braking to the newest target; unchanged drums finish their existing motion.
 - Persist independent sound enablement and volume. Default sound off and volume 35%. Hiding the HUD cancels animation and sound. Keep the standalone demo and font license for future website use.
 

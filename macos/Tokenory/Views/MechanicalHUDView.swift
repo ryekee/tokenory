@@ -11,11 +11,12 @@ struct MechanicalHUDView: View {
     @Environment(HUDPreferences.self) private var preferences
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
+    @State private var dayClock = 0
     @State private var animator = HUDAnimator()
     @State private var showAudio = false
 
     private var reading: HUDReading {
-        HUDReading(day: store.todayDay ?? UsageStore.day(Date()), metric: preferences.metric,
+        HUDReading(day: (store.todayDay ?? LocalUsageDay(now: Date()).day) + ":" + (store.todayTimeZone ?? TimeZone.autoupdatingCurrent.identifier), metric: preferences.metric,
                    summary: store.todayUsageError == nil ? store.today?.summary : nil)
     }
     private var help: String {
@@ -87,10 +88,13 @@ struct MechanicalHUDView: View {
                 if !Task.isCancelled, !animator.isRolling { HUDSound.shared.stop() }
             }
         }
-        .task {
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in dayClock += 1 }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in dayClock += 1 }
+        .task(id: dayClock) {
             while !Task.isCancelled {
-                await store.refreshToday()
-                let midnight = Localization.reportingCalendar.startOfDay(for: Date()).addingTimeInterval(86_400)
+                let now = Date()
+                await store.refreshToday(now: now)
+                let midnight = LocalUsageDay(now: now).end
                 do { try await Task.sleep(for: .seconds(max(0, midnight.timeIntervalSinceNow))) } catch { return }
             }
         }

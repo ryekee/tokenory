@@ -62,6 +62,7 @@ final class UsageStore {
     var settings: EngineSettings?
     var clients: [ClientInfo] = []
     private var eventTask: Task<Void, Never>?
+    private(set) var todayTimeZone: String?
     private var refreshGeneration = 0
 
     init(engine: EngineClient? = nil, directory: URL? = nil) {
@@ -101,8 +102,9 @@ final class UsageStore {
         updateDateRange(now: now)
         refreshGeneration += 1; let generation = refreshGeneration; loading = true
         let day = Self.day(now)
-        let quickGeneration = beginTodayRefresh(day: day)
-        async let quick: Void = loadToday(day: day, generation: quickGeneration)
+        let localDay = LocalUsageDay(now: now)
+        let quickGeneration = beginTodayRefresh(window: localDay)
+        async let quick: Void = loadToday(window: localDay, generation: quickGeneration)
         do {
             let queryFilter = filter
             let dashboardFilter = try JSONValue.encode(queryFilter)
@@ -134,21 +136,21 @@ final class UsageStore {
         let prior = filter
         updateDateRange(now: now)
         if prior != filter { await refresh(now: now); return }
-        let day = Self.day(now)
-        let generation = beginTodayRefresh(day: day)
-        await loadToday(day: day, generation: generation)
+        let window = LocalUsageDay(now: now)
+        let generation = beginTodayRefresh(window: window)
+        await loadToday(window: window, generation: generation)
     }
-    private func beginTodayRefresh(day: String) -> Int {
+    private func beginTodayRefresh(window: LocalUsageDay) -> Int {
         todayGeneration += 1
-        if todayDay != day {
+        if todayDay != window.day || todayTimeZone != window.timeZone {
             today = nil; todayTurns = nil; todaySpeedError = nil; todayUsageError = nil
-            todayDay = day
+            todayDay = window.day; todayTimeZone = window.timeZone
         }
         return todayGeneration
     }
-    private func loadToday(day: String, generation: Int) async {
-        async let usage = engine.request("overview", payload: .encode(UsageFilter(from: day, to: day)))
-        async let turns = engine.request("turnAnalytics", payload: .encode(TurnQuery(from: day, to: day)))
+    private func loadToday(window: LocalUsageDay, generation: Int) async {
+        async let usage = engine.request("overview", payload: .encode(UsageFilter(from: window.day, to: window.day, timestampFromMs: window.startMs, timestampToMs: window.endMs)))
+        async let turns = engine.request("turnAnalytics", payload: .encode(TurnQuery(from: window.day, to: window.day, timestampFromMs: window.startMs, timestampToMs: window.endMs)))
         do {
             let data = try await usage.decode(UsageReport.self)
             if generation == todayGeneration { today = data; todayUsageError = nil }
