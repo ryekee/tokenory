@@ -78,7 +78,7 @@ struct MechanicalHUDView: View {
                 }
                 do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
             }
-            // Let the last short click finish; keep audio active if a pending update started rolling.
+            // Let the final short click finish unless another reading has resumed the rollers.
             if !animator.isRolling {
                 try? await Task.sleep(for: .milliseconds(45))
                 if !Task.isCancelled, !animator.isRolling { HUDSound.shared.stop() }

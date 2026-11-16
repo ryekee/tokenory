@@ -1,6 +1,6 @@
 // [INPUT]: Validated day/metric readings and elapsed animation time.
 // [OUTPUT]: Drum positions and discrete tooth crossings for synchronized sound.
-// [POS]: Coalesces live updates without restarting an in-flight roll.
+// [POS]: Adds live increments to the current roll without resetting position, velocity or clock.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
 import Observation
@@ -11,41 +11,48 @@ final class HUDAnimator {
     private(set) var positions: [Double] = []
     private(set) var isRolling = false
     private(set) var generation = 0
-    @ObservationIgnored private var roll: HUDRoll?
-    @ObservationIgnored private var pending: HUDReading?
-    @ObservationIgnored private var lastTooth = 0
+    @ObservationIgnored private var motions: [HUDDrumMotion] = []
+    @ObservationIgnored private var elapsed: TimeInterval = 0
 
     func receive(_ next: HUDReading, animated: Bool) {
         guard animated, let previous = reading, previous.day == next.day, previous.metric == next.metric,
               let from = previous.value, let to = next.value, to >= from else {
-            reading = next; pending = nil; settle(); return
+            reading = next; settle(); return
         }
-        if isRolling { pending = next; return }
         reading = next
         guard to > from else { return }
-        roll = HUDRoll(from: from, to: to)
-        positions = roll!.positions(at: 0)
-        lastTooth = 0; isRolling = true; generation += 1
+        let roll = HUDRoll(from: from, to: to)
+        if isRolling {
+            let addedDigits = roll.starts.count - motions.count
+            if addedDigits > 0 {
+                motions.insert(contentsOf: Array(repeating: HUDDrumMotion(start: 0, target: 0, startTime: 0,
+                                                                          duration: roll.duration, initialSpeed: nil), count: addedDigits), at: 0)
+            }
+            motions = zip(motions, roll.travel).map { $0.extending(by: $1, at: elapsed, duration: roll.duration) }
+            positions = motions.map { $0.sample(at: elapsed).position }
+        } else {
+            elapsed = 0
+            motions = zip(roll.starts, roll.travel).map {
+                HUDDrumMotion(start: $0, target: $0 + $1, startTime: 0, duration: roll.duration, initialSpeed: nil)
+            }
+            positions = roll.positions(at: 0)
+            isRolling = true; generation += 1
+        }
     }
 
     @discardableResult
     func advance(elapsed: TimeInterval) -> Bool {
-        guard let roll else { return false }
-        let time = min(1, elapsed / roll.duration)
-        positions = roll.positions(at: time)
-        let tooth = Int(floor(roll.maxTravel * HUDRoll.curve(time).progress))
-        let clicked = tooth != lastTooth
-        lastTooth = tooth
-        if time >= 1 {
-            self.roll = nil; isRolling = false
-            if let next = pending { pending = nil; receive(next, animated: true) }
-        }
+        guard isRolling else { return false }
+        self.elapsed = elapsed
+        let next = motions.map { $0.sample(at: elapsed).position }
+        let clicked = zip(positions, next).contains { floor($0) != floor($1) }
+        positions = next
+        if motions.allSatisfy({ elapsed >= $0.endTime }) { motions = []; isRolling = false }
         return clicked
     }
 
     func settle() {
-        if let pending { reading = pending }
-        pending = nil; roll = nil; isRolling = false; generation += 1
+        motions = []; elapsed = 0; isRolling = false; generation += 1
         if let value = reading?.value { positions = HUDRoll(from: value, to: value).positions(at: 1) }
         else { positions = [] }
     }
