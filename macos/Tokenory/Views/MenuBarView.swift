@@ -31,7 +31,15 @@ struct MenuBarView: View {
                     .buttonStyle(.plain).disabled(store.scanning).help(store.connected ? L("action.scan") : L("action.reconnect"))
             }
             if !store.connected, let error = store.error { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(3) }
-            Toggle(L("hud.show"), isOn: $hud.enabled).toggleStyle(.switch).controlSize(.small)
+            Button { hud.enabled.toggle() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark").opacity(hud.enabled ? 1 : 0).frame(width: 14)
+                    Text(L("hud.show"))
+                    Spacer()
+                }.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(hud.enabled ? .isSelected : [])
             HStack {
                 Button(L("action.open_stats")) { Logger(subsystem: "ee.ryek.tokenory", category: "windows").info("Opening dashboard"); openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }.keyboardShortcut("o")
                 Spacer()
