@@ -1,5 +1,5 @@
 // [INPUT]: Today's real ledger summary, persisted HUD preferences, accessibility settings.
-// [OUTPUT]: Half-size orange mechanical counter with synchronized rolling and sound.
+// [OUTPUT]: Half-size orange mechanical counter with snapshot-consistent rolling and sound.
 // [POS]: Floating panel content; no dashboard filters or simulated increments.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -100,19 +100,21 @@ struct MechanicalHUDView: View {
     }
 
     private var readout: some View {
-        HStack(spacing: 2) {
+        // SwiftUI can evaluate an old child after the animator clears or resizes its array.
+        let positions = animator.positions
+        return HStack(spacing: 2) {
             if preferences.metric == .cost {
                 Text(reading.partial ? "≈$" : "$").font(.custom("SairaExtraCondensed-SemiBold", size: 24))
                     .foregroundStyle(Color(red: 0.72, green: 0.79, blue: 0.86)).padding(.horizontal, 3)
             }
-            if animator.positions.isEmpty {
+            if positions.isEmpty {
                 Text("—").font(.custom("SairaExtraCondensed-SemiBold", size: 48))
                     .foregroundStyle(Color(red: 0.94, green: 0.94, blue: 0.87)).frame(maxWidth: .infinity)
             } else {
-                ForEach(animator.positions.indices, id: \.self) { index in
-                    HUDDrum(position: animator.positions[index], blue: index == animator.positions.count - 1,
-                            count: animator.positions.count)
-                    let remaining = animator.positions.count - index - 1
+                ForEach(positions.indices, id: \.self) { index in
+                    HUDDrum(position: positions[index], blue: index == positions.count - 1,
+                            count: positions.count)
+                    let remaining = positions.count - index - 1
                     if remaining > 0, (preferences.metric == .tokens && remaining.isMultiple(of: 3)) || (preferences.metric == .cost && remaining == 2) {
                         Text(preferences.metric == .cost ? "." : ",").font(.custom("SairaExtraCondensed-SemiBold", size: 25))
                             .foregroundStyle(.white.opacity(0.8)).frame(width: 5).offset(y: 15)

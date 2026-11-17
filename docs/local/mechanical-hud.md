@@ -18,6 +18,8 @@ The approved interactive demo is retained in `docs/prototypes/mechanical-hud/ind
 
 ## Verification
 
+Each readout render captures one immutable drum-position snapshot. Deferred SwiftUI children use that snapshot for both indices and values, including while a day refresh clears the reading or a correction reduces its digit count. This addresses the `MechanicalHUDView.readout` array-bounds crash reported on 2026-11-17 in 0.1.6 (8).
+
 `xcodebuild test -project macos/Tokenory.xcodeproj -scheme Tokenory -derivedDataPath .build/xcode -destination 'platform=macOS'`
 
 `script/build_and_run.sh --verify`
