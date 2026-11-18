@@ -1,60 +1,79 @@
 // [INPUT]: Selected-range report and independently loaded annual activity.
-// [OUTPUT]: Compact overview, token mix, rankings, calendar and model history.
+// [OUTPUT]: Rolling totals, growing range charts, and independent annual activity.
 // [POS]: Native overview composition; disclosure keeps detailed caveats off the canvas.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 struct OverviewView: View {
     let report: UsageReport
+    let isActive: Bool
     @Environment(UsageStore.self) private var store
     @State private var rankingMetric: UsageMetric = .tokens
     @State private var previousRange: (UsageDateRange, String?, String?)?
+    @State private var scrolledAwayFromTop = false
+
+    private var reportFilter: UsageFilter { store.reportFilter ?? store.filter }
+    private var range: DashboardDateSpan? {
+        isActive ? DashboardDateSpan(from: reportFilter.from, to: reportFilter.to) : nil
+    }
 
     var body: some View {
         GeometryReader { geometry in
             ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    Color.clear.frame(height: 0).id("overview-top")
-                    if previousRange != nil {
-                        Button { restoreRange() } label: { Label(L("overview.back"), systemImage: "arrow.left") }
-                            .buttonStyle(.plain).foregroundStyle(Color.accentColor).font(.caption)
-                    }
-                    WorkspacePanel {
-                        VStack(alignment: .leading, spacing: 20) {
-                            totals
-                            TokenMixView(tokens: report.summary.tokenBreakdown)
-                            Divider()
-                            UsageTrendChart(report: report, filter: store.reportFilter ?? store.filter)
-                        }
-                    }
-                    let layout = geometry.size.width >= 720
-                        ? AnyLayout(HStackLayout(alignment: .top, spacing: 18))
-                        : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
-                    WorkspacePanel {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Picker(L("overview.sort"), selection: $rankingMetric) {
-                                ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
-                            }.labelsHidden().pickerStyle(.segmented).fixedSize()
-                            Divider()
-                            layout {
-                                UsageRankingView(groups: report.clients, kind: .tool, metric: rankingMetric)
-                                UsageRankingView(groups: report.models, kind: .model, metric: rankingMetric)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Color.clear.frame(height: 0).id("overview-top")
+                        LazyVStack(alignment: .leading, spacing: 20) {
+                            if previousRange != nil {
+                                Button { restoreRange() } label: { Label(L("overview.back"), systemImage: "arrow.left") }
+                                    .buttonStyle(.plain).foregroundStyle(Color.accentColor).font(.caption)
                             }
-                        }
+                            WorkspacePanel {
+                                VStack(alignment: .leading, spacing: 20) {
+                                    totals
+                                    TokenMixView(tokens: report.summary.tokenBreakdown, range: range)
+                                    Divider()
+                                    UsageTrendChart(report: report, filter: reportFilter, animateRangeChanges: isActive)
+                                }
+                            }
+                            let layout = geometry.size.width >= 720
+                                ? AnyLayout(HStackLayout(alignment: .top, spacing: 18))
+                                : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
+                            WorkspacePanel {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    Picker(L("overview.sort"), selection: $rankingMetric) {
+                                        ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
+                                    }.labelsHidden().pickerStyle(.segmented).fixedSize()
+                                    Divider()
+                                    layout {
+                                        UsageRankingView(groups: report.clients, kind: .tool, metric: rankingMetric, range: range)
+                                        UsageRankingView(groups: report.models, kind: .model, metric: rankingMetric, range: range)
+                                    }
+                                }
+                            }
+                            if let activity = store.activity, let calendar = store.activityCalendar {
+                                UsageActivityView(report: activity, activity: calendar) { day in
+                                    if previousRange == nil { previousRange = (store.dateRange, store.filter.from, store.filter.to) }
+                                    store.dateRange = .custom
+                                    var filter = store.filter; filter.from = day; filter.to = day; filter.offset = 0
+                                    store.filter = filter
+                                }
+                                UsageHabitsView(report: activity, activity: calendar, horizontal: geometry.size.width >= 760)
+                                UsageHistoryChart(report: activity)
+                            }
+                        }.padding(.horizontal, 22).padding(.bottom, 22).padding(.top, 4)
                     }
-                    if let activity = store.activity, let calendar = store.activityCalendar {
-                        UsageActivityView(report: activity, activity: calendar) { day in
-                            if previousRange == nil { previousRange = (store.dateRange, store.filter.from, store.filter.to) }
-                            store.dateRange = .custom
-                            var filter = store.filter; filter.from = day; filter.to = day; filter.offset = 0
-                            store.filter = filter
-                        }
-                        UsageHabitsView(report: activity, activity: calendar, horizontal: geometry.size.width >= 760)
-                        UsageHistoryChart(report: activity)
+                }
+                .onScrollGeometryChange(for: Bool.self) {
+                    $0.contentOffset.y + $0.contentInsets.top > 8
+                } action: { _, away in
+                    scrolledAwayFromTop = away
+                }
+                .onChange(of: reportFilter) { old, new in
+                    if scrolledAwayFromTop, old.from != new.from || old.to != new.to {
+                        proxy.scrollTo("overview-top", anchor: .top)
                     }
-                }.padding(.horizontal, 22).padding(.bottom, 22).padding(.top, 4)
-            }.onChange(of: store.filter.from) { _, _ in proxy.scrollTo("overview-top", anchor: .top) }
+                }
             }
         }
     }
@@ -72,7 +91,7 @@ struct OverviewView: View {
     }
     private var mainTotals: some View {
         HStack(alignment: .top, spacing: 28) {
-            metric(L("usage.tokens"), compactTokens(report.summary.tokens), large: true)
+            metric(L("usage.tokens"), compactTokens(report.summary.tokens), amount: report.summary.tokens, large: true)
                 .help(report.summary.tokens.formatted(.number.locale(Localization.locale)))
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 5) {
@@ -85,21 +104,26 @@ struct OverviewView: View {
                                 .compactMap { $0 }.joined(separator: "\n"))
                     }
                 }
-                Text(usd(report.summary.knownEstimatedCostUsd)).font(.system(size: 32, weight: .semibold)).monospacedDigit()
+                DashboardRollingValue(text: usd(report.summary.knownEstimatedCostUsd), value: report.summary.knownEstimatedCostUsd,
+                                      range: range, style: .semibold(32))
                     .lineLimit(1).minimumScaleFactor(0.7)
             }.frame(maxWidth: .infinity, alignment: .leading).help(L("overview.cost_help"))
         }
     }
     private var secondaryTotals: some View {
         HStack(spacing: 24) {
-            metric(L("overview.active_days"), report.summary.activeDays.formatted(), large: false)
-            metric(L("overview.models"), report.models.filter { $0.summary.tokens > 0 }.count.formatted(), large: false)
+            let filter = reportFilter
+            if filter.from == nil || filter.from != filter.to {
+                metric(L("overview.active_days"), report.summary.activeDays.formatted(), amount: report.summary.activeDays, large: false)
+            }
+            let modelsUsed = Int64(report.models.filter { $0.summary.tokens > 0 }.count)
+            metric(L("overview.models"), modelsUsed.formatted(), amount: modelsUsed, large: false)
         }.fixedSize(horizontal: true, vertical: false)
     }
-    private func metric(_ label: String, _ value: String, large: Bool) -> some View {
+    private func metric(_ label: String, _ value: String, amount: Int64, large: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(.subheadline).foregroundStyle(.secondary)
-            Text(value).font(.system(size: large ? 32 : 23, weight: .semibold)).monospacedDigit()
+            DashboardRollingValue(text: value, value: Double(amount), range: range, style: .semibold(large ? 32 : 23))
                 .lineLimit(1).minimumScaleFactor(0.7)
         }.frame(maxWidth: large ? .infinity : nil, alignment: .leading).accessibilityElement(children: .combine)
     }
@@ -107,6 +131,8 @@ struct OverviewView: View {
 
 private struct TokenMixView: View {
     let tokens: TokenBreakdown
+    let range: DashboardDateSpan?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var parts: [(String, Int64, Color)] {
         [("token.input", tokens.input, .blue), ("token.output", tokens.output, WorkspaceStyle.outputTokens),
          ("token.cache_read", tokens.cacheRead, .orange), ("token.cache_write", tokens.cacheWrite, .purple),
@@ -121,14 +147,17 @@ private struct TokenMixView: View {
                         Rectangle().fill(parts[i].2.opacity(0.8))
                             .frame(width: total > 0 ? geometry.size.width * Double(parts[i].1) / Double(total) : 0)
                     }
-                }.clipShape(Capsule())
+                }
+                .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: range)
+                .clipShape(Capsule())
             }.frame(height: 5).accessibilityHidden(true)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 142), alignment: .leading)], alignment: .leading, spacing: 7) {
                 ForEach(parts.indices, id: \.self) { i in
                     HStack(spacing: 5) {
                         Circle().fill(parts[i].2).frame(width: 5, height: 5)
                         Text(L(parts[i].0)).foregroundStyle(.secondary)
-                        Text(compactTokens(parts[i].1)).monospacedDigit()
+                        DashboardRollingValue(text: compactTokens(parts[i].1), value: Double(parts[i].1),
+                                              range: range, style: .caption2)
                     }.font(.caption2).help(total > 0 ? (Double(parts[i].1) / Double(total)).formatted(.percent.precision(.fractionLength(1))) : "0%")
                         .accessibilityElement(children: .combine)
                 }
@@ -141,6 +170,8 @@ private struct UsageRankingView: View {
     let groups: [UsageGroup]
     let kind: BrandKind
     let metric: UsageMetric
+    let range: DashboardDateSpan?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = false
     private var sorted: [UsageGroup] {
         groups.sorted {
@@ -159,22 +190,27 @@ private struct UsageRankingView: View {
                 }.frame(height: 24)
                 ForEach(expanded ? sorted : Array(sorted.prefix(5))) { group in
                     let amount = metric == .tokens ? Double(group.summary.tokens) : group.summary.knownEstimatedCostUsd
+                    let share = amount.map { total > 0 ? $0 / total : 0 }
                     HStack(spacing: 10) {
                         BrandIcon(name: group.key, kind: kind, size: 18)
                         VStack(spacing: 7) {
                             HStack {
                                 Text(kind == .tool ? clientName(group.key) : group.key).lineLimit(1).truncationMode(.middle)
                                 Spacer(minLength: 8)
-                                Text(metric == .tokens ? compactTokens(group.summary.tokens) : usd(amount)).monospacedDigit()
+                                DashboardRollingValue(text: metric == .tokens ? compactTokens(group.summary.tokens) : usd(amount),
+                                                      value: amount, range: range, style: .callout)
                             }.font(.callout)
                             GeometryReader { geometry in
                                 Capsule().fill(Color.accentColor.opacity(0.08))
                                 Capsule().fill(Color.accentColor.opacity(0.65))
-                                    .frame(width: total > 0 ? geometry.size.width * (amount ?? 0) / total : 0)
+                                    .frame(width: geometry.size.width)
+                                    .scaleEffect(x: share ?? 0, y: 1, anchor: .leading)
+                                    .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: range)
                             }.frame(height: 3).accessibilityHidden(true)
                         }
-                        Text(amount == nil ? "—" : (total > 0 ? (amount! / total).formatted(.percent.precision(.fractionLength(0))) : "0%"))
-                            .font(.caption2).foregroundStyle(.secondary).monospacedDigit().frame(width: 35, alignment: .trailing)
+                        DashboardRollingValue(text: share?.formatted(.percent.precision(.fractionLength(0))) ?? "—",
+                                              value: share, range: range, style: .caption2, secondary: true)
+                            .foregroundStyle(.secondary).frame(width: 35, alignment: .trailing)
                     }.help(group.key + "\n" + L(group.summary.costStatus == "partial" ? "cost.known" : "cost.estimate") + ": " + usd(group.summary.knownEstimatedCostUsd))
                         .accessibilityElement(children: .combine)
                 }

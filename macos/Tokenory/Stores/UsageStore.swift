@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 发布统计、独立当日用量及其日期/错误、回合、价格和采集状态。
+// [OUTPUT]: 独立发布筛选结果、全年活动、当日用量、回合、价格和采集状态。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -64,6 +64,11 @@ final class UsageStore {
     private var eventTask: Task<Void, Never>?
     private(set) var todayTimeZone: String?
     private var refreshGeneration = 0
+    private var reportGeneration = 0
+    private var requestedReportFilter: UsageFilter?
+    private var activityFilter: UsageFilter?
+    private var requestedActivityFilter: UsageFilter?
+    private var activityGeneration = 0
 
     init(engine: EngineClient? = nil, directory: URL? = nil) {
         let directory = directory ?? ProcessInfo.processInfo.environment["TOKENORY_DATA_DIR"].map { URL(fileURLWithPath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/Tokenory")
@@ -71,9 +76,14 @@ final class UsageStore {
         self.engine = engine ?? EngineClient(helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/tokenory"), directory: directory)
         updateDateRange()
     }
-    static func day(_ date: Date) -> String {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = "yyyy-MM-dd"; return f.string(from: date)
-    }
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+    static func day(_ date: Date) -> String { dayFormatter.string(from: date) }
     func start() {
         if eventTask == nil {
             eventTask = Task { [weak self, engine] in
@@ -85,52 +95,93 @@ final class UsageStore {
             catch { fail(error) }
         }
     }
-    func updateDateRange(now: Date = Date()) {
+    func selectDateRange(_ range: UsageDateRange) {
+        dateRange = range
+        updateDateRange(resetOffset: true)
+    }
+    func updateDateRange(now: Date = Date(), resetOffset: Bool = false) {
         guard dateRange != .custom else { return }
-        let prior = filter
-        filter.to = dateRange == .all ? nil : Self.day(now)
+        var selection = filter
+        selection.to = dateRange == .all ? nil : Self.day(now)
         switch dateRange {
-        case .today: filter.from = Self.day(now)
-        case .week: filter.from = Self.day(now.addingTimeInterval(-6 * 86400))
-        case .month: filter.from = Self.day(now.addingTimeInterval(-29 * 86400))
-        case .all: filter.from = nil
+        case .today: selection.from = selection.to
+        case .week: selection.from = Self.day(now.addingTimeInterval(-6 * 86400))
+        case .month: selection.from = Self.day(now.addingTimeInterval(-29 * 86400))
+        case .all: selection.from = nil
         case .custom: break
         }
-        if filter != prior { filter.offset = 0 }
+        if resetOffset || selection != filter { selection.offset = 0 }
+        if selection != filter { filter = selection }
     }
     func refresh(now: Date = Date()) async {
         updateDateRange(now: now)
-        refreshGeneration += 1; let generation = refreshGeneration; loading = true
-        let day = Self.day(now)
+        refreshGeneration += 1
+        let generation = refreshGeneration
         let localDay = LocalUsageDay(now: now)
         let quickGeneration = beginTodayRefresh(window: localDay)
+        await refreshReport(filter, force: true)
+        guard generation == refreshGeneration else { return }
+        async let history: Void = refreshActivity(for: filter, now: now, force: true)
         async let quick: Void = loadToday(window: localDay, generation: quickGeneration)
         do {
-            let queryFilter = filter
-            let dashboardFilter = try JSONValue.encode(queryFilter)
-            var historyFilter = queryFilter
-            let calendar = Localization.reportingCalendar
-            let start = calendar.date(byAdding: .year, value: -1, to: calendar.startOfDay(for: now))!
-            historyFilter.from = Self.day(calendar.date(byAdding: .day, value: 1, to: start)!)
-            historyFilter.to = day
-            historyFilter.offset = 0
-            async let dashboard = engine.request("overview", payload: dashboardFilter)
-            async let history = engine.request("activity", payload: .encode(historyFilter))
-            async let all = engine.request("overview")
-            async let engineStatus = engine.request("status")
-            let results = try await (dashboard, all, engineStatus, history)
-            guard generation == refreshGeneration else { return }
-            let newReport = try results.0.decode(UsageReport.self)
-            let newCatalog = try results.1.decode(UsageReport.self)
-            let newStatus = try results.2.decode(EngineStatus.self)
-            let newActivity = try results.3.decode(ActivityReport.self)
-            report = newReport; reportFilter = queryFilter; catalog = newCatalog
+            async let all = engine.request("overview", as: UsageReport.self)
+            async let engineStatus = engine.request("status", as: EngineStatus.self)
+            let (newCatalog, newStatus) = try await (all, engineStatus)
+            if generation == refreshGeneration {
+                catalog = newCatalog; status = newStatus; scanning = newStatus.scanning; connected = true
+            }
+        } catch { if generation == refreshGeneration { fail(error) } }
+        _ = await (history, quick)
+    }
+    func refreshSelection(_ selection: UsageFilter, now: Date = Date()) async {
+        guard selection == filter else { return }
+        await refreshReport(selection, force: false)
+        guard selection == filter, reportFilter == selection else { return }
+        await refreshActivity(for: selection, now: now, force: false)
+    }
+    private func refreshReport(_ selection: UsageFilter, force: Bool) async {
+        guard force || (requestedReportFilter != selection && reportFilter != selection) else { return }
+        reportGeneration += 1
+        let generation = reportGeneration
+        requestedReportFilter = selection
+        loading = true
+        defer {
+            if generation == reportGeneration { requestedReportFilter = nil; loading = false }
+        }
+        do {
+            let selected = try await engine.request("overview", payload: .encode(selection), as: UsageReport.self)
+            guard generation == reportGeneration, selection == filter else { return }
+            report = selected
+            reportFilter = selection
+        } catch {
+            if generation == reportGeneration, selection == filter { fail(error) }
+        }
+    }
+    private func refreshActivity(for selection: UsageFilter, now: Date, force: Bool) async {
+        let calendar = Localization.reportingCalendar
+        let start = calendar.date(byAdding: .year, value: -1, to: calendar.startOfDay(for: now))!
+        let from = Self.day(calendar.date(byAdding: .day, value: 1, to: start)!)
+        let to = Self.day(now)
+        let annual = annualFilter(for: selection, from: from, to: to)
+        guard force || (requestedActivityFilter != annual && activityFilter != annual) else { return }
+        activityGeneration += 1
+        let generation = activityGeneration
+        requestedActivityFilter = annual
+        defer { if generation == activityGeneration { requestedActivityFilter = nil } }
+        do {
+            let newActivity = try await engine.request("activity", payload: .encode(annual), as: ActivityReport.self)
+            guard generation == activityGeneration, annual == annualFilter(for: filter, from: from, to: to) else { return }
+            activityFilter = annual
             activityCalendar = UsageActivity(report: newActivity)
             historyCache.removeAll(keepingCapacity: true)
-            activity = newActivity; status = newStatus; scanning = newStatus.scanning; connected = true
-        } catch { if generation == refreshGeneration { fail(error) } }
-        await quick
-        if generation == refreshGeneration { loading = false }
+            activity = newActivity
+        } catch {
+            if generation == activityGeneration, annual == annualFilter(for: filter, from: from, to: to) { fail(error) }
+        }
+    }
+    private func annualFilter(for selection: UsageFilter, from: String, to: String) -> UsageFilter {
+        UsageFilter(from: from, to: to, client: selection.client, provider: selection.provider, model: selection.model,
+                    source: selection.source, timestampFromMs: selection.timestampFromMs, timestampToMs: selection.timestampToMs)
     }
     func refreshToday(now: Date = Date()) async {
         let prior = filter
@@ -186,7 +237,7 @@ final class UsageStore {
         let generation = turnsGeneration
         turnsLoading = true; turnsError = nil
         do {
-            let response = try await engine.request("turnAnalytics", payload: .encode(query)).decode(TurnReport.self)
+            let response = try await engine.request("turnAnalytics", payload: .encode(query), as: TurnReport.self)
             guard generation == turnsGeneration else { return }
             turnAnalytics = TurnPresentation(report: response)
             turnsQuery = query

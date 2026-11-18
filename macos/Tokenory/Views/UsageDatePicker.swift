@@ -1,128 +1,245 @@
+// [INPUT]: 当前用量筛选范围与日历交互。
+// [OUTPUT]: 提交预设或自定义日期范围。
+// [POS]: 统计窗口的日期工具栏控件与原生弹窗。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 struct UsageDatePicker: View {
     @Environment(UsageStore.self) private var store
-    @State private var isPresented = false
-    @State private var start = Date()
-    @State private var end: Date? = Date()
-    @State private var month = Date()
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var presentation: DateRangeDraft?
 
-    private var calendar: Calendar { Localization.reportingCalendar }
     private var title: String {
         if store.dateRange == .custom, let from = store.filter.from, let to = store.filter.to { return Localization.dateRange(from, to) }
         return store.dateRange.title
     }
+
     var body: some View {
-        Button { isPresented = true } label: { Label(title, systemImage: "calendar").lineLimit(1) }
-            .labelStyle(.titleAndIcon).help(title)
-            .accessibilityLabel(L("field.date")).accessibilityValue(title)
-            .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-                VStack(spacing: 16) {
-                    HStack(alignment: .top, spacing: 16) {
-                        VStack(spacing: 3) {
-                            ForEach(UsageDateRange.allCases.filter { $0 != .custom }, id: \.self) { range in
-                                Button {
-                                    store.dateRange = range
-                                    store.updateDateRange(); store.filter.offset = 0
-                                    isPresented = false
-                                } label: {
-                                    HStack {
-                                        Text(range.title)
-                                        Spacer(minLength: 3)
-                                        if store.dateRange == range { Image(systemName: "checkmark").font(.caption) }
-                                    }
-                                    .padding(.horizontal, 10).frame(height: 32).contentShape(Rectangle())
-                                    .background(store.dateRange == range ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
-                                }.buttonStyle(WorkspaceHoverStyle())
-                            }
-                        }.frame(width: 115).padding(.top, 35)
-                        Divider()
-                        VStack(spacing: 8) {
+        let title = title
+        Button {
+            guard presentation == nil else { return }
+            presentation = DateRangeDraft(filter: store.filter, selectedRange: store.dateRange)
+        } label: {
+            Label(title, systemImage: "calendar").lineLimit(1)
+        }
+        .labelStyle(.titleAndIcon).help(title)
+        .accessibilityLabel(L("field.date")).accessibilityValue(title)
+        .popover(item: $presentation, arrowEdge: .bottom) { draft in
+            DateRangePopover(
+                draft: draft,
+                selectPreset: { range in
+                    presentation = nil
+                    store.selectDateRange(range)
+                },
+                cancel: { presentation = nil },
+                apply: { start, end in
+                    presentation = nil
+                    store.dateRange = .custom
+                    var filter = store.filter
+                    filter.from = UsageStore.day(start)
+                    filter.to = UsageStore.day(end)
+                    filter.offset = 0
+                    store.filter = filter
+                }
+            )
+        }
+    }
+}
+
+private struct DateRangePopover: View {
+    // Editing the draft locally keeps the presentation item stable until dismissal.
+    @State var draft: DateRangeDraft
+    let selectPreset: (UsageDateRange) -> Void
+    let cancel: () -> Void
+    let apply: (Date, Date) -> Void
+
+    private static let presets = UsageDateRange.allCases.filter { $0 != .custom }
+    private static let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+
+    var body: some View {
+        let today = draft.calendar.startOfDay(for: .now)
+        VStack(spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
+                VStack(spacing: 3) {
+                    ForEach(Self.presets, id: \.self) { range in
+                        let selected = draft.selectedRange == range
+                        Button { selectPreset(range) } label: {
                             HStack {
-                                Button { moveMonth(-1) } label: { Image(systemName: "chevron.left").frame(width: 20, height: 20) }
-                                    .help(L("calendar.previous_month")).accessibilityLabel(L("calendar.previous_month"))
-                                Spacer()
-                                Text(L("range.custom")).font(.headline)
-                                Spacer()
-                                Button { moveMonth(1) } label: { Image(systemName: "chevron.right").frame(width: 20, height: 20) }
-                                    .help(L("calendar.next_month")).accessibilityLabel(L("calendar.next_month"))
-                            }.buttonStyle(.borderless)
-                            HStack(alignment: .top, spacing: 18) {
-                                monthGrid(month)
-                                monthGrid(calendar.date(byAdding: .month, value: 1, to: month)!)
+                                Text(range.title)
+                                Spacer(minLength: 3)
+                                if selected { Image(systemName: "checkmark").font(.caption) }
                             }
-                        }
-                    }.fixedSize(horizontal: false, vertical: true)
-                    Divider()
-                    HStack(spacing: 10) {
-                        Text(end.map { Localization.dateRange(UsageStore.day(start), UsageStore.day($0)) } ?? L("calendar.choose_end"))
-                            .font(.callout).foregroundStyle(.secondary)
+                            .padding(.horizontal, 10).frame(height: 32).contentShape(Rectangle())
+                            .background(selected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
+                        }.buttonStyle(WorkspaceHoverStyle())
+                    }
+                }.frame(width: 115).padding(.top, 35)
+                Divider()
+                VStack(spacing: 8) {
+                    HStack {
+                        Button { draft.moveMonth(-1) } label: { Image(systemName: "chevron.left").frame(width: 20, height: 20) }
+                            .help(L("calendar.previous_month")).accessibilityLabel(L("calendar.previous_month"))
                         Spacer()
-                        Button(L("action.cancel")) { isPresented = false }.keyboardShortcut(.cancelAction)
-                        Button(L("action.apply")) {
-                            guard let end else { return }
-                            store.dateRange = .custom
-                            var filter = store.filter
-                            filter.from = UsageStore.day(start); filter.to = UsageStore.day(end); filter.offset = 0
-                            store.filter = filter; isPresented = false
-                        }.buttonStyle(.borderedProminent).disabled(end == nil).keyboardShortcut(.defaultAction)
+                        Text(L("range.custom")).font(.headline)
+                        Spacer()
+                        Button { draft.moveMonth(1) } label: { Image(systemName: "chevron.right").frame(width: 20, height: 20) }
+                            .help(L("calendar.next_month")).accessibilityLabel(L("calendar.next_month"))
+                    }.buttonStyle(.borderless)
+                    HStack(alignment: .top, spacing: 18) {
+                        monthGrid(draft.firstMonth, today: today)
+                        monthGrid(draft.secondMonth, today: today)
                     }
-                }.padding(18).frame(width: 660)
-                    .onAppear {
-                        let finish = store.filter.to.flatMap(Localization.date) ?? calendar.startOfDay(for: Date())
-                        end = finish
-                        start = store.filter.from.flatMap(Localization.date) ?? calendar.date(byAdding: .day, value: -29, to: finish)!
-                        month = calendar.date(from: calendar.dateComponents([.year, .month], from: start))!
-                    }
+                }
+            }.fixedSize(horizontal: false, vertical: true)
+            Divider()
+            HStack(spacing: 10) {
+                Text(draft.rangeLabel ?? L("calendar.choose_end"))
+                    .font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Button(L("action.cancel"), action: cancel).keyboardShortcut(.cancelAction)
+                Button(L("action.apply")) {
+                    guard let end = draft.end else { return }
+                    apply(draft.start, end)
+                }.buttonStyle(.borderedProminent).disabled(draft.end == nil).keyboardShortcut(.defaultAction)
             }
+        }.padding(18).frame(width: 660)
     }
-    private func moveMonth(_ delta: Int) {
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { month = calendar.date(byAdding: .month, value: delta, to: month)! }
-    }
-    private func monthGrid(_ date: Date) -> some View {
-        let first = calendar.date(from: calendar.dateComponents([.year, .month], from: date))!
-        let leading = (calendar.component(.weekday, from: first) - calendar.firstWeekday + 7) % 7
-        let days = calendar.range(of: .day, in: .month, for: first)!.count
-        return VStack(spacing: 8) {
-            Text(Localization.month(first))
+
+    private func monthGrid(_ month: CalendarMonth, today: Date) -> some View {
+        VStack(spacing: 8) {
+            Text(month.label)
                 .font(.callout.weight(.medium)).frame(height: 24)
             HStack(spacing: 0) {
-                ForEach(0..<7, id: \.self) { offset in
-                    Text(calendar.veryShortStandaloneWeekdaySymbols[(calendar.firstWeekday - 1 + offset) % 7])
+                ForEach(draft.weekdays.indices, id: \.self) { offset in
+                    Text(draft.weekdays[offset])
                         .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
                 }
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 3) {
-                ForEach(0..<42, id: \.self) { cell in
-                    if cell >= leading && cell < leading + days {
-                        let day = calendar.date(byAdding: .day, value: cell - leading, to: first)!
-                        dayButton(day)
+            LazyVGrid(columns: Self.columns, spacing: 3) {
+                ForEach(month.cells.indices, id: \.self) { cell in
+                    if let day = month.cells[cell] {
+                        dayButton(day, today: today)
                     } else { Color.clear.frame(height: 30).accessibilityHidden(true) }
                 }
             }
         }.frame(maxWidth: .infinity)
     }
-    private func dayButton(_ date: Date) -> some View {
-        let isStart = calendar.isDate(date, inSameDayAs: start)
-        let isEnd = end.map { calendar.isDate(date, inSameDayAs: $0) } ?? false
-        let included = end.map { date >= start && date <= $0 } ?? false
-        let today = calendar.isDateInToday(date)
-        return Button {
-            if end != nil { start = date; end = nil }
-            else if date < start { end = start; start = date }
-            else { end = date }
-        } label: {
-            Text("\(calendar.component(.day, from: date))").font(.system(size: 12, weight: today ? .bold : .regular)).monospacedDigit()
-                .foregroundStyle(isStart || isEnd ? Color.white : Color.primary)
+
+    private func dayButton(_ day: CalendarMonth.Day, today: Date) -> some View {
+        let endpoint = day.date == draft.start || day.date == draft.end
+        let included = draft.end.map { day.date >= draft.start && day.date <= $0 } ?? false
+        let isToday = day.date == today
+        return Button { draft.selectDay(day.date) } label: {
+            Text("\(day.number)").font(.system(size: 12, weight: isToday ? .bold : .regular)).monospacedDigit()
+                .foregroundStyle(endpoint ? Color.white : Color.primary)
                 .frame(width: 30, height: 30)
-                .background(isStart || isEnd ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 6))
-                .overlay { if today && !isStart && !isEnd { RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor, lineWidth: 1) } }
+                .background(endpoint ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 6))
+                .overlay { if isToday && !endpoint { RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor, lineWidth: 1) } }
                 .frame(maxWidth: .infinity).contentShape(Rectangle())
                 .background(included ? Color.accentColor.opacity(0.12) : .clear)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Localization.day(UsageStore.day(date)))
-        .accessibilityAddTraits(isStart || isEnd || included ? [.isSelected] : [])
+        .accessibilityLabel(day.label)
+        .accessibilityAddTraits(endpoint || included ? [.isSelected] : [])
+    }
+}
+
+private struct DateRangeDraft: Identifiable {
+    let id = UUID()
+    let selectedRange: UsageDateRange
+    let calendar: Calendar
+    let weekdays: [String]
+    private(set) var start: Date
+    private(set) var end: Date?
+    private(set) var firstMonth: CalendarMonth
+    private(set) var secondMonth: CalendarMonth
+    private let dayFormatter: DateFormatter
+    private let monthFormatter: DateFormatter
+    private let rangeFormatter: DateIntervalFormatter
+
+    init(filter: UsageFilter, selectedRange: UsageDateRange) {
+        let calendar = Localization.reportingCalendar
+        self.calendar = calendar
+        self.selectedRange = selectedRange
+        let weekdaySymbols = calendar.veryShortStandaloneWeekdaySymbols
+        weekdays = weekdaySymbols.indices.map { weekdaySymbols[(calendar.firstWeekday - 1 + $0) % 7] }
+
+        let finish = filter.to.flatMap(Localization.date) ?? calendar.startOfDay(for: .now)
+        let start = filter.from.flatMap(Localization.date) ?? calendar.date(byAdding: .day, value: -29, to: finish)!
+        self.start = calendar.startOfDay(for: start)
+        end = calendar.startOfDay(for: finish)
+
+        let dayFormatter = DateFormatter()
+        dayFormatter.locale = calendar.locale
+        dayFormatter.timeZone = calendar.timeZone
+        dayFormatter.dateStyle = .medium
+        self.dayFormatter = dayFormatter
+
+        let monthFormatter = DateFormatter()
+        monthFormatter.locale = calendar.locale
+        monthFormatter.timeZone = calendar.timeZone
+        monthFormatter.setLocalizedDateFormatFromTemplate("yMMMM")
+        self.monthFormatter = monthFormatter
+
+        rangeFormatter = DateIntervalFormatter()
+        rangeFormatter.locale = calendar.locale
+        rangeFormatter.timeZone = calendar.timeZone
+        rangeFormatter.dateStyle = .medium
+        rangeFormatter.timeStyle = .none
+
+        let first = calendar.dateInterval(of: .month, for: start)!.start
+        firstMonth = CalendarMonth(first: first, calendar: calendar, monthFormatter: monthFormatter, dayFormatter: dayFormatter)
+        let next = calendar.date(byAdding: .month, value: 1, to: first)!
+        secondMonth = CalendarMonth(first: next, calendar: calendar, monthFormatter: monthFormatter, dayFormatter: dayFormatter)
+    }
+
+    var rangeLabel: String? { end.map { rangeFormatter.string(from: start, to: $0) } }
+
+    mutating func moveMonth(_ delta: Int) {
+        if delta < 0 {
+            let date = calendar.date(byAdding: .month, value: -1, to: firstMonth.first)!
+            secondMonth = firstMonth
+            firstMonth = CalendarMonth(first: date, calendar: calendar, monthFormatter: monthFormatter, dayFormatter: dayFormatter)
+        } else {
+            let date = calendar.date(byAdding: .month, value: 1, to: secondMonth.first)!
+            firstMonth = secondMonth
+            secondMonth = CalendarMonth(first: date, calendar: calendar, monthFormatter: monthFormatter, dayFormatter: dayFormatter)
+        }
+    }
+
+    mutating func selectDay(_ date: Date) {
+        if end != nil {
+            start = date
+            end = nil
+        } else if date < start {
+            end = start
+            start = date
+        } else {
+            end = date
+        }
+    }
+}
+
+private struct CalendarMonth {
+    struct Day {
+        let date: Date
+        let number: Int
+        let label: String
+    }
+
+    let first: Date
+    let label: String
+    let cells: [Day?]
+
+    init(first: Date, calendar: Calendar, monthFormatter: DateFormatter, dayFormatter: DateFormatter) {
+        self.first = calendar.dateInterval(of: .month, for: first)!.start
+        label = monthFormatter.string(from: first)
+        let leading = (calendar.component(.weekday, from: first) - calendar.firstWeekday + 7) % 7
+        let count = calendar.range(of: .day, in: .month, for: first)!.count
+        cells = (0..<42).map { cell in
+            let offset = cell - leading
+            guard (0..<count).contains(offset) else { return nil }
+            let date = calendar.startOfDay(for: calendar.date(byAdding: .day, value: offset, to: first)!)
+            return Day(date: date, number: offset + 1, label: dayFormatter.string(from: date))
+        }
     }
 }

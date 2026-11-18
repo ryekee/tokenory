@@ -47,6 +47,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 
 - Use tokens.ci as the reference for content, visual style and bilingual vocabulary. When a design proposal is requested for review, present a prototype first and preserve confirmed interactions when connecting it to real app data.
 - Default to the last 7 days. Align trend labels with the visible edges of the heading, body and chart. Keep chronological order fixed; do not offer a newest-first control.
+- Hide the active-day count when the selected range covers a single date.
 - Tool and model rankings share one panel and a top-level Tokens/cost segmented control. Place shared controls outside both child rankings. Use one-click segments for binary choices.
 - Daily values and trailing 30-day averages use the same raw totals. No-activity dates count as zero. Unknown costs remain gaps only in the affected series; never draw unknown costs as zero. Zero-token synthetic records with no cost count as zero. Zero-token records are not active days. Do not introduce erroneous breaks in averages.
 
@@ -75,6 +76,9 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 
 ## Performance
 
+- Build the date picker's two visible months once at opening and reuse their labels when selecting dates.
+- Keep the date and scan buttons adjacent. Show report progress in the scan icon's existing space.
+- Keep the current content visible until the new date-range report arrives. Drive rolling readouts from one count with carry and borrow. For large changes, briefly fade to the final portion of the same count, then roll to the result. For unit changes, fade between the two formatted values. Move plot marks independently of axis layout. Bars start at zero after an empty range, and lines draw left to right. Empty results mount only the empty state. Respect Reduce Motion and reuse annual data across range changes.
 - Cache annual presentation data per refresh; isolate hover observation to readouts. Lazy-load overview sections and reuse cached history on navigation.
 - Keep details and sources mounted after first visit. Sources requests do not fetch price catalogs; already loaded source data refreshes after scans. Keep overview, details and sources responsive when entering and switching pages.
 

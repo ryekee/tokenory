@@ -75,6 +75,57 @@ final class HUDTests: XCTestCase {
         model.receive(reading(1, day: "2026-11-17", metric: .cost), animated: true)
         XCTAssertFalse(model.isRolling)
     }
+
+    func testTensEaseInNearCarryWithoutChangingUnitsPace() {
+        let animator = HUDAnimator()
+        animator.receive(reading(123), animated: true)
+        animator.receive(reading(135), animated: true)
+        for (ticks, tens) in [(4.0, 2.0), (5.0, 2.0), (6.0, 2.5), (7.0, 3.0), (9.0, 3.0)] {
+            animator.advance(elapsed: time(atProgress: ticks / 12))
+            XCTAssertEqual(animator.positions[4], tens, accuracy: 1e-8)
+            XCTAssertEqual(animator.positions[5], 3 + ticks, accuracy: 1e-8)
+        }
+        animator.advance(elapsed: 4.2)
+        XCTAssertEqual(Array(animator.positions.suffix(3)).map { Int($0) % 10 }, [1, 3, 5])
+        XCTAssertFalse(animator.isRolling)
+    }
+
+    func test099CarryMovesBothHigherWheelsAndSettlesTogether() {
+        let animator = HUDAnimator()
+        animator.receive(reading(99), animated: true)
+        animator.receive(reading(100), animated: true)
+        animator.advance(elapsed: time(atProgress: 0.5))
+        let middle = Array(animator.positions.suffix(3))
+        for (actual, expected) in zip(middle, [0.5, 9.5, 9.5]) {
+            XCTAssertEqual(actual, expected, accuracy: 1e-8)
+        }
+        animator.advance(elapsed: 4.2)
+        XCTAssertEqual(Array(animator.positions.suffix(3)).map { Int($0) % 10 }, [1, 0, 0])
+    }
+
+    func testNewReadingMakesCarryReachableWithoutJumpingHigherWheel() {
+        let animator = HUDAnimator()
+        animator.receive(reading(123), animated: true)
+        animator.receive(reading(129), animated: true)
+        animator.advance(elapsed: time(atProgress: 5.5 / 6))
+        let before = animator.positions
+        XCTAssertEqual(before[4], 2)
+        animator.receive(reading(135), animated: true)
+        XCTAssertEqual(animator.positions, before)
+        animator.advance(elapsed: 9)
+        XCTAssertEqual(Array(animator.positions.suffix(3)).map { Int($0) % 10 }, [1, 3, 5])
+    }
+
+    private func time(atProgress desired: Double) -> TimeInterval {
+        var lower = 0.0
+        var upper = 1.0
+        for _ in 0..<48 {
+            let middle = (lower + upper) / 2
+            if HUDRoll.curve(middle).progress < desired { lower = middle }
+            else { upper = middle }
+        }
+        return (lower + upper) / 2 * 4.2
+    }
     func testUpdatesExtendCurrentRollWithoutRestartAndHideStopsWork() {
         let model = HUDAnimator()
         model.receive(reading(100), animated: true)

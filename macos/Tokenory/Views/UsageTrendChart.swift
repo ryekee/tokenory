@@ -1,15 +1,21 @@
-// [INPUT]: Selected-range daily/hourly report.
-// [OUTPUT]: Dual-axis Tokens bars and cost line with shared hover readout.
+// [INPUT]: Committed daily/hourly report and dashboard visibility.
+// [OUTPUT]: Dual-axis Tokens bars and cost line with range transitions and a shared hover readout.
 // [POS]: Upper overview chart; preserves unknown prices and unallocated hours.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
+import AppKit
 import SwiftUI
 import Charts
 
 struct UsageTrendChart: View {
     let report: UsageReport
     let filter: UsageFilter
+    let animateRangeChanges: Bool
     @State private var selectedDate: Date?
+    @State private var transition = DashboardPlotTransition()
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var range: DashboardDateSpan { DashboardDateSpan(from: filter.from, to: filter.to) }
+    private var canAnimateRange: Bool { animateRangeChanges && !reduceMotion }
     private var costColor: Color { WorkspaceStyle.costColor(scheme) }
     private var axisDateFormat: Date.FormatStyle {
         Date.FormatStyle(locale: Localization.locale, calendar: Localization.reportingCalendar,
@@ -17,11 +23,13 @@ struct UsageTrendChart: View {
     }
 
     var body: some View {
-        let trend = UsageTrend(report: report, filter: filter)
-        let selected = trend.points.first { $0.id == selectedDate && !$0.isFuture }
+        let hourly = report.hourly != nil
+        let hasHourlyData = report.hourly?.buckets.isEmpty != true
+        let presence = DashboardPlotPresence(range: range, hasData: report.summary.recordCount > 0 && hasHourlyData)
+        let unallocatedTokens = report.hourly?.unallocated.tokens ?? 0
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(L(trend.hourly ? "usage.hourly" : "usage.trend")).font(.headline)
+                Text(L(hourly ? "usage.hourly" : "usage.trend")).font(.headline)
                 Spacer()
                 HStack(spacing: 6) {
                     RoundedRectangle(cornerRadius: 2).fill(Color.accentColor).frame(width: 8, height: 12)
@@ -34,7 +42,7 @@ struct UsageTrendChart: View {
             }.font(.caption)
             if report.summary.recordCount == 0 {
                 ContentUnavailableView(L("usage.empty"), systemImage: "chart.bar.xaxis").frame(height: 210)
-            } else if trend.hourly && report.hourly?.buckets.isEmpty == true {
+            } else if !hasHourlyData {
                 ContentUnavailableView(L("usage.no_hourly"), systemImage: "clock").frame(height: 210)
             } else {
                 HStack {
@@ -42,50 +50,24 @@ struct UsageTrendChart: View {
                     Spacer()
                     Text("USD").foregroundStyle(costColor)
                 }.font(.caption2).monospacedDigit()
-                plot(trend, selected: selected).frame(height: 210)
+                let trend = UsageTrend(report: report, filter: filter)
+                let selected = trend.points.first { $0.id == selectedDate && !$0.isFuture }
+                plot(trend, selected: selected, presence: presence).frame(height: 210)
             }
-            if trend.unallocatedTokens > 0 {
-                Text(LF("usage.hourly_unallocated", compactTokens(trend.unallocatedTokens)))
+            if unallocatedTokens > 0 {
+                Text(LF("usage.hourly_unallocated", compactTokens(unallocatedTokens)))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
+        .onChange(of: presence, initial: true) { _, next in transition.commit(next) }
         .onChange(of: filter) { _, _ in selectedDate = nil }
     }
 
-    private func plot(_ trend: UsageTrend, selected: UsageTrendPoint?) -> some View {
+    private func plot(_ trend: UsageTrend, selected: UsageTrendPoint?, presence: DashboardPlotPresence) -> some View {
         let ticks = trend.axisPoints
         return Chart {
-            ForEach(trend.points) { point in
-                if let tokens = point.tokens {
-                    RectangleMark(xStart: .value("Time", point.start.addingTimeInterval(point.duration * 0.16)),
-                            xEnd: .value("Time", point.start.addingTimeInterval(point.duration * 0.84)),
-                            yStart: .value("Tokens", 0),
-                            yEnd: .value("Tokens", Double(tokens) / trend.tokenMaximum))
-                    .foregroundStyle(Color.accentColor.opacity(selectedDate == nil || point.id == selectedDate ? 0.7 : 0.25))
-                    .cornerRadius(2)
-                    .accessibilityLabel(label(point, hourly: trend.hourly))
-                    .accessibilityValue(tokens.formatted(.number.locale(Localization.locale)))
-                }
-            }
-            ForEach(trend.points) { point in
-                if let cost = point.cost, trend.hasPricedUsage {
-                    LineMark(x: .value("Time", point.center), y: .value("USD", cost / trend.costMaximum),
-                             series: .value("Cost segment", point.costSegment))
-                    .foregroundStyle(costColor).lineStyle(StrokeStyle(lineWidth: 2))
-                    .interpolationMethod(.monotone)
-                    .accessibilityLabel(label(point, hourly: trend.hourly))
-                    .accessibilityValue(usd(cost))
-                    if trend.hourly || trend.points.count <= 7 || selectedDate == point.id {
-                        PointMark(x: .value("Time", point.center), y: .value("USD", cost / trend.costMaximum))
-                            .foregroundStyle(costColor).symbolSize(16).accessibilityHidden(true)
-                    }
-                }
-            }
-            if let selected {
-                RuleMark(x: .value("Time", selected.center))
-                    .foregroundStyle(.secondary.opacity(0.5))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3])).accessibilityHidden(true)
-            }
+            // Swift Charts owns the scales and axes; the plot layer owns only the marks.
+            RuleMark(y: .value("Tokens", 0.0)).foregroundStyle(.clear).accessibilityHidden(true)
         }
         .chartXScale(domain: trend.domain)
         .chartYScale(domain: 0...1)
@@ -107,6 +89,7 @@ struct UsageTrendChart: View {
                     if let fraction = value.as(Double.self) {
                         Text(compactTokens(Int64((fraction * trend.tokenMaximum).rounded())))
                             .font(.system(size: 10)).monospacedDigit().foregroundStyle(Color.accentColor)
+                            .frame(minWidth: 44, alignment: .trailing)
                     }
                 }
             }
@@ -115,6 +98,7 @@ struct UsageTrendChart: View {
                     if let fraction = value.as(Double.self) {
                         Text(!trend.hasPricedUsage ? "—" : usd(fraction * trend.costMaximum))
                             .font(.system(size: 10)).monospacedDigit().foregroundStyle(costColor)
+                            .frame(minWidth: 48, alignment: .trailing)
                     }
                 }
             }
@@ -124,6 +108,11 @@ struct UsageTrendChart: View {
                 if let plot = proxy.plotFrame {
                     let frame = geometry[plot]
                     ZStack(alignment: .topLeading) {
+                        chartMarks(trend, proxy: proxy, size: frame.size, presence: presence)
+                            .frame(width: frame.width, height: frame.height)
+                            .offset(x: frame.minX, y: frame.minY)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                         Rectangle().fill(.clear).contentShape(Rectangle())
                             .onContinuousHover { phase in
                                 switch phase {
@@ -133,6 +122,7 @@ struct UsageTrendChart: View {
                             }
                             .onTapGesture { select(at: $0, frame: frame, proxy: proxy, trend: trend) }
                         if let selected, let x = proxy.position(forX: selected.center) {
+                            ChartHoverRule(x: frame.minX + x, plot: frame, opacity: 0.5)
                             readout(selected, hourly: trend.hourly)
                                 .padding(12).frame(width: 248)
                                 .background(WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: 8))
@@ -160,11 +150,43 @@ struct UsageTrendChart: View {
         }
     }
 
+    private func chartMarks(_ trend: UsageTrend, proxy: ChartProxy, size: CGSize, presence: DashboardPlotPresence) -> some View {
+        let baseline = proxy.position(forY: 0.0) ?? size.height
+        var series: [[CGPoint]] = []
+        var dots: [DashboardChartMarks.Dot] = []
+        var lastSegment: Int?
+        let bars = trend.points.map { point in
+            let left = proxy.position(forX: point.start.addingTimeInterval(point.duration * 0.16)) ?? 0
+            let right = proxy.position(forX: point.start.addingTimeInterval(point.duration * 0.84)) ?? left
+            let top = proxy.position(forY: Double(point.tokens ?? 0) / trend.tokenMaximum) ?? baseline
+            if trend.hasPricedUsage, let cost = point.cost,
+               let x = proxy.position(forX: point.center), let y = proxy.position(forY: cost / trend.costMaximum) {
+                if lastSegment != point.costSegment {
+                    series.append([])
+                    lastSegment = point.costSegment
+                }
+                let center = CGPoint(x: x, y: y)
+                series[series.count - 1].append(center)
+                if trend.hourly || trend.points.count <= 7 || selectedDate == point.id {
+                    dots.append(.init(center: center, diameter: 4.5))
+                }
+            }
+            return DashboardChartMarks.Bar(frame: CGRect(x: left, y: top, width: max(0, right - left),
+                                                         height: max(0, baseline - top)),
+                                           emphasized: selectedDate == nil || point.id == selectedDate)
+        }
+        return DashboardChartMarks(bars: bars, series: series, dots: dots, frameSize: size,
+                                   range: range, animateRangeChanges: canAnimateRange,
+                                   takeEntrance: { [transition] in transition.takeEntrance(presence) },
+                                   barColor: NSColor(Color.accentColor), lineColor: NSColor(costColor))
+    }
+
     private func select(at location: CGPoint, frame: CGRect, proxy: ChartProxy, trend: UsageTrend) {
         guard frame.contains(location), let date: Date = proxy.value(atX: location.x - frame.minX) else {
             selectedDate = nil; return
         }
-        selectedDate = trend.points.first { date >= $0.start && date < $0.start.addingTimeInterval($0.duration) && !$0.isFuture }?.id
+        let bucket = trend.points.first { date >= $0.start && date < $0.start.addingTimeInterval($0.duration) && !$0.isFuture }?.id
+        if selectedDate != bucket { selectedDate = bucket }
     }
     private func moveSelection(_ delta: Int, trend: UsageTrend) {
         let points = trend.points.filter { !$0.isFuture }
@@ -172,12 +194,19 @@ struct UsageTrendChart: View {
         let current = points.firstIndex { $0.id == selectedDate } ?? (delta > 0 ? -1 : points.count)
         selectedDate = points[min(max(current + delta, 0), points.count - 1)].id
     }
-    private func hour(_ date: Date) -> String {
-        let formatter = DateFormatter(); formatter.timeZone = TimeZone(identifier: "Asia/Shanghai"); formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
-    }
+    private static let hourFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+    private func hour(_ date: Date) -> String { Self.hourFormatter.string(from: date) }
     private func label(_ point: UsageTrendPoint, hourly: Bool) -> String {
-        hourly ? "\(hour(point.start))–\(hour(point.start.addingTimeInterval(3600)))" : Localization.day(UsageStore.day(point.start))
+        if hourly { return "\(hour(point.start))–\(hour(point.start.addingTimeInterval(3600)))" }
+        let calendar = Localization.reportingCalendar
+        return point.start.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, locale: Localization.locale,
+                                                      calendar: calendar, timeZone: calendar.timeZone))
     }
     private func readout(_ point: UsageTrendPoint, hourly: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -188,5 +217,21 @@ struct UsageTrendChart: View {
                 Text(LF("usage.unpriced", compactTokens(pending))).foregroundStyle(.secondary)
             }
         }.font(.caption)
+    }
+}
+
+struct ChartHoverRule: View {
+    let x: CGFloat
+    let plot: CGRect
+    let opacity: Double
+
+    var body: some View {
+        Path { path in
+            path.move(to: CGPoint(x: x, y: plot.minY))
+            path.addLine(to: CGPoint(x: x, y: plot.maxY))
+        }
+        .stroke(.secondary.opacity(opacity), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
