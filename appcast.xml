@@ -3,30 +3,30 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.6</title>
-            <pubDate>Sat, 14 Nov 2026 20:55:48 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.6</link>
-            <sparkle:version>8</sparkle:version>
-            <sparkle:shortVersionString>0.1.6</sparkle:shortVersionString>
+            <title>0.1.7</title>
+            <pubDate>Wed, 18 Nov 2026 09:47:40 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.7</link>
+            <sparkle:version>10</sparkle:version>
+            <sparkle:shortVersionString>0.1.7</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"># Tokenory 0.1.6
+            <description sparkle:format="markdown"># Tokenory 0.1.7
 
-### 看看一个回合花了多少时间
+### 新增
 
-新增「速度」页面，查看已完成回合的平均速度、首 token 等待时间和推理 token 数量。按日期、工具和模型筛选，查看速度趋势，也可以按耗时、时间、速度或推理量排列回合。打开回合详情，可以查看生成的 tokens，以及有记录时的工具等待时间。
+- 新增橙色机械悬浮 HUD，可切换查看今日精确 Token 数量和估算美元费用。
+- 支持六个屏幕边缘位置，HUD 会跟随鼠标所在的显示器。
+- 滚轮音效默认关闭，可在设置中调整音量。
+- Codex 已确认的日志用量会实时刷新；跨日及唤醒时按设备时区更新。
 
-速度等于生成 tokens 除以完整回合耗时，包含工具等待时间。它反映回合吞吐量，并非模型的纯解码速度。缺失的数据显示为 `—`，估算值标记为 `≈`。
+### 改进与修复
 
-### 在菜单栏查看今日摘要
-
-菜单栏新增今日速度，与 Tokens 和费用一起显示。这里的摘要独立于统计窗口的筛选条件。
-
-### 查看哪些工具有速度数据
-
-目前 12 个客户端至少有一种格式可提供速度数据，包括 Codex、Claude Code 和 OpenCode。Paseo 和 Orca 使用底层客户端日志，因此筛选结果包含对应客户端的全部可用回合。其余 28 个入口暂不支持速度统计。打开支持列表可以查看图标，悬停显示名称。各格式的支持范围和限制见[覆盖详情](https://github.com/ryekee/tokenory/blob/main/docs/local/agent-speed-coverage.md)。
+- 新增 GPT-6.2 Astra 和 Sol 的官方 API 参考费率，支持长上下文、Fast 和 Ultrafast。
+- 修复 HUD 读数为空或位数缩短时可能发生的崩溃。
+- 限制自动备份和预览文件的保留量，减少磁盘占用。
+- 更新下载改用公开的 GitHub Release 地址，避免受到匿名 API 额度限制。
 </description>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.6/Tokenory-0.1.6-macOS-arm64.zip" length="10089883" type="application/octet-stream" sparkle:edSignature="wG990qjAtGZ90yOFDqHsOvegPQYZwPi39/+A0jQuuFTitrkERE8v6AM+E4dsdZ4N0CUkzCKVBu4S7UX9HmYsCg==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.7/Tokenory-0.1.7-macOS-arm64.zip" length="10341924" type="application/octet-stream" sparkle:edSignature="VHw5gNyKpfrnI6At4WGWYt5a7uzf5IuMtrPdiFJWdKcsPwhuUyUlaQaFQcNU7L+9ubovwAWJqUv2FFATVIeMDA==" />
         </item>
     </channel>
 </rss>
