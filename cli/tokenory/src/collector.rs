@@ -1,6 +1,6 @@
 // [INPUT]: 读取各客户端日志和当前价格快照。
 // [OUTPUT]: 全量或变更 Codex 文件增量采集，生成规范化用量、完成回合与诊断。
-// [POS]: 解析器与账本之间的边界；维护稳定记录身份。
+// [POS]: 解析器与账本之间的边界；维护稳定记录身份，并继承 Devin 旧行的计价依据。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
     clients::{source_paths, CLIENTS},
@@ -71,6 +71,7 @@ pub struct ScanResult {
 }
 pub struct ScanBatch {
     pub records: Vec<UsageRecord>,
+    devin_legacy_keys: HashMap<String, String>,
     pub codex_turns: Vec<crate::codex_turns::CodexTurn>,
     pub invalidated_turn_ids: Vec<String>,
     pub timezone: String,
@@ -287,6 +288,7 @@ async fn collect(
         }
     }
     let mut records = Vec::new();
+    let mut devin_legacy_keys = HashMap::new();
     {
         let mut messages = if let Some(paths) = &paths {
             tokens_core::parse_changed_codex_files(options.clone(), paths.clone(), cache.persistent)
@@ -322,6 +324,9 @@ async fn collect(
         let mut positions: HashMap<(String, String), usize> = HashMap::new();
         for m in messages {
             let snapshot = !matches!(m.client.as_str(), "claude" | "codex");
+            let devin_keys = (m.client == "devin-cli")
+                .then(|| tokens_core::sessions::devin::devin_cli_request_keys(&m))
+                .flatten();
             let position = positions
                 .entry((m.client.clone(), m.session_id.clone()))
                 .or_default();
@@ -336,7 +341,11 @@ async fn collect(
                     );
                     // Length-delimited JSON avoids collisions between arbitrary
                     // client/session IDs. No tokens or costs enter the identity.
-                    let identity = match m.dedup_key.as_deref().filter(|key| !key.is_empty()) {
+                    let event_key = devin_keys
+                        .as_ref()
+                        .map(|(key, _)| key.as_str())
+                        .or(m.dedup_key.as_deref());
+                    let identity = match event_key.filter(|key| !key.is_empty()) {
                         Some(key) => json!(["event", key]),
                         None => json!(["position", index]),
                     };
@@ -390,6 +399,14 @@ async fn collect(
                     r.metadata["collectionMode"] = "sessionSnapshot".into();
                 }
                 r.validate()?;
+                if let Some((_, row_key)) = &devin_keys {
+                    let legacy_key = serde_json::to_string(&(
+                        &m.client,
+                        &m.session_id,
+                        ["event", row_key.as_str()],
+                    ))?;
+                    devin_legacy_keys.insert(r.key.clone(), format!("snapshot:{legacy_key}"));
+                }
                 Ok(r)
             })();
             if let Some(s) = sources.iter_mut().find(|s| s.client == m.client) {
@@ -443,6 +460,7 @@ async fn collect(
     }
     Ok(ScanBatch {
         records,
+        devin_legacy_keys,
         codex_turns,
         invalidated_turn_ids,
         timezone: config.timezone.clone(),
@@ -494,16 +512,19 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
             })
             .collect::<rusqlite::Result<Vec<_>>>()?
     };
-    for key in obsolete {
-        batch.result.removed += tx.execute(
-            "DELETE FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",
-            [key],
-        )?;
-    }
-    batch.result.changed += batch.result.removed;
+    let mut read_prior = tx.prepare_cached(
+        "SELECT body FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",
+    )?;
     for mut record in batch.records {
-        let prior:Option<String>=tx.query_row("SELECT body FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",[&record.key],|r|r.get(0)).optional()?;
+        let mut prior: Option<String> = read_prior
+            .query_row([&record.key], |row| row.get(0))
+            .optional()?;
         let is_new = prior.is_none();
+        if is_new {
+            if let Some(key) = batch.devin_legacy_keys.get(&record.key) {
+                prior = read_prior.query_row([key], |row| row.get(0)).optional()?;
+            }
+        }
         if let Some((id, p)) = &snapshot {
             crate::pricing::assign("local", &mut record, id, p);
         }
@@ -549,6 +570,15 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
         }
         tx.execute("INSERT OR IGNORE INTO coverage_choices(date,client,source,batch_id) VALUES (?1,?2,'local','')",params![record.date,record.client])?;
     }
+    drop(read_prior);
+    // Keep legacy Devin rows available until their survivors inherit pricing.
+    for key in obsolete {
+        batch.result.removed += tx.execute(
+            "DELETE FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",
+            [key],
+        )?;
+    }
+    batch.result.changed += batch.result.removed;
     let invalidated: HashSet<_> = batch.invalidated_turn_ids.iter().collect();
     batch
         .codex_turns

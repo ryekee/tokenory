@@ -3256,7 +3256,7 @@ fn parse_all_messages_streaming<S: MessageSink>(
             for message in outcome
                 .messages
                 .into_iter()
-                .filter(|message| should_keep_deduped_message(&mut devin_cli_seen, message))
+                .filter(|message| should_keep_devin_cli_message(&mut devin_cli_seen, message))
             {
                 devin_cli_session_ids.insert(message.session_id.clone());
                 all_messages.push(message);
@@ -6242,7 +6242,7 @@ pub fn parse_local_clients(options: LocalParseOptions) -> Result<ParsedMessages,
             .devin_dbs
             .iter()
             .flat_map(|db_path| sessions::devin::parse_devin_cli_sqlite(db_path))
-            .filter(|message| should_keep_deduped_message(&mut devin_cli_seen, message))
+            .filter(|message| should_keep_devin_cli_message(&mut devin_cli_seen, message))
             .collect()
     } else {
         Vec::new()
@@ -6549,6 +6549,14 @@ fn should_keep_deduped_message(seen_keys: &mut HashSet<String>, message: &Unifie
         .dedup_key
         .as_ref()
         .is_none_or(|key| seen_keys.insert(key.clone()))
+}
+
+fn should_keep_devin_cli_message(seen_keys: &mut HashSet<String>, message: &UnifiedMessage) -> bool {
+    if let Some((request_key, _)) = sessions::devin::devin_cli_request_keys(message) {
+        seen_keys.insert(request_key)
+    } else {
+        should_keep_deduped_message(seen_keys, message)
+    }
 }
 
 fn summed_parsed_message_count(messages: &[ParsedMessage]) -> i32 {

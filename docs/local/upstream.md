@@ -16,4 +16,6 @@ Tokenory fork 自 https://github.com/missuo/tokens，固定基线 `c2f3857c32847
 
 后续按需同步解析、去重和定价修复。新增客户端先检查本地发现、快照更新和成本口径，再加入 Tokenory 支持集合。本地持久化和原生 UI 不耦合上游公共站点。
 
+已移植 [Codex 上下文压缩修复](https://github.com/missuo/tokens/pull/116) 和 [Devin CLI 请求去重](https://github.com/missuo/tokens/pull/125) 的解析逻辑。首次扫描会重建这两类客户端的源解析缓存。
+
 本地方案覆盖 42 个工具入口。4 个缓存入口依赖另行同步的上游格式文件，App 不包含这些账号的登录/同步流程。完整边界见 [来源说明](sources.md)。`docs/upstream_policy.md` 为继承的上游历史文档，不是 Tokenory 的实施规则。

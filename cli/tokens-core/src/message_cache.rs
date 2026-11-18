@@ -1311,7 +1311,9 @@ fn parser_version(client: ClientId) -> u32 {
         // state gained `selected_speed` / `turn_speed` after `current_model`.
         // Reject v10 envelopes before decoding that incompatible state, then
         // reparse the source to recover speed selections and turn boundaries.
-        ClientId::Codex => 11,
+        // v11->v12: recover compaction usage omitted from cumulative snapshots;
+        // incremental state now retains a pending per-response record.
+        ClientId::Codex => 12,
         // v4->v5: jcode's assistant-message timestamp is now back-calculated
         // to the turn start (timestamp - tool_duration_ms) instead of using
         // the recorded (end-anchored) timestamp directly. Follow-up to #890.
@@ -1337,7 +1339,9 @@ fn parser_version(client: ClientId) -> u32 {
         // message timestamp is now back-calculated to the turn start
         // (created_at - total_time_ms) instead of the recorded (end-anchored)
         // created_at. Follow-up to #890.
-        ClientId::DevinCli => 3,
+        // v3->v4: CLI rows carry the request ID for deduplication and retain
+        // their original row ID for ledger reconciliation.
+        ClientId::DevinCli => 4,
         // Desktop v1 parsed a non-ACP shape and did not track its CLI title
         // lookup; its timestamp handling is unaffected by the #890 follow-up.
         ClientId::DevinDesktop => 2,
@@ -3934,7 +3938,7 @@ mod tests {
 
     #[test]
     fn test_devin_parser_versions_invalidate_v1_entries() {
-        assert_eq!(parser_version(ClientId::DevinCli), 3);
+        assert_eq!(parser_version(ClientId::DevinCli), 4);
         assert_eq!(parser_version(ClientId::DevinDesktop), 2);
     }
 
@@ -3949,7 +3953,7 @@ mod tests {
         // and changes the incremental state layout.
         // Each bump is what stops an existing cache from replaying the old
         // rows, so it has to be asserted rather than assumed.
-        assert_eq!(parser_version(ClientId::Codex), 11);
+        assert_eq!(parser_version(ClientId::Codex), 12);
         assert_eq!(parser_version(ClientId::Claude), 2);
     }
 
@@ -3974,7 +3978,7 @@ mod tests {
         // cache entries are also invalidated.
         assert_eq!(parser_version(ClientId::Junie), 3);
         assert_eq!(parser_version(ClientId::Jcode), 7);
-        assert_eq!(parser_version(ClientId::DevinCli), 3);
+        assert_eq!(parser_version(ClientId::DevinCli), 4);
         assert_eq!(parser_version(ClientId::Zcode), 3);
         assert_eq!(parser_version(ClientId::OpenCodeReview), 3);
         assert_eq!(parser_version(ClientId::Kiro), 2);

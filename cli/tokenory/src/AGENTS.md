@@ -3,7 +3,7 @@
 
 clients.rs: 声明客户端来源和扫描路径。
 codex_watch.rs: 监听 Codex 默认/额外/headless 日志根目录，检查活跃日志元数据以覆盖 FSEvents 合并的追加通知。
-collector.rs: 只读采集源日志并更新账本及独立回合分析；分析失败只影响诊断，不阻止有效用量更新。
+collector.rs: 只读采集源日志并更新账本及独立回合分析；分析失败只影响诊断，不阻止有效用量更新。Devin CLI 以请求键替换旧行时，沿用同一用量的原价格快照。
 turn_analytics.rs / turn_analytics/: 泛化完成回合、来源能力与别名过滤；按各来源原生事务、主链或用户区间聚合，证据不足不估 token；有效来源重开回合返回精确撤销 ID。
 codex_turns.rs: 校验完成主回合、缓存未变化日志、保存无正文的统计并按日期/模型查询。
 config.rs: 保存采集配置。
