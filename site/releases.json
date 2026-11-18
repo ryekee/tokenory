@@ -1,5 +1,35 @@
 [
   {
+    "tag": "v0.1.9",
+    "date": "2026-11-19",
+    "notes": {
+      "en": {
+        "features": [
+          "Use the arrows beside the date picker in Overview, Records, and Speed to browse earlier periods.",
+          "Redesigned the Speed page.",
+          "The digits in the floating counter roll more smoothly as small increases carry over.",
+          "Release notes for future in-app updates follow the language you choose in Tokenory."
+        ],
+        "fixes": [
+          "Fixed an undercount when Codex omitted context compaction from its cumulative token totals.",
+          "Fixed duplicate Devin CLI usage when the same request appeared more than once in a session log."
+        ]
+      },
+      "zh-Hans": {
+        "features": [
+          "总览、明细和速度页都可以用日期旁的箭头回看历史。",
+          "重新设计了速度页。",
+          "悬浮计数器小幅增加时，数字进位更顺滑。",
+          "后续的应用内更新说明会跟随你在 Tokenory 中选择的语言。"
+        ],
+        "fixes": [
+          "补计 Codex 在上下文压缩时遗漏的 Tokens。",
+          "修复 Devin CLI 同一请求在会话日志里出现多次时，用量被重复计算的问题。"
+        ]
+      }
+    }
+  },
+  {
     "tag": "v0.1.8",
     "date": "2026-11-18",
     "notes": {
