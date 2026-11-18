@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Tokenory</title>
+        <item>
+            <title>0.1.9</title>
+            <pubDate>Thu, 19 Nov 2026 01:05:24 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.9</link>
+            <sparkle:version>12</sparkle:version>
+            <sparkle:shortVersionString>0.1.9</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.9/Tokenory-0.1.9-macOS-arm64.zip" length="10548241" type="application/octet-stream" sparkle:edSignature="AdmcslSk62CVFnmvxs6nNfzLZAUK0+dQGjjGv18wXNozYLv2siqt89RmmgW3s2ZVxXi5mxCq/w//Fh2EKRGPDQ==" />
+        <description xml:lang="en" sparkle:format="markdown">## New Features
+
+- Use the arrows beside the date picker in Overview, Records, and Speed to browse earlier periods.
+- Redesigned the Speed page.
+- The digits in the floating counter roll more smoothly as small increases carry over.
+- Release notes for future in-app updates follow the language you choose in Tokenory.
+
+## Fixes
+
+- Fixed an undercount when Codex omitted context compaction from its cumulative token totals.
+- Fixed duplicate Devin CLI usage when the same request appeared more than once in a session log.
+</description></item>
+    </channel>
+</rss>
