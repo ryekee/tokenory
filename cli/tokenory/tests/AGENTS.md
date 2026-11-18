@@ -8,7 +8,7 @@ cli.rs: 验证 cli 的账本接口和行为。
 clients.rs: 验证 clients 的账本接口和行为。
 turn_analytics.rs: 验证多客户端完成边界、分支排除、分列推理量、筛选目录和 Codex 兼容；续跑撤销、最终恢复、损坏源历史保留及分析失败不阻断账本。
 codex_turns.rs: 验证回合去重、用量对账、未知值、工具阻塞区间、扫描缓存、查询及迁移恢复。
-collection.rs: 验证 collection 的账本接口和行为。
+collection.rs: 验证采集和入账，覆盖 Devin CLI 重扫去重及原价格依据。
 coverage.rs: 验证 coverage 的账本接口和行为。
 history_import.rs: 验证 history_import 的账本接口和行为。
 hourly.rs: 验证 hourly 的账本接口和行为。
@@ -20,7 +20,7 @@ pricing.rs: 验证 pricing 的账本接口和行为，覆盖 GPT-6.2 费率、�
 
 price_catalog.rs: 验证未使用供应商、峰谷与参考规则、订阅价格边界。
 
-codex_live.rs: 真正的 worker 文件监听、打开句柄追加、半行、重复、归档副本与全扫描对账。
+codex_live.rs: 真正的 worker 文件监听、打开句柄追加、半行、重复、归档副本与全扫描对账；验证 Codex 压缩用量在变更文件扫描和全量账本中一致。
 
 local_day.rs: 跨账本日期的本地午夜范围、包含起点/排除终点、日汇总回退与历史不变。
 

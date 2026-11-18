@@ -154,6 +154,94 @@ async fn cumulative_codex_and_archived_copy_count_once() {
 }
 
 #[tokio::test]
+async fn devin_rescan_removes_duplicate_rows_and_keeps_original_pricing() {
+    use tokenory::pricing::{save_snapshot, PriceSnapshot};
+
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let dir = home.path().join(".local/share/devin/cli");
+    fs::create_dir_all(&dir).unwrap();
+    let source = rusqlite::Connection::open(dir.join("sessions.db")).unwrap();
+    source
+        .execute_batch(
+            "CREATE TABLE sessions (id TEXT PRIMARY KEY, model TEXT, working_directory TEXT);
+             CREATE TABLE message_nodes (row_id INTEGER PRIMARY KEY, session_id TEXT, chat_message TEXT, created_at INTEGER);
+             INSERT INTO sessions VALUES ('test-session', 'adaptive', '/tmp/project');",
+        )
+        .unwrap();
+    for row_id in 1..=4 {
+        let message = json!({"role":"assistant","metadata":{
+            "generation_model":"compactor","metrics":{"input_tokens":100,"output_tokens":20}
+        }});
+        source
+            .execute(
+                "INSERT INTO message_nodes VALUES (?1, 'test-session', ?2, 1793830800 + ?1)",
+                rusqlite::params![row_id, message.to_string()],
+            )
+            .unwrap();
+    }
+
+    let config = Config {
+        home_dir: home.path().into(),
+        ..Default::default()
+    };
+    let mut db = Database::open(data.path()).unwrap();
+    let mut cache = DiagnosticCache::default();
+    let mut prices = PriceSnapshot::bundled_reference();
+    let original_snapshot = save_snapshot(&mut db, prices.clone()).unwrap();
+    // With no request IDs, this produces the same row keys as the old parser.
+    let batch = collect_once(&config, &mut cache).await.unwrap();
+    assert_eq!(batch.records.len(), 4);
+    persist(&mut db, batch).unwrap();
+    let read_original = |db: &Database| -> (f64, String, String) {
+        db.connection
+            .query_row(
+                "SELECT json_extract(body, '$.estimatedCostUsd'), json_extract(body, '$.costBasis'),
+                        json_extract(body, '$.priceSnapshotId')
+                 FROM usage_records WHERE source='local' AND json_extract(body, '$.timestampMs')=?1",
+                [1793830801000_i64],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap()
+    };
+    let initial_price = read_original(&db);
+    assert_eq!(initial_price.2, original_snapshot);
+    let compactor = prices
+        .entries
+        .iter_mut()
+        .find(|entry| entry.provider == "devin" && entry.model == "compactor")
+        .unwrap();
+    compactor.rates.input_cost_per_token = Some(0.01);
+    compactor.assumption = "Different active reference rate".into();
+    assert_ne!(save_snapshot(&mut db, prices).unwrap(), original_snapshot);
+
+    for (row_id, request_id) in [(1, "request-a"), (2, " request-a "), (4, " ")] {
+        source
+            .execute(
+                "UPDATE message_nodes
+                 SET chat_message=json_set(chat_message, '$.metadata.request_id', ?1)
+                 WHERE row_id=?2",
+                rusqlite::params![request_id, row_id],
+            )
+            .unwrap();
+    }
+    let batch = collect_once(&config, &mut cache).await.unwrap();
+    let scan = persist(&mut db, batch).unwrap();
+    // Two old row keys become one request key. Rows without IDs stay in place.
+    assert_eq!(scan.removed, 2);
+    assert_eq!(scan.added, 1);
+    let result = report(&mut db, &Filter::default()).unwrap();
+    assert_eq!(result.summary.tokens, 360);
+    assert_eq!(result.summary.record_count, 3);
+    let reconciled_price = read_original(&db);
+    assert!((reconciled_price.0 - initial_price.0).abs() < 1e-12);
+    assert_eq!(reconciled_price.1, initial_price.1);
+    assert_eq!(reconciled_price.2, initial_price.2);
+    let batch = collect_once(&config, &mut cache).await.unwrap();
+    assert_eq!(persist(&mut db, batch).unwrap().changed, 0);
+}
+
+#[tokio::test]
 async fn deepseek_anthropic_usage_is_one_event_per_response_not_per_observation() {
     let home = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();

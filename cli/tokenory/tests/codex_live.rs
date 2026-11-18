@@ -25,6 +25,75 @@ fn count(total: i64, minute: i32) -> String {
 }
 
 #[tokio::test]
+async fn compaction_usage_agrees_between_changed_file_and_full_scan_ledgers() {
+    let home = tempfile::tempdir().unwrap();
+    let active_data = tempfile::tempdir().unwrap();
+    let full_data = tempfile::tempdir().unwrap();
+    let dir = home.path().join(".codex/sessions");
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("active.jsonl");
+    fs::write(&path, header() + &count(100, 1)).unwrap();
+    let config = Config {
+        home_dir: home.path().into(),
+        ..Default::default()
+    };
+    let mut cache = DiagnosticCache::default();
+    let mut active = Database::open(active_data.path()).unwrap();
+    persist(
+        &mut active,
+        collect_once(&config, &mut cache).await.unwrap(),
+    )
+    .unwrap();
+
+    let mut file = fs::OpenOptions::new().append(true).open(&path).unwrap();
+    let compaction_response = json!({"type":"token_usage_record","payload":{"thread_id":"live-session","turn_id":"compact-turn","response_id":"summary-response","usage":{"input_tokens":40,"cached_input_tokens":20,"output_tokens":10}}});
+    let snapshot = json!({"type":"event_msg","timestamp":"2026-11-16T01:03:00Z","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100},"last_token_usage":{"input_tokens":0,"output_tokens":0}}}});
+    let context =
+        json!({"type":"turn_context","payload":{"turn_id":"compact-turn","model":"gpt-5-codex"}});
+    for row in [
+        &context,
+        &compaction_response,
+        &json!({"type":"compacted","payload":{"message":"","replacement_history":[]}}),
+        &json!({"type":"world_state","payload":{}}),
+        &context,
+        &json!({"type":"event_msg","payload":{"type":"thread_settings_applied","thread_id":"live-session"}}),
+        &snapshot,
+        &snapshot,
+    ] {
+        writeln!(file, "{row}").unwrap();
+    }
+    file.write_all(count(125, 4).as_bytes()).unwrap();
+    let batch = collect_codex_changes(&config, &mut cache, Some(vec![path.clone()]))
+        .await
+        .unwrap();
+    persist(&mut active, batch).unwrap();
+    let batch = collect_codex_changes(&config, &mut cache, Some(vec![path]))
+        .await
+        .unwrap();
+    assert_eq!(persist(&mut active, batch).unwrap().changed, 0);
+
+    let mut full = Database::open(full_data.path()).unwrap();
+    let batch = collect_once(&config, &mut DiagnosticCache::default())
+        .await
+        .unwrap();
+    persist(&mut full, batch).unwrap();
+    let summary = report(&mut active, &Filter::default()).unwrap().summary;
+    assert_eq!(summary.tokens, 175);
+    assert_eq!(summary.token_breakdown.cache_read, 20);
+    assert_eq!(summary.record_count, 3);
+    let recorded_usage = |db: &Database| -> Vec<String> {
+        db.connection
+            .prepare("SELECT body FROM usage_records WHERE source='local' ORDER BY item_key")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap()
+    };
+    assert_eq!(recorded_usage(&active), recorded_usage(&full));
+}
+
+#[tokio::test]
 async fn changed_files_preserve_identity_partial_tail_and_confirmed_history() {
     let home = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();

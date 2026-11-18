@@ -41,6 +41,8 @@ struct DevinNodeMetadata {
     metrics: Option<DevinMetrics>,
     #[serde(default)]
     generation_model: Option<String>,
+    #[serde(default)]
+    request_id: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -146,6 +148,25 @@ pub fn load_devin_desktop_session_lookup(
     }
 
     lookup
+}
+
+const DEVIN_CLI_REQUEST_PREFIX: &str = "devin-cli-request:";
+
+/// Return the session-scoped request key and the old row key for an observed
+/// Devin CLI request. The ledger uses the row key to carry forward pricing
+/// when replacing a previously collected row with the request identity.
+pub fn devin_cli_request_keys(message: &UnifiedMessage) -> Option<(String, String)> {
+    let (row_id, request_id) = message
+        .dedup_key
+        .as_deref()?
+        .strip_prefix(DEVIN_CLI_REQUEST_PREFIX)?
+        .split_once(':')?;
+    let session = &message.session_id;
+    let request_key = format!(
+        "{DEVIN_CLI_REQUEST_PREFIX}{}:{session}:{request_id}",
+        session.len()
+    );
+    Some((request_key, format!("devin-cli:{session}:{row_id}")))
 }
 
 pub fn parse_devin_cli_sqlite(db_path: &Path) -> Vec<UnifiedMessage> {
@@ -271,7 +292,18 @@ pub fn parse_devin_cli_sqlite(db_path: &Path) -> Vec<UnifiedMessage> {
             (Some(end), Some(duration)) => back_anchor_timestamp(end, duration),
             _ => recorded_timestamp,
         };
-        let dedup_key = format!("devin-cli:{session_id}:{row_id}");
+        // Several rows can represent one provider request. Keep the row ID
+        // alongside the request ID so existing ledgers can identify the survivor.
+        let request_id = metadata
+            .as_ref()
+            .and_then(|m| m.request_id.as_ref())
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|id| !id.is_empty());
+        let dedup_key = match request_id {
+            Some(id) => format!("{DEVIN_CLI_REQUEST_PREFIX}{row_id}:{id}"),
+            None => format!("devin-cli:{session_id}:{row_id}"),
+        };
         let mut unified = UnifiedMessage::new_with_dedup(
             "devin-cli",
             model_id,
