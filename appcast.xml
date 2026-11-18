@@ -3,30 +3,18 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.7</title>
-            <pubDate>Wed, 18 Nov 2026 09:47:40 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.7</link>
-            <sparkle:version>10</sparkle:version>
-            <sparkle:shortVersionString>0.1.7</sparkle:shortVersionString>
+            <title>0.1.8</title>
+            <pubDate>Wed, 18 Nov 2026 11:21:45 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.8</link>
+            <sparkle:version>11</sparkle:version>
+            <sparkle:shortVersionString>0.1.8</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"># Tokenory 0.1.7
+            <description sparkle:format="markdown"># Tokenory 0.1.8
 
-### 新增
-
-- 新增橙色机械悬浮 HUD，可切换查看今日精确 Token 数量和估算美元费用。
-- 支持六个屏幕边缘位置，HUD 会跟随鼠标所在的显示器。
-- 滚轮音效默认关闭，可在设置中调整音量。
-- Codex 已确认的日志用量会实时刷新；跨日及唤醒时按设备时区更新。
-
-### 改进与修复
-
-- 新增 GPT-6.2 Astra 和 Sol 的官方 API 参考费率，支持长上下文、Fast 和 Ultrafast。
-- 修复 HUD 读数为空或位数缩短时可能发生的崩溃。
-- 限制自动备份和预览文件的保留量，减少磁盘占用。
-- 更新下载改用公开的 GitHub Release 地址，避免受到匿名 API 额度限制。
+Tokenory 现在会自动获取官方模型费率。已支持的模型和计费方式有新价格时，应用可直接更新费率并补齐待计价记录。离线时继续使用上次获取的费率。每笔估算仍可追溯到计价时的价格快照。
 </description>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.7/Tokenory-0.1.7-macOS-arm64.zip" length="10341924" type="application/octet-stream" sparkle:edSignature="VHw5gNyKpfrnI6At4WGWYt5a7uzf5IuMtrPdiFJWdKcsPwhuUyUlaQaFQcNU7L+9ubovwAWJqUv2FFATVIeMDA==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.8/Tokenory-0.1.8-macOS-arm64.zip" length="10369644" type="application/octet-stream" sparkle:edSignature="UAaZBXH9o6Cclex8cM3v3WXw3orMzFzp48G0j7Bzw+UNy5kkGvt7hYdWmfYhOG0ilIfYpRPMM8LPPlhHImr1AQ==" />
         </item>
     </channel>
 </rss>
