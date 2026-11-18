@@ -11,7 +11,8 @@ migration.md: 历史迁移对账。
 operations.md: 使用与维护。
 mechanical-hud.md: HUD 启用、当日累计口径、滚轮音效、窗口行为及官网原型保留位置。
 pricing.md: 估算口径、远程目录格式及独立更新流程。
-releases.md: macOS 发布。
+releases.md: macOS 打包、双语更新说明和 Sparkle 更新源。
+release-notes-review.md: v0.1.0 至 v0.1.8 的双语历史说明审阅稿。
 source-audit.md: 来源探查与基线。
 sources.md: 客户端与来源。
 storage-maintenance.md: 自动备份、预览留存和本地存储维护。

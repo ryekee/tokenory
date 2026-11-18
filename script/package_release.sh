@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Build a signed, notarized GitHub release with a matching Sparkle feed.
+# Build a signed, notarized GitHub release with bilingual Sparkle notes.
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
-NOTES="${1:?usage: package_release.sh RELEASE_NOTES.md}"
-[[ -f "$NOTES" ]]
+NOTES="${1:?usage: package_release.sh RELEASE_NOTES.json}"
+NOTES_SNAPSHOT="$(mktemp)"
+trap 'rm -f "$NOTES_SNAPSHOT"' EXIT
+cp "$NOTES" "$NOTES_SNAPSHOT"
+python3 ./script/release_notes.py "$NOTES_SNAPSHOT" > /dev/null
 IDENTITY="${TOKENORY_SIGNING_IDENTITY:-Developer ID Application: Shenzhen Hiko Technology Co., Ltd. (JQTFJ8P2T7)}"
 PROFILE="${TOKENORY_NOTARY_PROFILE:-Hiko-notray}"
 ACCOUNT="ee.ryek.tokenory"
@@ -14,7 +17,7 @@ VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$BUIL
 OUT="$ROOT_DIR/.build/releases/v$VERSION"
 [[ ! -e "$OUT/Tokenory.app" ]] || { echo "Release directory already contains an app: $OUT" >&2; exit 1; }
 mkdir -p "$OUT"
-cp "$NOTES" "$OUT/release-notes.md"
+cp "$NOTES_SNAPSHOT" "$OUT/release-notes.json"
 ditto "$BUILT_APP" "$OUT/Tokenory.app"
 APP="$OUT/Tokenory.app"
 FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
@@ -44,10 +47,10 @@ xcrun stapler validate "$APP"
 spctl --assess --type execute --verbose=2 "$APP"
 # Stapling changes the archive. Sparkle must sign the final bytes served to users.
 ditto -c -k --keepParent "$APP" "$OUT/$ARCHIVE"
-cp "$NOTES" "$OUT/${ARCHIVE%.zip}.md"
 "$ROOT_DIR/.build/xcode/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast" \
-    --account "$ACCOUNT" --maximum-deltas 0 --embed-release-notes \
+    --account "$ACCOUNT" --maximum-deltas 0 \
     --download-url-prefix "https://github.com/ryekee/tokenory/releases/download/v$VERSION/" \
     --link "https://github.com/ryekee/tokenory/releases/tag/v$VERSION" "$OUT"
+python3 ./script/release_notes.py "$OUT/release-notes.json" --appcast "$OUT/appcast.xml"
 (cd "$OUT" && shasum -a 256 "$ARCHIVE" appcast.xml > SHA256SUMS.txt)
 printf 'Release artifacts: %s\n' "$OUT"

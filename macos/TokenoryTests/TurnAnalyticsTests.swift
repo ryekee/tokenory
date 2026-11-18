@@ -44,6 +44,38 @@ final class TurnAnalyticsTests: XCTestCase {
         XCTAssertEqual(data.averageSpeed, 0); XCTAssertEqual(data.averageReasoning, 0)
         XCTAssertNil(data.reasoningShare)
     }
+
+    func testHourlySpeedGroupsKeepSparsePointsAndEmptyHours() throws {
+        let start = try XCTUnwrap(Localization.date("2026-11-18"))
+        let midnight = Int64(start.timeIntervalSince1970 * 1000)
+        let rows = [
+            turn("late", start: midnight + 7_200_000, duration: 1000, tokens: 9, reasoning: nil, ttft: nil),
+            turn("first", start: midnight, duration: 1000, tokens: 0, reasoning: nil, ttft: nil),
+            turn("last", start: midnight + 3_599_999, duration: 1000, tokens: 10, reasoning: nil, ttft: nil)
+        ]
+        let data = TurnPresentation(report: TurnReport(revision: 1, models: [], turns: rows))
+        XCTAssertEqual(data.orderedSpeedHours.map(\.start), [start, start.addingTimeInterval(7200)])
+        XCTAssertNil(data.speedHours[start.addingTimeInterval(3600)])
+        let first = try XCTUnwrap(data.speedHours[start])
+        XCTAssertNil(first.distribution)
+        XCTAssertEqual(first.visiblePoints.map(\.id), ["first", "last"])
+        XCTAssertEqual(first.visiblePoints.map(\.speed), [0, 10])
+    }
+
+    func testHourlyDistributionKeepsOutliersAndSelectsAnObservedTurnForTheMedian() throws {
+        let rows = [0, 20, 22, 24, 25, 26, 28, 100].enumerated().map { index, speed in
+            turn(String(index), start: Int64(1000 + index), duration: 1000, tokens: Int64(speed),
+                 reasoning: nil, ttft: nil)
+        }
+        let data = TurnPresentation(report: TurnReport(revision: 1, models: [], turns: rows.reversed()))
+        let hour = try XCTUnwrap(data.orderedSpeedHours.first)
+        let stats = try XCTUnwrap(hour.distribution)
+        XCTAssertEqual(stats.middle, 21.5...26.5)
+        XCTAssertEqual(stats.median, 24.5)
+        XCTAssertEqual(stats.whiskers, 20...28)
+        XCTAssertEqual(hour.visiblePoints.map(\.speed), [0, 100])
+        XCTAssertEqual(stats.representative.id, "3")
+    }
     func testMixedAgentsPreserveEstimateAndUnknownMetrics() throws {
         let estimated = AgentTurn(id: "claude-1", sessionId: "s", turnId: "t", project: "p", model: "m",
                                   effort: nil, startMs: 1000, endMs: 11000, durationMs: 10000,

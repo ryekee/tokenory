@@ -16,6 +16,7 @@
 </p>
 
 <p align="center">
+  <a href="https://tokenory.ryek.ee">正式官网</a> ·
   <a href="https://github.com/ryekee/tokenory/releases/latest"><strong>下载最新版本</strong></a> ·
   <a href="#功能">功能介绍</a> ·
   <a href="#支持的客户端">支持的客户端</a> ·
@@ -97,6 +98,7 @@
 - [客户端支持与本地格式](docs/local/sources.md)
 - [估算口径](docs/local/pricing.md)
 - [macOS 发布说明](docs/local/releases.md)
+- [官网构建与预览](site/README.md)
 
 ## 开发
 

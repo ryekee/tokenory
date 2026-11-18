@@ -1,5 +1,5 @@
 // [INPUT]: Multi-agent completed main-turn analytics and support capabilities from the Rust worker.
-// [OUTPUT]: Validated client identities, estimated durations, whole-range summaries and chronological chart points.
+// [OUTPUT]: Validated client identities, estimated durations, whole-range summaries and hourly speed distributions.
 // [POS]: Turn analytics presentation boundary; independent of priced usage pagination.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -105,6 +105,61 @@ enum TurnSort: String, CaseIterable {
     var title: String { L("turns.sort." + rawValue) }
 }
 
+struct TurnSpeedHour: Sendable {
+    struct Distribution: Sendable {
+        let middle: ClosedRange<Double>
+        let median: Double
+        let whiskers: ClosedRange<Double>
+        let outliers: [AgentTurn]
+        let representative: AgentTurn
+    }
+
+    let start: Date
+    let turns: [AgentTurn]
+    let distribution: Distribution?
+    let containsEstimates: Bool
+
+    var end: Date { start.addingTimeInterval(3600) }
+    var center: Date { start.addingTimeInterval(1800) }
+    var visiblePoints: [AgentTurn] { distribution?.outliers ?? turns }
+
+    static func start(containing date: Date, calendar: Calendar) -> Date {
+        calendar.dateInterval(of: .hour, for: date)?.start ?? date
+    }
+
+    init(start: Date, turns: [AgentTurn]) {
+        self.start = start
+        self.turns = turns
+        containsEstimates = turns.contains(where: \.durationEstimated)
+        guard turns.count >= 3 else {
+            distribution = nil
+            return
+        }
+        let ordered = turns.sorted { ($0.speed, $0.startMs, $0.id) < ($1.speed, $1.startMs, $1.id) }
+        let q1 = Self.percentile(0.25, in: ordered)
+        let median = Self.percentile(0.5, in: ordered)
+        let q3 = Self.percentile(0.75, in: ordered)
+        let fence = (q3 - q1) * 1.5
+        let regular = (q1 - fence)...(q3 + fence)
+        let representative = turns.min {
+            abs($0.speed - median) < abs($1.speed - median)
+        } ?? turns[0]
+        let low = ordered.first(where: { regular.contains($0.speed) }) ?? representative
+        let high = ordered.last(where: { regular.contains($0.speed) }) ?? representative
+        distribution = Distribution(middle: q1...q3, median: median,
+                                    whiskers: low.speed...high.speed,
+                                    outliers: ordered.filter { !regular.contains($0.speed) },
+                                    representative: representative)
+    }
+
+    private static func percentile(_ fraction: Double, in ordered: [AgentTurn]) -> Double {
+        let index = fraction * Double(ordered.count - 1)
+        let lower = ordered[Int(index)].speed
+        let upper = ordered[Int(index.rounded(.up))].speed
+        return lower + (upper - lower) * (index - index.rounded(.down))
+    }
+}
+
 struct TurnPresentation: Sendable {
     let revision: Int64
     let models: [String]
@@ -112,6 +167,8 @@ struct TurnPresentation: Sendable {
     let capabilities: [TurnCapability]
     let containsEstimates: Bool
     let points: [AgentTurn]
+    let speedHours: [Date: TurnSpeedHour]
+    let orderedSpeedHours: [TurnSpeedHour]
     let averageSpeed: Double?
     let averageTTFTSeconds: Double?
     let averageReasoning: Double?
@@ -126,6 +183,11 @@ struct TurnPresentation: Sendable {
         revision = report.revision
         models = report.models
         points = report.turns.sorted { ($0.startMs, $0.id) < ($1.startMs, $1.id) }
+        let calendar = Localization.reportingCalendar
+        let groups = Dictionary(grouping: points) { TurnSpeedHour.start(containing: $0.start, calendar: calendar) }
+        let hours = groups.map { TurnSpeedHour(start: $0.key, turns: $0.value) }
+        speedHours = Dictionary(uniqueKeysWithValues: hours.map { ($0.start, $0) })
+        orderedSpeedHours = hours.sorted { $0.start < $1.start }
         let seconds = points.reduce(0.0) { $0 + Double($1.durationMs) / 1000 }
         let generated = points.reduce(0.0) { $0 + Double($1.generatedTokens) }
         averageSpeed = seconds > 0 ? generated / seconds : nil

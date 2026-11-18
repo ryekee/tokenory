@@ -500,7 +500,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "近 7 天"
+            "value": "最近 7 天"
           }
         }
       }
@@ -518,7 +518,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "近 30 天"
+            "value": "最近 30 天"
           }
         }
       }
@@ -3119,6 +3119,40 @@
         }
       }
     },
+    "calendar.previous_range": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous date range"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上一日期范围"
+          }
+        }
+      }
+    },
+    "calendar.next_range": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next date range"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一日期范围"
+          }
+        }
+      }
+    },
     "cost.no_priced_usage": {
       "extractionState": "manual",
       "localizations": {
@@ -4764,19 +4798,36 @@
         }
       }
     },
-    "turns.chart_help": {
+    "turns.chart_middle": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Each point is a completed turn at its start time. The curve connects observed values across gaps; it does not fill missing time with zero or add observations."
+            "value": "Half of turns: %@–%@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "每个点是一个已完成回合，按开始时间排列。曲线跨空档连接真实观测值，不补零，也不生成额外数据点。"
+            "value": "一半回合在 %@–%@"
+          }
+        }
+      }
+    },
+    "turns.chart_typical": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Typical speed: %@ tokens/s"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "典型速度 %@ tokens/s"
           }
         }
       }
@@ -4787,13 +4838,30 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use Left and Right to inspect turns, then Return to show details."
+            "value": "Use Left and Right to inspect an hour or turn. Press Return to select it."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按左右方向键查看回合，按回车显示详情。"
+            "value": "按左右方向键查看时段或回合，按回车选中。"
+          }
+        }
+      }
+    },
+    "turns.show_all": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show all"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示全部"
           }
         }
       }

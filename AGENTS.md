@@ -12,6 +12,7 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 - `DESIGN.md`：UI/UX 设计规范与验收清单。
 - `docs/design/`：文案审阅和历史设计记录。
 - `docs/prototypes/mechanical-hud/`：已确认的独立网页原型，保留供未来官网使用。
+- `site/`：双语官网、交互式 HUD 演示和正式发布记录。
 - `docs/local/`：计价口径、数据来源和维护说明。
 - `web/`、`packages/`、`scripts/`、`deploy/`：保留的上游 Web、包及部署工具。
 - `local-data/`：本地开发数据。

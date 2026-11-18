@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 独立发布筛选结果、全年活动、当日用量、回合、价格和采集状态。
+// [OUTPUT]: 日期范围切换，独立发布筛选结果、全年活动、当日用量、回合、价格和采集状态。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -8,10 +8,21 @@ import Observation
 enum UsageDateRange: String, CaseIterable {
     case today, week, month, all, custom
     var title: String { L("range." + rawValue) }
+
+    fileprivate var dayCount: Int? {
+        switch self {
+        case .today: 1
+        case .week: 7
+        case .month: 30
+        case .all, .custom: nil
+        }
+    }
 }
 
 @MainActor @Observable
 final class UsageStore {
+    enum DateStep { case earlier, later }
+
     static let shared = UsageStore()
     let engine: EngineClient
     let dataDirectory: URL
@@ -95,21 +106,62 @@ final class UsageStore {
             catch { fail(error) }
         }
     }
-    func selectDateRange(_ range: UsageDateRange) {
+    func selectDateRange(_ range: UsageDateRange, now: Date = .now) {
         dateRange = range
-        updateDateRange(resetOffset: true)
+        updateDateRange(now: now, resetOffset: true)
     }
+
+    func selectCustomDateRange(_ range: ClosedRange<Date>) {
+        dateRange = .custom
+        var selection = filter
+        selection.from = Self.day(range.lowerBound)
+        selection.to = Self.day(range.upperBound)
+        selection.offset = 0
+        filter = selection
+    }
+
+    func steppedDateRange(_ step: DateStep, now: Date = .now) -> ClosedRange<Date>? {
+        guard let from = filter.from.flatMap(Localization.date),
+              let to = filter.to.flatMap(Localization.date), from <= to else { return nil }
+        let calendar = Localization.reportingCalendar
+        guard let distance = calendar.dateComponents([.day], from: from, to: to).day else { return nil }
+        let length = distance + 1
+        let days: Int
+        switch step {
+        case .earlier: days = -length
+        case .later:
+            let today = calendar.startOfDay(for: now)
+            guard let available = calendar.dateComponents([.day], from: to, to: today).day,
+                  available > 0 else { return nil }
+            days = min(length, available)
+        }
+        guard let start = calendar.date(byAdding: .day, value: days, to: from),
+              let end = calendar.date(byAdding: .day, value: days, to: to) else { return nil }
+        return start...end
+    }
+
+    func stepDateRange(_ step: DateStep, now: Date = .now) {
+        guard let range = steppedDateRange(step, now: now) else { return }
+        let calendar = Localization.reportingCalendar
+        let dayCount = calendar.dateComponents([.day], from: range.lowerBound, to: range.upperBound).day.map { $0 + 1 }
+        if calendar.isDate(range.upperBound, inSameDayAs: now),
+           let dayCount,
+           let preset = UsageDateRange.allCases.first(where: { $0.dayCount == dayCount }) {
+            selectDateRange(preset, now: now)
+        } else {
+            selectCustomDateRange(range)
+        }
+    }
+
     func updateDateRange(now: Date = Date(), resetOffset: Bool = false) {
         guard dateRange != .custom else { return }
+        let calendar = Localization.reportingCalendar
+        let today = calendar.startOfDay(for: now)
         var selection = filter
         selection.to = dateRange == .all ? nil : Self.day(now)
-        switch dateRange {
-        case .today: selection.from = selection.to
-        case .week: selection.from = Self.day(now.addingTimeInterval(-6 * 86400))
-        case .month: selection.from = Self.day(now.addingTimeInterval(-29 * 86400))
-        case .all: selection.from = nil
-        case .custom: break
-        }
+        selection.from = dateRange.dayCount
+            .flatMap { calendar.date(byAdding: .day, value: 1 - $0, to: today) }
+            .map(Self.day)
         if resetOffset || selection != filter { selection.offset = 0 }
         if selection != filter { filter = selection }
     }
