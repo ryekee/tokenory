@@ -1,5 +1,5 @@
 // [INPUT]: 使用真实 helper、临时源日志和 UsageStore。
-// [OUTPUT]: 验证账本到原生展示的状态更新及客户端目录。
+// [OUTPUT]: 验证账本状态更新、筛选请求和客户端目录。
 // [POS]: 跨 Rust 和 Swift 的集成测试边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -178,11 +178,12 @@ final class UsageStoreTests: XCTestCase {
             XCTAssertEqual(store.history(metric: .tokens, average: true, client: nil)?.total, 1000)
             XCTAssertEqual(store.activity?.modelDays.reduce(0) { $0 + $1.summary.tokens }, 1000)
             store.filter.model = "not-a-model"
-            await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
+            await store.refreshSelection(store.filter, now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
             XCTAssertTrue(store.activity?.modelDays.isEmpty == true)
             store.filter.model = nil
-            await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
+            await store.refreshSelection(store.filter, now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
             XCTAssertEqual(store.report?.summary.tokens, 1000)
+            XCTAssertEqual(store.history(metric: .tokens, average: true, client: nil)?.total, 1000)
             store.dateRange = .month
             await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
             XCTAssertEqual(store.filter.from, "2026-10-08")
@@ -212,6 +213,66 @@ final class UsageStoreTests: XCTestCase {
             throw error
         }
     }
+    func testDateSelectionKeepsPreviousReportAndOnlyRequestsNewRange() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "Tokenory-range-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let helper = root.appending(path: "worker.py")
+        let script = #"""
+        #!/usr/bin/python3
+        import json, pathlib, sys, time
+        root = pathlib.Path(sys.argv[2])
+        for line in sys.stdin:
+            r = json.loads(line)
+            p, operation = r['payload'], r['operation']
+            with (root / 'requests').open('a') as log:
+                print(operation, file=log)
+            if operation == 'overview':
+                tokens = 100 if p['from'] == '2026-11-14' else 200
+                if tokens == 200:
+                    (root / 'waiting').touch()
+                    while not (root / 'release').exists(): time.sleep(.01)
+                summary = dict(tokens=tokens,tokenBreakdown=dict(input=tokens,output=0,cacheRead=0,cacheWrite=0,reasoning=0),unpricedTokens=0,costStatus='unknown',recordCount=1,activeDays=1)
+                result = dict(revision=1,summary=summary,daily=[],clients=[],providers=[],models=[],details=[])
+            else:
+                result = dict(revision=1,daily=[],modelDays=[])
+                result.update({k:p[k] for k in ('from','to')})
+            print(json.dumps(dict(version=1,id=r['id'],result=result)),flush=True)
+        """#
+        try Data(script.utf8).write(to: helper)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+        let engine = EngineClient(helper: helper, directory: root)
+        let store = UsageStore(engine: engine, directory: root)
+        let now = try XCTUnwrap(Localization.date("2026-11-18"))
+        store.dateRange = .custom
+        let first = UsageFilter(from: "2026-11-14", to: "2026-11-14")
+        let second = UsageFilter(from: "2026-11-15", to: "2026-11-15")
+        try await engine.start()
+        store.filter = first
+        await store.refreshSelection(first, now: now)
+        XCTAssertEqual(store.report?.summary.tokens, 100)
+        XCTAssertNotNil(store.activity)
+        store.filter = second
+        let refresh = Task { await store.refreshSelection(second, now: now) }
+        let waiting = root.appending(path: "waiting")
+        for _ in 0..<100 {
+            if FileManager.default.fileExists(atPath: waiting.path) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: waiting.path))
+        XCTAssertTrue(store.loading)
+        XCTAssertEqual(store.reportFilter, first)
+        XCTAssertEqual(store.report?.summary.tokens, 100)
+        try Data().write(to: root.appending(path: "release"))
+        await refresh.value
+        await engine.stop()
+        XCTAssertFalse(store.loading)
+        XCTAssertEqual(store.reportFilter, second)
+        XCTAssertEqual(store.report?.summary.tokens, 200)
+        let requests = try String(contentsOf: root.appending(path: "requests"), encoding: .utf8)
+        XCTAssertEqual(requests.split(separator: "\n"), ["overview", "activity", "overview"])
+    }
+
     func testOlderFullRefreshCannotReplaceNewDayMenuMetrics() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "Tokenory-today-race-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

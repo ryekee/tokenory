@@ -1,10 +1,11 @@
 // [INPUT]: Lazy multi-agent turn report, shared date range and local client/model selection.
-// [OUTPUT]: Inline metric units, prominent detail values, semantic token/time colors and estimated turn details.
+// [OUTPUT]: Turn analytics and detail values with rolling metrics and a growing speed chart on range changes.
 // [POS]: Native speed-analysis page; list pagination never limits summaries or chart data.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 struct TurnsView: View {
+    let isActive: Bool
     @Environment(UsageStore.self) private var store
     @State private var selectedID: String?
     @State private var order: TurnSort = .duration
@@ -14,6 +15,8 @@ struct TurnsView: View {
         TurnQuery(from: store.filter.from, to: store.filter.to, model: store.turnModel, client: store.turnClient)
     }
     var body: some View {
+        let requestedQuery = isActive ? query : nil
+        let waiting = isActive && (store.turnsLoading || (store.turnsQuery != requestedQuery && store.turnsError == nil))
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Picker(L("field.tool"), selection: Binding(
@@ -38,7 +41,9 @@ struct TurnsView: View {
                     .popover(isPresented: $showsCoverage) {
                         AgentCoveragePopover(capabilities: store.turnAnalytics?.capabilities ?? [])
                     }
-                if store.turnsLoading { ProgressView().controlSize(.small) }
+                ZStack {
+                    if waiting && store.turnAnalytics != nil { ProgressView().controlSize(.small) }
+                }.frame(width: 16, height: 16)
             }.padding(.horizontal, 22).padding(.vertical, 14)
             if let error = store.turnsError {
                 HStack(alignment: .top) {
@@ -51,16 +56,20 @@ struct TurnsView: View {
                     Button(L("turns.retry")) { Task { await store.loadAgentTurns(query, force: true) } }
                 }.font(.caption).padding(.horizontal, 22).padding(.bottom, 12)
             }
-            if let data = store.turnAnalytics, store.turnsQuery == query {
-                TurnsContent(data: data, selectedID: $selectedID, order: $order, page: $page)
-            } else if store.turnsLoading {
+            if let data = store.turnAnalytics, let displayed = store.turnsQuery,
+               requestedQuery == nil || displayed == requestedQuery || waiting {
+                TurnsContent(data: data, range: DashboardDateSpan(from: displayed.from, to: displayed.to),
+                             isActive: isActive, selectedID: $selectedID, order: $order, page: $page)
+            } else if waiting {
                 ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ContentUnavailableView(L("turns.empty"), systemImage: "stopwatch")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: query) { await store.loadAgentTurns(query) }
+        .task(id: requestedQuery) {
+            if let requestedQuery, !Task.isCancelled { await store.loadAgentTurns(requestedQuery) }
+        }
     }
 }
 
@@ -127,6 +136,8 @@ private struct AgentCoveragePopover: View {
 
 private struct TurnsContent: View {
     let data: TurnPresentation
+    let range: DashboardDateSpan
+    let isActive: Bool
     @Binding var selectedID: String?
     @Binding var order: TurnSort
     @Binding var page: Int
@@ -140,7 +151,8 @@ private struct TurnsContent: View {
                 VStack(alignment: .leading, spacing: 18) {
                     WorkspacePanel { summary }
                     WorkspacePanel {
-                        TurnSpeedChart(data: data, selectedID: selected?.id) { select($0) }
+                        TurnSpeedChart(data: data, range: range, animateRangeChanges: isActive,
+                                       selectedID: selected?.id) { select($0) }
                     }
                     if data.points.isEmpty {
                         ContentUnavailableView(L("turns.empty"), systemImage: "stopwatch")
@@ -171,19 +183,27 @@ private struct TurnsContent: View {
 
     private var summary: some View {
         HStack(alignment: .top, spacing: 18) {
-            metric("turns.average_speed", (data.containsEstimates ? "≈ " : "") + TurnFormat.number(data.averageSpeed), unit: "tokens/s", help: L("turns.average_speed_help"))
+            metric("turns.average_speed", (data.containsEstimates ? "≈ " : "") + TurnFormat.number(data.averageSpeed),
+                   amount: data.averageSpeed, unit: "tokens/s", help: L("turns.average_speed_help"))
             Divider().frame(height: 58)
-            metric("turns.average_ttft", TurnFormat.number(data.averageTTFTSeconds), unit: L("turns.seconds_unit"),
+            metric("turns.average_ttft", TurnFormat.number(data.averageTTFTSeconds), amount: data.averageTTFTSeconds, unit: L("turns.seconds_unit"),
                    help: LF("turns.average_ttft_help", data.ttftCoverage, data.points.count))
             Divider().frame(height: 58)
             metric("turns.average_reasoning", data.averageReasoning.map { $0.formatted(.number.precision(.fractionLength(0)).locale(Localization.locale)) } ?? "—",
-                   unit: L("turns.tokens_per_turn"), help: LF("turns.average_reasoning_help", data.reasoningCoverage, data.points.count))
+                   amount: data.averageReasoning, unit: L("turns.tokens_per_turn"),
+                   help: LF("turns.average_reasoning_help", data.reasoningCoverage, data.points.count))
         }
     }
-    private func metric(_ key: String, _ value: String, unit: String, help: String) -> some View {
+    private func metric(_ key: String, _ value: String, amount: Double?, unit: String, help: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L(key)).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            TurnMetricValue(value: value, unit: unit, size: 32)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                DashboardRollingValue(text: value, value: amount, range: isActive ? range : nil, style: .semibold(32))
+                Text(unit).font(.caption).foregroundStyle(.secondary)
+            }
+            .lineLimit(1).minimumScaleFactor(0.75).textSelection(.enabled)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(unit.isEmpty ? value : "\(value) \(unit)")
         }.frame(maxWidth: .infinity, alignment: .leading).help(help).accessibilityElement(children: .combine)
     }
 
@@ -240,7 +260,10 @@ private struct TurnsContent: View {
             }
         }
     }
-    private var listTitle: some View { Text(LF("turns.count", data.points.count)).font(.headline) }
+    private var listTitle: some View {
+        DashboardRollingValue(text: LF("turns.count", data.points.count), value: Double(data.points.count),
+                              range: isActive ? range : nil, style: .headline)
+    }
     private var sortPicker: some View {
         Picker(L("overview.sort"), selection: $order) {
             ForEach(TurnSort.allCases, id: \.self) { Text($0.title).tag($0) }

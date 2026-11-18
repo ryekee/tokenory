@@ -1,5 +1,5 @@
 // [INPUT]: 接收统计报告、筛选状态和记录详情。
-// [OUTPUT]: 提供主窗口导航、按需加载的慢回合页和可滚动的记录详情弹窗。
+// [OUTPUT]: 提供主窗口导航、紧凑的日期与刷新工具栏、按需加载的回合页和记录详情。
 // [POS]: 主工作区入口；详情操作区独立于长内容滚动。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -15,6 +15,12 @@ struct DashboardView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var selectedDetail: UsageDetail?
     @State private var visited: Set<DashboardSection> = [.overview]
+    private var dashboardSelection: UsageFilter? {
+        section == .overview || section == .details ? store.filter : nil
+    }
+    private var showsReportProgress: Bool {
+        (section == .overview || section == .details) && store.report != nil && store.loading
+    }
     var body: some View {
         NavigationSplitView {
             VStack(spacing: 0) {
@@ -37,7 +43,7 @@ struct DashboardView: View {
                     VStack(spacing: 0) {
                         UsageFiltersView(showsSource: false)
                             .padding(.horizontal, 22).padding(.vertical, 14)
-                        if let report = store.report { OverviewView(report: report) }
+                        if let report = store.report { OverviewView(report: report, isActive: section == .overview) }
                         else { ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity) }
                     }
                     .opacity(section == .overview ? 1 : 0)
@@ -46,7 +52,7 @@ struct DashboardView: View {
                     .accessibilityHidden(section != .overview)
                     if section == .imports { ImportView() }
                     if section == .turns || visited.contains(.turns) {
-                        TurnsView()
+                        TurnsView(isActive: section == .turns)
                             .opacity(section == .turns ? 1 : 0)
                             .allowsHitTesting(section == .turns)
                             .disabled(section != .turns)
@@ -63,7 +69,7 @@ struct DashboardView: View {
                         VStack(spacing: 0) {
                             UsageFiltersView(showsSource: true)
                                 .padding(.horizontal, 22).padding(.vertical, 14)
-                            if let report = store.report { RecordsView(report: report) { selectedDetail = $0 } }
+                            if let report = store.report { RecordsView(report: report, isActive: section == .details) { selectedDetail = $0 } }
                             else { ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity) }
                         }
                         .opacity(section == .details ? 1 : 0)
@@ -76,15 +82,28 @@ struct DashboardView: View {
                 .toolbar {
                     ToolbarItemGroup {
                         if section == .overview || section == .details || section == .turns { UsageDatePicker() }
-                        if store.loading { ProgressView().controlSize(.small) }
-                        Button { store.scan() } label: { Label(L("action.scan"), systemImage: "arrow.clockwise") }.disabled(store.scanning || !store.connected)
+                        Button { store.scan() } label: {
+                            Label {
+                                Text(L("action.scan"))
+                            } icon: {
+                                Image(systemName: "arrow.clockwise")
+                                    .opacity(showsReportProgress ? 0 : 1)
+                                    .overlay {
+                                        if showsReportProgress { ProgressView().controlSize(.small).accessibilityHidden(true) }
+                                    }
+                            }
+                        }
+                        .accessibilityValue(showsReportProgress ? L("usage.loading_stats") : "")
+                        .disabled(store.scanning || !store.connected)
                         if !store.connected { Button(L("action.reconnect")) { store.start() } }
                     }
                 }
         }
         .frame(minWidth: 800, minHeight: 560)
         .onChange(of: section) { _, next in visited.insert(next) }
-        .onChange(of: store.filter) { _, _ in Task { await store.refresh() } }
+        .onChange(of: dashboardSelection) { _, selection in
+            if let selection { Task { await store.refreshSelection(selection) } }
+        }
         .sheet(item: $selectedDetail) { detail in DetailSheet(detail: detail) }
     }
 }

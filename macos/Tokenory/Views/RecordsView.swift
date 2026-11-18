@@ -1,7 +1,12 @@
+// [INPUT]: 当前日期范围的报表和明细操作。
+// [OUTPUT]: 已显示的账本记录，以及随日期范围滚动更新的记录数。
+// [POS]: 主工作区明细页；保留记录身份与分页。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 struct RecordsView: View {
     let report: UsageReport
+    let isActive: Bool
     let openDetail: (UsageDetail) -> Void
     @Environment(UsageStore.self) private var store
     @Environment(\.colorScheme) private var scheme
@@ -23,7 +28,10 @@ struct RecordsView: View {
         let dates = Dictionary(uniqueKeysWithValues: Set(report.details.map(\.date)).map { ($0, Localization.day($0)) })
         VStack(spacing: 0) {
             HStack {
-                Text(LF("usage.record_count", report.summary.recordCount)).font(.headline)
+                DashboardRollingValue(text: LF("usage.record_count", report.summary.recordCount),
+                                      value: Double(report.summary.recordCount),
+                                      range: isActive ? DashboardDateSpan(from: displayedFilter.from, to: displayedFilter.to) : nil,
+                                      style: .headline)
                 Spacer()
                 Text(L("record.daily_note")).font(.caption).foregroundStyle(.secondary)
             }.padding(16)

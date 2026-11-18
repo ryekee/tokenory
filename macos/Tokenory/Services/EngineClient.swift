@@ -63,6 +63,10 @@ actor EngineClient {
         }
     }
 
+    func request<Result: Decodable & Sendable>(_ operation: String, payload: JSONValue = .object([:]), as type: Result.Type) async throws -> Result {
+        try await request(operation, payload: payload).decode(type)
+    }
+
     func stop() async {
         guard let child = process else { return }
         try? input?.close(); input = nil

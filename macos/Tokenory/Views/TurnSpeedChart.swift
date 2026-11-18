@@ -1,16 +1,21 @@
-// [INPUT]: Chronologically sorted real turn observations and selected turn identity.
-// [OUTPUT]: Monotone temporal curve, immediate pointer/keyboard readout and detail selection.
+// [INPUT]: Committed range, chronologically sorted turn observations, and selected turn identity.
+// [OUTPUT]: Monotone temporal curve with a range reveal, immediate readout, and detail selection.
 // [POS]: Isolates chart hover state from the page; never fills gaps with synthetic data.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
+import AppKit
 import SwiftUI
 import Charts
 
 struct TurnSpeedChart: View {
     let data: TurnPresentation
+    let range: DashboardDateSpan
+    let animateRangeChanges: Bool
     let selectedID: String?
     let onSelect: (AgentTurn) -> Void
     @State private var hovered: AgentTurn?
+    @State private var transition = DashboardPlotTransition()
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var dateFormat: Date.FormatStyle {
         Date.FormatStyle(locale: Localization.locale, calendar: Localization.reportingCalendar,
                          timeZone: Localization.reportingCalendar.timeZone).month(.twoDigits).day(.twoDigits).hour().minute()
@@ -21,47 +26,27 @@ struct TurnSpeedChart: View {
         return start == end ? start.addingTimeInterval(-60)...end.addingTimeInterval(60) : start...end
     }
     var body: some View {
+        let presence = DashboardPlotPresence(range: range, hasData: !data.points.isEmpty)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(L("turns.trend")).font(.headline)
                 Spacer()
                 Text("tokens/s").font(.caption).foregroundStyle(.secondary)
             }.help(L("turns.chart_help"))
-            if data.points.isEmpty {
+            if !presence.hasData {
                 ContentUnavailableView(L("turns.empty"), systemImage: "chart.xyaxis.line").frame(height: 190)
             } else {
-                plot.frame(height: 190)
+                plot(presence: presence).frame(height: 190)
             }
         }
+        .onChange(of: presence, initial: true) { _, next in transition.commit(next) }
         .onChange(of: data.points) { _, _ in hovered = nil }
     }
 
-    private var marks: some View {
+    private func plot(presence: DashboardPlotPresence) -> some View {
         Chart {
-            ForEach(data.points) { turn in
-                LineMark(x: .value("Time", turn.start), y: .value("tokens/s", turn.speed))
-                    .foregroundStyle(Color.accentColor)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
-                    .interpolationMethod(.monotone)
-                    .accessibilityHidden(true)
-                if data.points.count <= 100 || hovered?.id == turn.id || selectedID == turn.id {
-                    PointMark(x: .value("Time", turn.start), y: .value("tokens/s", turn.speed))
-                        .foregroundStyle(Color.accentColor)
-                        .symbolSize(selectedID == turn.id || hovered?.id == turn.id ? 30 : 12)
-                        .accessibilityHidden(true)
-                }
-            }
-            if let hovered {
-                RuleMark(x: .value("Time", hovered.start))
-                    .foregroundStyle(.secondary.opacity(0.4))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .accessibilityHidden(true)
-            }
+            RuleMark(y: .value("tokens/s", 0.0)).foregroundStyle(.clear).accessibilityHidden(true)
         }
-    }
-
-    private var plot: some View {
-        marks
         .chartXScale(domain: domain)
         .chartYScale(domain: 0...max(10, ceil((data.points.map(\.speed).max() ?? 0) / 10) * 10))
         .chartXAxis {
@@ -75,11 +60,14 @@ struct TurnSpeedChart: View {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 4])).foregroundStyle(.secondary.opacity(0.2))
                 AxisValueLabel {
-                    if let speed = value.as(Double.self) { Text(speed.formatted(.number.precision(.fractionLength(0)).locale(Localization.locale))).font(.system(size: 10)).monospacedDigit() }
+                    if let speed = value.as(Double.self) {
+                        Text(speed.formatted(.number.precision(.fractionLength(0)).locale(Localization.locale)))
+                            .font(.system(size: 10)).monospacedDigit().frame(minWidth: 30, alignment: .trailing)
+                    }
                 }
             }
         }
-        .chartOverlay { proxy in overlay(proxy) }
+        .chartOverlay { proxy in overlay(proxy, presence: presence) }
         .focusable()
         .onKeyPress(.leftArrow) { move(-1); return .handled }
         .onKeyPress(.rightArrow) { move(1); return .handled }
@@ -98,11 +86,16 @@ struct TurnSpeedChart: View {
         }
     }
 
-    private func overlay(_ proxy: ChartProxy) -> some View {
+    private func overlay(_ proxy: ChartProxy, presence: DashboardPlotPresence) -> some View {
             GeometryReader { geometry in
                 if let plot = proxy.plotFrame {
                     let frame = geometry[plot]
                     ZStack(alignment: .topLeading) {
+                        marks(proxy, size: frame.size, presence: presence)
+                            .frame(width: frame.width, height: frame.height)
+                            .offset(x: frame.minX, y: frame.minY)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                         Rectangle().fill(.clear).contentShape(Rectangle())
                             .onContinuousHover { phase in
                                 switch phase {
@@ -115,6 +108,7 @@ struct TurnSpeedChart: View {
                                 if let hovered { onSelect(hovered) }
                             }
                         if let hovered, let x = proxy.position(forX: hovered.start) {
+                            ChartHoverRule(x: frame.minX + x, plot: frame, opacity: 0.4)
                             readout(hovered)
                                 .padding(12).frame(width: 246)
                                 .background(WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: 8))
@@ -125,6 +119,25 @@ struct TurnSpeedChart: View {
                     }
                 }
             }
+    }
+
+    private func marks(_ proxy: ChartProxy, size: CGSize, presence: DashboardPlotPresence) -> some View {
+        var series: [CGPoint] = []
+        var dots: [DashboardChartMarks.Dot] = []
+        for turn in data.points {
+            guard let x = proxy.position(forX: turn.start), let y = proxy.position(forY: turn.speed) else { continue }
+            let point = CGPoint(x: x, y: y)
+            series.append(point)
+            let emphasized = turn.id == hovered?.id || turn.id == selectedID
+            if data.points.count <= 100 || emphasized {
+                dots.append(.init(center: point, diameter: emphasized ? 6 : 4))
+            }
+        }
+        let accent = NSColor(Color.accentColor)
+        return DashboardChartMarks(bars: [], series: [series], dots: dots, frameSize: size,
+                                   range: range, animateRangeChanges: animateRangeChanges && !reduceMotion,
+                                   takeEntrance: { [transition] in transition.takeEntrance(presence) },
+                                   barColor: accent, lineColor: accent)
     }
 
     private func updateHover(at location: CGPoint, frame: CGRect, proxy: ChartProxy) {

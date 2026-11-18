@@ -32,11 +32,14 @@ enum Localization {
     static func format(_ key: String, _ arguments: [CVarArg], language: String? = nil) -> String {
         String(format: string(key, language: language), locale: Locale(identifier: language ?? identifier), arguments: arguments)
     }
-    static func date(_ day: String) -> Date? {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = "yyyy-MM-dd"
-        return f.date(from: day)
-    }
+    private static let dayParser: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+    static func date(_ day: String) -> Date? { dayParser.date(from: day) }
     static func day(_ value: String) -> String {
         guard let date = date(value) else { return value }
         let f = DateFormatter(); f.locale = locale; f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateStyle = .medium

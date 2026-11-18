@@ -118,10 +118,90 @@ struct HUDDrumMotion {
         if destination - current.position > 40 {
             destination -= floor((destination - current.position - 20) / 10) * 10
         }
+        return Self.retargeting(from: current, to: destination, at: elapsed, duration: duration)
+    }
+
+    static func retargeting(from current: (position: Double, speed: Double), to destination: Double,
+                            at elapsed: TimeInterval, duration: TimeInterval) -> HUDDrumMotion {
         let distance = destination - current.position
         // A normalized initial slope <= 3 keeps the entire path forward and prevents overshoot.
-        let brakingDuration = current.speed > 0 ? min(duration, 3 * distance / current.speed) : duration
+        let brakingDuration = current.speed > 0 && distance > 0 ? min(duration, 3 * distance / current.speed) : duration
         return HUDDrumMotion(start: current.position, target: destination, startTime: elapsed,
                              duration: brakingDuration, initialSpeed: current.speed)
+    }
+}
+
+// Carry timing uses the same visible units travel as the original HUD. Beyond
+// that limit, each drum keeps the original bounded winding behavior.
+struct HUDCarryRoll {
+    static let maximumTravel: Int64 = 30
+    private let from: Int64
+    private var target: Int64
+    private var motion: HUDDrumMotion
+    private var lateEngagement: [Int64: Double] = [:]
+    private var places: [Int64]
+    var endTime: TimeInterval { motion.endTime }
+
+    init?(from: Int64, to: Int64, duration: TimeInterval) {
+        guard to > from, to - from <= Self.maximumTravel else { return nil }
+        self.from = from
+        self.target = to
+        motion = HUDDrumMotion(start: 0, target: Double(to - from), startTime: 0, duration: duration, initialSpeed: nil)
+        places = Self.drumPlaces(to)
+    }
+
+    mutating func extend(to next: Int64, at elapsed: TimeInterval, duration: TimeInterval) -> Bool {
+        guard next - from <= Self.maximumTravel else { return false }
+        let current = motion.sample(at: elapsed).position
+        places = Self.drumPlaces(next)
+        for place in places where place > 1 && next / place > target / place {
+            // If an update makes a carry reachable while inside its lead-in,
+            // engage at the current position instead of jumping into the step.
+            let firstNewBoundary = (target / place + 1) * place - from
+            if Double(firstNewBoundary) - Double(place) * 0.2 < current {
+                lateEngagement[place] = current
+            }
+        }
+        motion = motion.extending(by: Double(next - target), at: elapsed, duration: duration)
+        target = next
+        return true
+    }
+
+    func positions(at elapsed: TimeInterval) -> [Double] {
+        let reading = motion.sample(at: elapsed)
+        return places.map { drum(at: $0, reading: reading).position }
+    }
+
+    func boundedMotions(to next: Int64, at elapsed: TimeInterval, duration: TimeInterval) -> [HUDDrumMotion] {
+        let reading = motion.sample(at: elapsed)
+        return Self.drumPlaces(next).map { place in
+            let current = drum(at: place, reading: reading)
+            let digit = from / place % 10
+            let steps = next / place - from / place - (Int64(floor(current.position)) - digit)
+            let travel = steps > 30 ? 20 + steps % 10 : steps
+            let destination = floor(current.position) + Double(travel)
+            return HUDDrumMotion.retargeting(from: current, to: destination, at: elapsed, duration: duration)
+        }
+    }
+
+    private func drum(at place: Int64, reading: (position: Double, speed: Double)) -> (position: Double, speed: Double) {
+        let initial = from / place
+        if place == 1 { return (Double(initial % 10) + reading.position, reading.speed) }
+        let reached = (from + Int64(reading.position)) / place
+        let digit = Double(initial % 10 + reached - initial)
+        guard reached < target / place else { return (digit, 0) }
+        let boundary = Double((reached + 1) * place - from)
+        let start = max(0, boundary - Double(place) * 0.2, lateEngagement[place] ?? 0)
+        guard reading.position > start else { return (digit, 0) }
+        let length = boundary - start
+        let t = min(1, (reading.position - start) / length)
+        // Ease across the lead-in and arrive at the next digit at the carry.
+        return (digit + t * t * (3 - 2 * t), 6 * t * (1 - t) * reading.speed / length)
+    }
+
+    private static func drumPlaces(_ value: Int64) -> [Int64] {
+        var places: [Int64] = [1]
+        for _ in 1..<max(6, String(value).count) { places.append(places[places.count - 1] * 10) }
+        return places.reversed()
     }
 }
