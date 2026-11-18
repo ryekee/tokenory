@@ -1,5 +1,5 @@
 // [INPUT]: 使用真实计价、导入和 SQLite 接口。
-// [OUTPUT]: 验证价格匹配、费用计算和历史重估。
+// [OUTPUT]: 验证价格匹配、费用计算、GPT-6.2 档位与优惠截止边界和历史重估。
 // [POS]: 隔离测试账本，验证计价规则的外部行为。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use tokenory::{
@@ -49,6 +49,41 @@ fn snapshot(input: f64, output: f64) -> PriceSnapshot {
             ..Default::default()
         },
     }])
+}
+#[test]
+fn gpt_62_official_rates_cover_cache_speed_context_and_promotion_boundary() {
+    let mut p = PriceSnapshot::bundled_reference();
+    p.created_at = "2026-11-18T00:00:00Z".into();
+    for (model, standard, at_limit, above_limit) in [
+        ("gpt-6.2-astra", 0.0284, 2.576, 4.952016),
+        ("gpt-6.2-sol", 0.0071, 0.644, 1.238004),
+    ] {
+        let mut r = record();
+        r.provider = "openai".into();
+        r.model = model.into();
+        r.tokens.cache_read = 1000;
+        for (speed, factor) in [("standard", 1.), ("fast", 2.), ("ultrafast", 3.)] {
+            r.metadata["inferenceSpeed"] = serde_json::json!({"speed": speed});
+            assert!((estimate("local", &r, &p).cost.unwrap() - standard * factor).abs() < 1e-12);
+        }
+        for (date, factor) in [
+            ("2027-03-01T07:59:59Z", 3.),
+            ("2027-03-01T08:00:00Z", 6.),
+        ] {
+            p.created_at = date.into();
+            assert!((estimate("local", &r, &p).cost.unwrap() - standard * factor).abs() < 1e-12);
+        }
+        p.created_at = "2026-11-18T00:00:00Z".into();
+        r.metadata["inferenceSpeed"] = serde_json::json!({"speed": "standard"});
+        r.tokens = Tokens { input: 272_000, output: 10_000, ..Default::default() };
+        assert!((estimate("local", &r, &p).cost.unwrap() - at_limit).abs() < 1e-12);
+        r.tokens.input += 1;
+        assert!((estimate("local", &r, &p).cost.unwrap() - above_limit).abs() < 1e-12);
+        r.metadata["inferenceSpeed"] = serde_json::json!({"speed": "fast"});
+        assert!((estimate("local", &r, &p).cost.unwrap() - above_limit * 2.).abs() < 1e-12);
+        r.provider = "reseller".into();
+        assert!(estimate("local", &r, &p).cost.is_none());
+    }
 }
 #[test]
 fn codex_review_reference_matches_export_and_is_scoped_to_codex() {

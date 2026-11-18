@@ -13,7 +13,7 @@ ipc.rs: 向原生应用提供 worker JSON 协议、有效账本的已用模型�
 lib.rs: 导出账本引擎模块。
 main.rs: 提供 CLI 命令和单写者锁；compact 回收空闲页。
 price_coverage.rs: 从缓存扩展模型覆盖，为未计价记录生成首次估算候选。
-pricing.rs: 保存官方价格快照，计算估算并重估历史。
+pricing.rs: 保存官方价格快照，计算估算并重估历史；GPT-6.2 支持长上下文、Fast 和按快照日期确定的 Ultrafast 优惠。
 queries.rs: 当日用量支持时间戳半开区间，按设备本地午夜查询； 按来源覆盖和筛选条件查询用量；activity 独立聚合日期/工具/模型及跨日期小时分布，小时仅采用与账本日期相符的时间戳，不受明细分页影响。
 usage.rs: 定义用量记录和 token 分类。
 

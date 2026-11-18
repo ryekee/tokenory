@@ -39,6 +39,17 @@ class FeedTests(unittest.TestCase):
         once = publish.finalize_feed(self.feed, self.asset, '0.1.4', '6')
         self.assertEqual(once, publish.finalize_feed(once, self.asset, '0.1.4', '6'))
 
+    def testDraftAssetUsesTagUrlInFeed(self):
+        draft_asset = self.asset | {
+            'browser_download_url': self.asset['browser_download_url'].replace(
+                '/v0.1.4/', '/untagged-72ae1138e3ebb2a7665a/'
+            ),
+        }
+        result = ET.fromstring(publish.finalize_feed(self.feed, draft_asset, '0.1.4', '6', draft=True))
+        self.assertEqual(result.find('channel/item/enclosure').get('url'), self.asset['browser_download_url'])
+        with self.assertRaises(ValueError):
+            publish.finalize_feed(self.feed, draft_asset, '0.1.4', '6')
+
 
 if __name__ == '__main__':
     unittest.main()
