@@ -5,6 +5,7 @@ import hashlib
 import json
 import pathlib
 import plistlib
+import re
 import subprocess
 import xml.etree.ElementTree as ET
 
@@ -28,7 +29,7 @@ def api(path, payload=None, method=None):
     return json.loads(gh(*args, payload=payload))
 
 
-def finalize_feed(feed, asset, version, build):
+def finalize_feed(feed, asset, version, build, *, draft=False):
     """Bind the generated enclosure to the exact uploaded, signed archive."""
     root = ET.fromstring(feed)
     items = root.findall('channel/item')
@@ -50,7 +51,12 @@ def finalize_feed(feed, asset, version, build):
         raise ValueError('Uploaded asset does not match the signed enclosure')
     # The EdDSA signature covers archive bytes, so changing the download URL preserves it.
     download_url = f'https://github.com/{REPO}/releases/download/v{version}/{expected_name}'
-    if asset.get('browser_download_url') != download_url:
+    asset_url = asset.get('browser_download_url', '')
+    draft_url_pattern = (
+        rf'https://github\.com/{re.escape(REPO)}/releases/download/'
+        rf'untagged-[0-9a-f]+/{re.escape(expected_name)}'
+    )
+    if asset_url != download_url and not (draft and re.fullmatch(draft_url_pattern, asset_url)):
         raise ValueError('Public download URL does not match the release')
     # App downloads must not depend on the anonymous REST API rate limit.
     enclosure.set('url', download_url)
@@ -90,7 +96,7 @@ def main():
         raise ValueError('Remote archive is missing or has a different SHA256; do not overwrite a published binary')
     # Both old and current clients use the public Release download route.
     # The REST API remains authenticated publishing infrastructure only.
-    public_feed = finalize_feed(feed.read_bytes(), asset, version, build)
+    public_feed = finalize_feed(feed.read_bytes(), asset, version, build, draft=release['draft'])
     (folder / "appcast-public.xml").write_bytes(public_feed)
     sums = folder / 'SHA256SUMS.txt'
     sums.write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in [archive, feed]))
@@ -105,6 +111,10 @@ def main():
     latest = api('releases/latest')
     if latest['id'] != release['id']:
         raise ValueError('This release is not latest; refusing to move the update feed backwards')
+    published_asset = next((a for a in latest['assets'] if a['id'] == asset['id']), None)
+    if published_asset is None or published_asset.get('digest') != expected_digest:
+        raise ValueError('Published archive does not match the signed package')
+    finalize_feed(feed.read_bytes(), published_asset, version, build)
     # A dedicated generated branch avoids committing a mutable feed into app source.
     refs = api(f'git/matching-refs/heads/{FEED_BRANCH}')
     ref = next((r for r in refs if r['ref'] == f'refs/heads/{FEED_BRANCH}'), None)

@@ -1,6 +1,6 @@
 // [INPUT]: 读取 UsageRecord、官方费率和 SQLite 账本。
 // [OUTPUT]: 提供价格快照、费用估算和带备份的重估流程；预览限时限量且应用后删除。
-// [POS]: 在采集与查询之间保存可追溯的计价依据。
+// [POS]: 在采集与查询之间保存可追溯的计价依据；GPT-6.2 Ultrafast 按快照日期选择优惠价。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
     db::{advance_revision, put_record, Database},
@@ -93,6 +93,8 @@ impl PriceSnapshot {
             });
         }
         for (model, input, output, cache, tiered) in [
+            ("gpt-6.2-astra", 8., 40., 0.4, true),
+            ("gpt-6.2-sol", 2., 10., 0.1, true),
             ("gpt-6-astra", 10., 50., 1., true),
             ("gpt-6.1-sol", 2., 10., 0.1, true),
             ("gpt-6.1-terra", 1., 5., 0.05, true),
@@ -110,7 +112,11 @@ impl PriceSnapshot {
         ] {
             p.entries.push(PriceEntry { schedule: None, provider: "openai".into(), model: model.into(), matched_key: model.into(),
                 source: "https://developers.openai.com/api/docs/pricing".into(),
-                assumption: "Official standard USD API rates verified 2026-11-05; full-request long-context tiers; current-rate estimate, not historical billing".into(),
+                assumption: if model.starts_with("gpt-6.2-") {
+                    "Official USD API rates verified 2026-11-18; full-request long-context tiers; Fast 2x; Ultrafast 3x before 2027-03-01 Pacific, then 6x, based on snapshot date; cache-write retention not available; current-rate estimate, not historical billing"
+                } else {
+                    "Official standard USD API rates verified 2026-11-05; full-request long-context tiers; current-rate estimate, not historical billing"
+                }.into(),
                 explicit_free: false, allow_fast: false,
                 rates: ModelPricing { input_cost_per_token: Some(input/1e6), output_cost_per_token: Some(output/1e6), cache_read_input_token_cost: Some(cache/1e6),
                     input_cost_per_token_above_272k_tokens: tiered.then_some(input*2./1e6),
@@ -257,6 +263,16 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     let official_openai = e.source == "https://developers.openai.com/api/docs/pricing";
     let official_anthropic = e.source == "https://platform.claude.com/docs/en/about-claude/pricing";
     let speed_factor = match speed {
+        Some("ultrafast")
+            if official_openai
+                && matches!(e.matched_key.as_str(), "gpt-6.2-astra" | "gpt-6.2-sol") =>
+        {
+            let Ok(snapshot_time) = chrono::DateTime::parse_from_rfc3339(&p.created_at) else {
+                return unknown("Ultrafast promotion requires a valid snapshot date");
+            };
+            // March 1 is PST (UTC-8). Freeze the current-rate promotion in the snapshot.
+            if snapshot_time.timestamp() < 1_803_888_000 { 3. } else { 6. }
+        }
         Some("fast")
             if official_openai
                 && (e.matched_key.starts_with("gpt-6")
@@ -487,7 +503,7 @@ pub fn active_snapshot(c: &rusqlite::Connection) -> Result<Option<(String, Price
         .transpose()
 }
 pub fn initialize(db: &mut Database) -> Result<()> {
-    const VERSION: &str = "2026-11-13-compactor-reference-v3";
+    const VERSION: &str = "2026-11-18-openai-6.2-v1";
     let installed: Option<String> = db
         .connection
         .query_row(
