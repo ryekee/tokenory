@@ -1,5 +1,5 @@
 // [INPUT]: 当前用量筛选范围与日历交互。
-// [OUTPUT]: 提交预设或自定义日期范围。
+// [OUTPUT]: 直接切换到相邻日期范围，或在日历中提交预设与自定义范围。
 // [POS]: 统计窗口的日期工具栏控件与原生弹窗。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -14,8 +14,16 @@ struct UsageDatePicker: View {
     }
 
     var body: some View {
+        ControlGroup {
+            calendarButton
+            stepButton(.earlier, icon: "chevron.left", title: L("calendar.previous_range"))
+            stepButton(.later, icon: "chevron.right", title: L("calendar.next_range"))
+        }
+    }
+
+    private var calendarButton: some View {
         let title = title
-        Button {
+        return Button {
             guard presentation == nil else { return }
             presentation = DateRangeDraft(filter: store.filter, selectedRange: store.dateRange)
         } label: {
@@ -33,15 +41,22 @@ struct UsageDatePicker: View {
                 cancel: { presentation = nil },
                 apply: { start, end in
                     presentation = nil
-                    store.dateRange = .custom
-                    var filter = store.filter
-                    filter.from = UsageStore.day(start)
-                    filter.to = UsageStore.day(end)
-                    filter.offset = 0
-                    store.filter = filter
+                    store.selectCustomDateRange(start...end)
                 }
             )
         }
+    }
+
+    private func stepButton(_ step: UsageStore.DateStep, icon: String, title: String) -> some View {
+        Button {
+            presentation = nil
+            store.stepDateRange(step)
+        } label: {
+            Label(title, systemImage: icon).labelStyle(.iconOnly)
+        }
+        .accessibilityLabel(title)
+        .help(title)
+        .disabled(store.steppedDateRange(step) == nil)
     }
 }
 

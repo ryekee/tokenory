@@ -1,0 +1,48 @@
+name: Tokenory website
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy to Cloudflare after building
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenory-website
+  cancel-in-progress: false
+
+jobs:
+  website:
+    if: (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Build from published releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISHED_TAG: ${{ github.event.release.tag_name }}
+        run: python3 site/build.py --refresh-releases --expect-tag "$PUBLISHED_TAG"
+      - name: Deploy static site
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DEPLOY: ${{ inputs.deploy || github.event_name == 'release' }}
+        run: |
+          if [ "$DEPLOY" = true ]; then
+            if [ "$GITHUB_EVENT_NAME" = release ] && { [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$CLOUDFLARE_API_TOKEN" ]; }; then
+              echo "::notice::Cloudflare credentials are not configured. Use the Cloudflare dashboard to deploy the generated site."
+              exit 0
+            fi
+            : "${CLOUDFLARE_ACCOUNT_ID:?Set the CLOUDFLARE_ACCOUNT_ID repository secret}"
+            : "${CLOUDFLARE_API_TOKEN:?Set the CLOUDFLARE_API_TOKEN repository secret}"
+            npx --yes wrangler@4.158.0 deploy
+          fi

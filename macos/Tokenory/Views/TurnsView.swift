@@ -1,5 +1,5 @@
 // [INPUT]: Lazy multi-agent turn report, shared date range and local client/model selection.
-// [OUTPUT]: Turn analytics and detail values with rolling metrics and a growing speed chart on range changes.
+// [OUTPUT]: Turn analytics and details with rolling metrics, hourly speed boxes, and hour-scoped drill-down.
 // [POS]: Native speed-analysis page; list pagination never limits summaries or chart data.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -141,10 +141,11 @@ private struct TurnsContent: View {
     @Binding var selectedID: String?
     @Binding var order: TurnSort
     @Binding var page: Int
+    @State private var selectedHour: Date?
     private let pageSize = 50
 
     var body: some View {
-        let sorted = data.sorted(by: order)
+        let sorted = visibleTurns(in: selectedHour)
         let selected = data.points.first { $0.id == selectedID } ?? sorted.first
         return GeometryReader { geometry in
             ScrollView {
@@ -152,7 +153,7 @@ private struct TurnsContent: View {
                     WorkspacePanel { summary }
                     WorkspacePanel {
                         TurnSpeedChart(data: data, range: range, animateRangeChanges: isActive,
-                                       selectedID: selected?.id) { select($0) }
+                                       selected: selected, selectedHour: selectedHour, onSelect: select)
                     }
                     if data.points.isEmpty {
                         ContentUnavailableView(L("turns.empty"), systemImage: "stopwatch")
@@ -169,14 +170,19 @@ private struct TurnsContent: View {
             }
         }
         .onChange(of: order) { _, _ in
-            page = selectedID.flatMap { id in sorted.firstIndex { $0.id == id } }.map { $0 / pageSize } ?? 0
+            showPage(containing: selectedID, in: sorted)
         }
-        .onChange(of: data.points, initial: true) { _, points in
+        .onChange(of: range) { _, _ in
+            selectedHour = nil
+            showPage(containing: selectedID, in: visibleTurns(in: nil))
+        }
+        .onChange(of: data.points, initial: true) { _, _ in
             if let index = sorted.firstIndex(where: { $0.id == selectedID }) {
                 page = index / pageSize
             } else {
                 selectedID = nil
-                page = min(page, max(0, (points.count - 1) / pageSize))
+                if sorted.isEmpty { selectedHour = nil }
+                page = min(page, max(0, (sorted.count - 1) / pageSize))
             }
         }
     }
@@ -214,9 +220,10 @@ private struct TurnsContent: View {
         return WorkspacePanel {
             VStack(spacing: 12) {
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) { listTitle; Spacer(); sortPicker }
-                    VStack(alignment: .leading, spacing: 8) { listTitle; sortPicker }
+                    HStack(spacing: 12) { listTitle(count: sorted.count); Spacer(); sortPicker }
+                    VStack(alignment: .leading, spacing: 8) { listTitle(count: sorted.count); sortPicker }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 rowColumns {
                     Text(L("turns.project")); Text(L("turns.duration")); Text(L("token.reasoning")); Text("tokens/s")
                 }.font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 5)
@@ -260,9 +267,20 @@ private struct TurnsContent: View {
             }
         }
     }
-    private var listTitle: some View {
-        DashboardRollingValue(text: LF("turns.count", data.points.count), value: Double(data.points.count),
-                              range: isActive ? range : nil, style: .headline)
+    @ViewBuilder
+    private func listTitle(count: Int) -> some View {
+        if let selectedHour {
+            HStack(spacing: 8) {
+                Text("\(TurnFormat.timestamp(selectedHour)) · \(LF("turns.count", count))").font(.headline)
+                Button(L("turns.show_all")) {
+                    self.selectedHour = nil
+                    showPage(containing: selectedID, in: visibleTurns(in: nil))
+                }.controlSize(.small)
+            }
+        } else {
+            DashboardRollingValue(text: LF("turns.count", count), value: Double(count),
+                                  range: isActive ? range : nil, style: .headline)
+        }
     }
     private var sortPicker: some View {
         Picker(L("overview.sort"), selection: $order) {
@@ -279,9 +297,25 @@ private struct TurnsContent: View {
             }
         }.lineLimit(1).minimumScaleFactor(0.85)
     }
-    private func select(_ turn: AgentTurn) {
+    private func visibleTurns(in hourStart: Date?) -> [AgentTurn] {
+        let sorted = data.sorted(by: order)
+        guard let hourStart, let hour = data.speedHours[hourStart] else { return sorted }
+        return sorted.filter { $0.start >= hour.start && $0.start < hour.end }
+    }
+
+    private func showPage(containing id: String?, in turns: [AgentTurn]) {
+        page = turns.firstIndex(where: { $0.id == id }).map { $0 / pageSize } ?? 0
+    }
+
+    private func select(_ turn: AgentTurn, hourStart: Date?) {
+        if let hourStart {
+            selectedHour = hourStart
+        } else if let selectedHour, let hour = data.speedHours[selectedHour],
+                  turn.start < hour.start || turn.start >= hour.end {
+            self.selectedHour = nil
+        }
         selectedID = turn.id
-        if let index = data.sorted(by: order).firstIndex(where: { $0.id == turn.id }) { page = index / pageSize }
+        showPage(containing: turn.id, in: visibleTurns(in: selectedHour))
     }
 }
 

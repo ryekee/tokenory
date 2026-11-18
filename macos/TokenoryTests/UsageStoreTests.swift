@@ -8,6 +8,66 @@ import XCTest
 
 @MainActor
 final class UsageStoreTests: XCTestCase {
+    func testDateArrowsKeepRangeLengthAndFiltersAcrossMonths() throws {
+        let store = UsageStore()
+        let today = try XCTUnwrap(Localization.date("2026-11-05"))
+        store.updateDateRange(now: today)
+        store.filter.client = "codex"
+        store.filter.model = "gpt-5"
+        store.filter.offset = 50
+        XCTAssertNil(store.steppedDateRange(.later, now: today))
+
+        store.stepDateRange(.earlier, now: today)
+        XCTAssertEqual(store.dateRange, .custom)
+        XCTAssertEqual(store.filter, UsageFilter(from: "2026-10-23", to: "2026-10-29", client: "codex", model: "gpt-5"))
+        store.updateDateRange(now: today.addingTimeInterval(86_400))
+        XCTAssertEqual(store.filter.to, "2026-10-29")
+
+        store.stepDateRange(.later, now: today)
+        XCTAssertEqual(store.dateRange, .week)
+        XCTAssertEqual(store.filter, UsageFilter(from: "2026-10-30", to: "2026-11-05", client: "codex", model: "gpt-5"))
+        XCTAssertNil(store.steppedDateRange(.later, now: today))
+    }
+
+    func testDateArrowsClampCustomRangesAndDisableForAllTime() throws {
+        let store = UsageStore()
+        let today = try XCTUnwrap(Localization.date("2026-11-05"))
+        let from = try XCTUnwrap(Localization.date("2026-11-01"))
+        let to = try XCTUnwrap(Localization.date("2026-11-03"))
+        store.selectCustomDateRange(from...to)
+        store.stepDateRange(.later, now: today)
+        XCTAssertEqual(store.dateRange, .custom)
+        XCTAssertEqual(store.filter.from, "2026-11-03")
+        XCTAssertEqual(store.filter.to, "2026-11-05")
+
+        store.selectDateRange(.today)
+        store.updateDateRange(now: today)
+        store.stepDateRange(.earlier, now: today)
+        XCTAssertEqual(store.filter.from, "2026-11-04")
+        XCTAssertEqual(store.filter.to, "2026-11-04")
+
+        store.selectDateRange(.all)
+        XCTAssertNil(store.steppedDateRange(.earlier, now: today))
+        XCTAssertNil(store.steppedDateRange(.later, now: today))
+    }
+
+    func testDateArrowsReturnToRollingPresets() throws {
+        let store = UsageStore()
+        let today = try XCTUnwrap(Localization.date("2026-11-05"))
+        let tomorrow = try XCTUnwrap(Localization.date("2026-11-06"))
+        for preset in [UsageDateRange.today, .week, .month] {
+            store.selectDateRange(preset, now: today)
+            let expected = store.filter
+            store.stepDateRange(.earlier, now: today)
+            XCTAssertEqual(store.dateRange, .custom)
+            store.stepDateRange(.later, now: today)
+            XCTAssertEqual(store.dateRange, preset)
+            XCTAssertEqual(store.filter, expected)
+            store.updateDateRange(now: tomorrow)
+            XCTAssertEqual(store.filter.to, "2026-11-06")
+        }
+    }
+
     func testCodexLiveAppendUpdatesTodayAndExtendsActiveHUDRoll() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "Tokenory-live-\(UUID())")
         let home = root.appending(path: "home"), data = root.appending(path: "data")

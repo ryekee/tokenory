@@ -13,7 +13,7 @@ RecordsView.swift: 展示筛选后的用量明细和滚动记录数；同页重�
 SettingsView.swift: 配置通用、HUD、采集、价格和数据维护。
 MechanicalHUDView.swift: 原生橙色机械计数器按原型 50% 显示（220×92 pt 窗口）；文本片段/费用图标、渐停数字轮；复用当日汇总，跨日与唤醒刷新；每帧捕获数字位置快照，避免延迟绘制访问已清空或缩短的数组。
 HUDSettingsView.swift: 六种位置的 2 × 3 选择器； HUD 显隐、指标和独立音效开关、音量；音量仅在设置页调整，HUD 喇叭按钮直接切换音效。
-UsageDatePicker.swift: 选择统计日期范围；弹出时初始化草稿和两个月的日历展示，选中日期时复用日历标签。
+UsageDatePicker.swift: 在总览、明细和速度的工具栏直接切换日期范围；弹出时初始化草稿和两个月的日历展示，选中日期时复用日历标签。
 UsageFiltersView.swift: 选择工具、提供方和模型。
 UsageTrendChart.swift: 绘制双轴日/小时趋势；日期切换时插值 Tokens 柱高，沿时间轴描出费用。
 UsageActivityView.swift: 固定 YlGnBu 活动日历，隔离悬停状态，只更新提示卡片，点击直达当日。
@@ -23,7 +23,7 @@ UsageViews.swift: 提供用量展示名称、格式及菜单栏三项摘要。
 WorkspaceControls.swift: 提供前缘对齐、展开间距统一的原生窗口控件。
 WorkspaceStyle.swift: 定义统计窗口颜色、共享输出/推理色和独立工具等待/其余耗时色及布局样式。
 
-TurnsView.swift: 原生多 agent 回合摘要、agent/模型筛选、按支持状态分组的图标弹窗及避让图标的跟随光标名称提示、估算标记、分页排序和详情；切换范围时保留上一份报告；窄窗口上下排列。
-TurnSpeedChart.swift: 真实时间轴上的单调平滑速度曲线，切换日期时描出新曲线，隔离悬停状态并支持键盘选择。
+TurnsView.swift: 原生多 agent 回合摘要、agent/模型筛选、按支持状态分组的图标弹窗及避让图标的跟随光标名称提示、估算标记、小时筛选、分页排序和详情；切换范围时保留上一份报告；窄窗口上下排列。
+TurnSpeedChart.swift: 按北京时间显示小时速度箱体、稀疏样本和离群点；用悬停读数解释区间和典型速度，支持键盘选择。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md

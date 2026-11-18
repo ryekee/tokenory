@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="$language">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="$description">
+  <meta name="theme-color" content="#f9f4e9">
+  <title>$title</title>
+  <link rel="alternate" hreflang="$alternate_language" href="$alternate_link">
+  <link rel="icon" href="/assets/app-icon.png">
+  <link rel="stylesheet" href="$stylesheet">
+  $script
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap masthead-inner">
+    <a class="wordmark" href="$base" aria-label="Tokenory"><img src="/assets/app-icon.png" width="42" height="42" alt=""><span>Tokenory</span></a>
+    <nav class="main-nav" aria-label="$nav_label">
+      $faq
+      $changelog
+    </nav>
+    <div class="nav-actions">
+      <a class="language-switch" lang="$alternate_language" hreflang="$alternate_language" href="$alternate_link" aria-label="$alternate_label">
+        $language_icon<span>$alternate_label</span>
+      </a>
+      <a class="download nav-download" href="$download_url" aria-label="$download_label">$download_icon<span>$download_label</span></a>
+    </div>
+  </div>
+</header>
+<main class="wrap">$content</main>
+<footer class="site-footer">
+  <nav class="footer-dock" aria-label="$footer_label">
+    $footer_faq
+    $footer_changelog
+    $footer_github
+  </nav>
+  <p>© 2026 Tokenory</p>
+  <img class="footer-brandmark" src="/assets/app-icon.png" width="220" height="220" alt="" loading="lazy">
+</footer>
+</body>
+</html>

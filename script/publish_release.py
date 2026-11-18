@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the signed archive and update its stable Sparkle feed on GitHub."""
+"""Publish the signed archive, bilingual notes, and Sparkle feeds on GitHub."""
 import argparse
 import hashlib
 import json
@@ -9,9 +9,10 @@ import re
 import subprocess
 import xml.etree.ElementTree as ET
 
+from release_notes import SPARKLE, appcast_item, github_markdown, load_notes, localized_feeds, verify_notes
+
 REPO = 'ryekee/tokenory'
 FEED_BRANCH = 'updates'
-SPARKLE = 'http://www.andymatuschak.org/xml-namespaces/sparkle'
 
 
 def gh(*args, payload=None):
@@ -32,10 +33,7 @@ def api(path, payload=None, method=None):
 def finalize_feed(feed, asset, version, build, *, draft=False):
     """Bind the generated enclosure to the exact uploaded, signed archive."""
     root = ET.fromstring(feed)
-    items = root.findall('channel/item')
-    if len(items) != 1:
-        raise ValueError('Expected exactly one generated update')
-    item = items[0]
+    item = appcast_item(root)
     enclosure = item.find('enclosure')
     if (item.findtext(f'{{{SPARKLE}}}shortVersionString') != version
             or item.findtext(f'{{{SPARKLE}}}version') != build
@@ -60,7 +58,6 @@ def finalize_feed(feed, asset, version, build, *, draft=False):
         raise ValueError('Public download URL does not match the release')
     # App downloads must not depend on the anonymous REST API rate limit.
     enclosure.set('url', download_url)
-    ET.register_namespace('sparkle', SPARKLE)
     return ET.tostring(root, encoding='utf-8', xml_declaration=True)
 
 
@@ -76,7 +73,12 @@ def main():
     tag = f'v{version}'
     archive = folder / f'Tokenory-{version}-macOS-arm64.zip'
     feed = folder / 'appcast.xml'
-    notes = folder / 'release-notes.md'
+    packaged_feed = feed.read_bytes()
+    notes = load_notes(folder / 'release-notes.json')
+    verify_notes(appcast_item(ET.fromstring(packaged_feed)), notes)
+    body = github_markdown(notes)
+    body_file = folder / 'release-notes.md'
+    body_file.write_text(body, encoding='utf-8')
     if json.loads((folder / 'notarization.json').read_text())['status'] != 'Accepted':
         raise ValueError('Notarization has not succeeded')
     subprocess.run(['codesign', '--verify', '--deep', '--strict', str(folder / 'Tokenory.app')], check=True)
@@ -86,7 +88,7 @@ def main():
     release = next((r for r in releases if r['tag_name'] == tag), None)
     if release is None:
         gh('release', 'create', tag, str(archive), '--repo', REPO, '--target', args.target,
-           '--draft', '--title', f'Tokenory {tag}', '--notes-file', str(notes))
+           '--draft', '--title', f'Tokenory {tag}', '--notes-file', str(body_file))
         releases = api('releases?per_page=100')
         release = next(r for r in releases if r['tag_name'] == tag)
     if release['target_commitish'] != args.target:
@@ -96,30 +98,34 @@ def main():
         raise ValueError('Remote archive is missing or has a different SHA256; do not overwrite a published binary')
     # Both old and current clients use the public Release download route.
     # The REST API remains authenticated publishing infrastructure only.
-    public_feed = finalize_feed(feed.read_bytes(), asset, version, build, draft=release['draft'])
+    public_feed = finalize_feed(packaged_feed, asset, version, build, draft=release['draft'])
     (folder / "appcast-public.xml").write_bytes(public_feed)
     sums = folder / 'SHA256SUMS.txt'
     sums.write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in [archive, feed]))
     if release['draft']:
         gh('release', 'upload', tag, str(feed), str(sums), '--clobber', '--repo', REPO)
-        gh('release', 'edit', tag, '--draft=false', '--latest', '--repo', REPO)
+        gh('release', 'edit', tag, '--notes-file', str(body_file), '--draft=false', '--latest', '--repo', REPO)
     else:
         # A retry may only publish the same feed already attached to the release.
         remote_feed = next((a for a in release['assets'] if a['name'] == feed.name), None)
-        if remote_feed is None or remote_feed.get('digest') != 'sha256:' + hashlib.sha256(feed.read_bytes()).hexdigest():
+        if remote_feed is None or remote_feed.get('digest') != 'sha256:' + hashlib.sha256(packaged_feed).hexdigest():
             raise ValueError('Published feed differs; use a new release')
     latest = api('releases/latest')
     if latest['id'] != release['id']:
         raise ValueError('This release is not latest; refusing to move the update feed backwards')
+    if (latest.get('body') or '').strip() != body.strip():
+        raise ValueError('Published release notes do not match release-notes.json')
     published_asset = next((a for a in latest['assets'] if a['id'] == asset['id']), None)
     if published_asset is None or published_asset.get('digest') != expected_digest:
         raise ValueError('Published archive does not match the signed package')
-    finalize_feed(feed.read_bytes(), published_asset, version, build)
+    public_feed = finalize_feed(packaged_feed, published_asset, version, build)
     # A dedicated generated branch avoids committing a mutable feed into app source.
     refs = api(f'git/matching-refs/heads/{FEED_BRANCH}')
     ref = next((r for r in refs if r['ref'] == f'refs/heads/{FEED_BRANCH}'), None)
     parent = ref['object']['sha'] if ref else None
-    tree_args = {'tree': [{'path': 'appcast.xml', 'mode': '100644', 'type': 'blob', 'content': public_feed.decode('utf-8')}]}
+    feeds = [('appcast.xml', public_feed), *localized_feeds(public_feed)]
+    tree_args = {'tree': [{'path': name, 'mode': '100644', 'type': 'blob', 'content': xml.decode('utf-8')}
+                          for name, xml in feeds]}
     if parent:
         tree_args['base_tree'] = api(f'git/commits/{parent}')['tree']['sha']
     tree = api('git/trees', tree_args)

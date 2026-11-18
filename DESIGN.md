@@ -31,7 +31,7 @@ Watermelon references are recorded in `docs/design/watermelon-reference-2026-11-
 - Typography: system body/callout for controls and rows, semibold headings, 32 pt primary totals and monospaced numeric digits. Chart readouts and record details show full integer token counts; costs retain the common two-decimal display format.
 - Blue identifies the main series and selection. Stable tool colors distinguish model history layers. Do not use green/red to judge changes in usage.
 - The upper chart combines Tokens bars and a cost line with independent axes. It keeps zero baselines and a temporal axis. Single-day ranges use 24 Beijing hours, based on actual timestamps across all effective records. Daily imports stay unallocated, future hours stay empty, and unknown costs break the line. The cost curve uses monotone interpolation through the observed values. Pointer and keyboard readouts show both metrics and incomplete pricing.
-- Date selection uses a two-month range calendar with immediate presets and an explicit Apply for custom ranges. Cancel leaves the filter intact.
+- Date selection uses a two-month range calendar with immediate presets and an explicit Apply for custom ranges. Cancel leaves the filter intact. Toolbar arrows shift the shared selection by its inclusive day count. A forward step stops at the current reporting day, and All Time disables both arrows. Historical selections stay fixed. Stepping to a range that matches Today, Last 7 Days or Last 30 Days restores that rolling preset.
 - Records use aligned SwiftUI rows, thin separators, a fixed header, full-row detail buttons and 50/100/200-row numbered pagination. Narrow windows can scroll the table horizontally and wrap the footer.
 - The main window supports an 800 pt minimum width. Below a 720 pt detail width, distribution panels stack. Filter controls can wrap in Records.
 - Settings uses vertical category buttons, a single content heading and a stable content-sized window. Control edges align to the trailing column. Disclosure headers are full-width buttons. Pricing groups by provider and identical complete pricing rules, with a model/provider search.
@@ -50,6 +50,11 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 - Hide the active-day count when the selected range covers a single date.
 - Tool and model rankings share one panel and a top-level Tokens/cost segmented control. Place shared controls outside both child rankings. Use one-click segments for binary choices.
 - Daily values and trailing 30-day averages use the same raw totals. No-activity dates count as zero. Unknown costs remain gaps only in the affected series; never draw unknown costs as zero. Zero-token synthetic records with no cost count as zero. Zero-token records are not active days. Do not introduce erroneous breaks in averages.
+
+## Turn speed
+
+- Use reporting hours on the time axis. Show a quartile box with a median tick for hours with at least three turns. Plot sparse turns and outliers individually and leave empty hours blank.
+- Explain the box through its hover readout, using real values and a turn count. Keep the plot free of a persistent legend. Selecting a box filters the turn list to that hour and selects the observed turn closest to the median.
 
 ## Annual calendar
 

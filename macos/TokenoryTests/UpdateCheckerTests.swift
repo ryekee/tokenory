@@ -60,4 +60,19 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertEqual(bundle.object(forInfoDictionaryKey: "SUEnableAutomaticChecks") as? Bool, true)
         XCTAssertEqual(bundle.object(forInfoDictionaryKey: "SUAllowsAutomaticUpdates") as? Bool, false)
     }
+
+    @MainActor
+    func testFeedFollowsAppLanguageAtCheckTime() {
+        let defaults = UserDefaults.standard
+        let original = defaults.object(forKey: "appLanguage")
+        defer { defaults.set(original, forKey: "appLanguage") }
+        let checker = UpdateChecker()
+
+        defaults.set(AppLanguage.english.rawValue, forKey: "appLanguage")
+        XCTAssertEqual(checker.updater.feedURL?.lastPathComponent, "appcast.en.xml")
+        defaults.set(AppLanguage.simplifiedChinese.rawValue, forKey: "appLanguage")
+        XCTAssertEqual(checker.updater.feedURL?.lastPathComponent, "appcast.zh-Hans.xml")
+        defaults.set(AppLanguage.system.rawValue, forKey: "appLanguage")
+        XCTAssertEqual(checker.updater.feedURL?.lastPathComponent, "appcast.xml")
+    }
 }

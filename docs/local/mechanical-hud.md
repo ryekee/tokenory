@@ -14,7 +14,7 @@ Native owners: `HUDReading`, `HUDAnimator`, `HUDPreferences`, `HUDController`, `
 
 ## Website prototype
 
-The approved interactive demo is retained in `docs/prototypes/mechanical-hud/index.html` with its font license. It is a standalone static page with embedded font and synthesized Web Audio. Open directly or serve statically; no dependencies or build step. Its simulated values are deliberately separate from the native ledger. Do not remove it during temporary-file cleanup.
+The original prototype and font license live in `docs/prototypes/mechanical-hud/`. Each click in the homepage demo sends one simulated model turn into the counter, with API-equivalent cost computed from bundled rates. A single click follows the shape of `HUDRoll`'s 4.2-second curve. Rapid clicks retarget the same roll, capped at six seconds from its start. One numeric trajectory drives the visible odometer. A higher drum eases through its carry over the last 80% of the lower cycle and lands at the exact digit boundary. Large increments can skip intermediate teeth so the demo settles at the exact cumulative value by the deadline. Further clicks in the same burst update the settled value without another roll.
 
 ## Verification
 
