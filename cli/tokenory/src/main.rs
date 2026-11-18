@@ -1,5 +1,5 @@
 // [INPUT]: CLI 参数和本地账本目录。
-// [OUTPUT]: 单写者保护的采集、导入、恢复与 compact 存储维护命令。
+// [OUTPUT]: 单写者保护的采集、导入、恢复与 compact 存储维护命令，以及离线费率目录校验。
 // [POS]: 命令行入口。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use anyhow::{Context, Result};
@@ -29,6 +29,8 @@ enum GroupBy {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Validate a pricing feed without opening the local ledger.
+    ValidatePricing { file: PathBuf },
     /// Remove expired previews, rotate automatic backups and return free pages to disk.
     Compact,
     Restore {
@@ -92,6 +94,11 @@ enum ImportAction {
 }
 fn main() -> Result<()> {
     let args = Args::parse();
+    if let Command::ValidatePricing { file } = &args.command {
+        tokenory::remote_pricing::Feed::parse(&std::fs::read(file)?)?;
+        println!("Pricing feed is valid");
+        return Ok(());
+    }
     let directory = args.data_dir.unwrap_or_else(|| {
         dirs::home_dir()
             .expect("home directory")
@@ -124,6 +131,7 @@ fn main() -> Result<()> {
         tokenory::pricing::initialize(&mut db)?;
     }
     let value = match args.command {
+        Command::ValidatePricing { .. } => unreachable!(),
         Command::Compact => {
             db.backup_before("storage-maintenance")?;
             db.connection

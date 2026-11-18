@@ -6,7 +6,7 @@ use crate::{
     collector::{self, DiagnosticCache, ScanBatch},
     config::Config,
     db::{revision, Database},
-    import, pricing,
+    import, pricing, remote_pricing,
     queries::{self, Filter},
 };
 use anyhow::{anyhow, bail, ensure, Result};
@@ -342,9 +342,7 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
         None,
     ));
     let mut next_scan = Instant::now() + Duration::from_secs(config.interval_seconds);
-    let mut price_task: Option<
-        JoinHandle<(String, Result<tokens_core::pricing::PricingService, String>)>,
-    > = None;
+    let mut price_task = None;
     let mut next_price_refresh = Instant::now();
     let mut cached_prices = tokens_core::pricing::PricingService::load_cached_any_age()
         .unwrap_or_else(|| {
@@ -376,7 +374,7 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
            "scan"=>{let started=scan.is_none();if started {scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent), None));send(json!({"version":1,"event":"scanStarted"}))?;}reply(&r.id,Ok(json!({"started":started})))?;},
            "status"=>reply(&r.id,Ok(json!({"scanning":scan.is_some(),"lastScan":last_scan,"dataDirectory":db.directory,"revision":before,"refreshingPrices":price_task.is_some()})))?,
            "refreshPrices"=>{
-            if price_task.is_some(){reply(&r.id,Err(anyhow!("price refresh already running")))?;}else{price_task=Some(tokio::spawn(async move{(r.id,tokens_core::pricing::PricingService::fetch_snapshot().await)}));}
+            if price_task.is_some(){reply(&r.id,Err(anyhow!("price refresh already running")))?;}else{price_task=Some(tokio::spawn(fetch_prices(r.id)));}
            },
            _=>{let result=execute(db,&mut config,&r.operation,r.payload);
                if r.operation == "updateSettings" && result.is_ok() {
@@ -441,14 +439,48 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
          _=tokio::time::sleep_until(next_scan),if scan.is_none()=>{scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent), None));send(json!({"version":1,"event":"scanStarted"}))?;},
          _=tokio::time::sleep_until(next_price_refresh),if scan.is_none() && price_task.is_none()=>{
           next_price_refresh=Instant::now()+Duration::from_secs(86400);
-          price_task=Some(tokio::spawn(async {(String::new(),tokens_core::pricing::PricingService::fetch_snapshot().await)}));
+          price_task=Some(tokio::spawn(fetch_prices(String::new())));
          },
          result=async {match &mut price_task {Some(task)=>task.await,None=>std::future::pending().await}},if price_task.is_some()=>{
-          price_task=None;let(id,result)=result?;let result=result.map_err(|e|anyhow!(e)).and_then(|service|{ensure!(service.has_pricing_data(),"no upstream price dataset available; saved prices retained");let snapshot=pricing::snapshot_from_service(db,&service)?;let before=revision(&db.connection)?;let snapshot_id=pricing::save_snapshot(db,snapshot)?;cached_prices=service;let after=revision(&db.connection)?;if before!=after{send(json!({"version":1,"event":"usageChanged","revision":after}))?;}Ok(json!({"id":snapshot_id}))});
+          price_task = None;
+          let (id, remote, upstream) = result?;
+          let result = (|| -> Result<Value> {
+              let before = revision(&db.connection)?;
+              let service = upstream.ok().filter(|s| s.has_pricing_data());
+              let feed = match remote {
+                  Ok(feed) => Some(feed),
+                  Err(error) => {
+                      tracing::warn!(%error, "Official price feed unavailable");
+                      None
+                  }
+              };
+              ensure!(feed.is_some() || service.is_some(), "No price source available; saved prices retained");
+              let snapshot_id = remote_pricing::apply_refresh(db, service.as_ref().unwrap_or(&cached_prices), feed)?;
+              if let Some(service) = service {
+                  cached_prices = service;
+              }
+              let after = revision(&db.connection)?;
+              if before != after {
+                  send(json!({"version":1,"event":"usageChanged","revision":after}))?;
+              }
+              Ok(json!({"id":snapshot_id}))
+          })();
           if id.is_empty() { match result { Ok(value)=>send(json!({"version":1,"event":"pricesUpdated","payload":value}))?, Err(error)=>send(json!({"version":1,"event":"priceRefreshFailed","message":format!("{error:#}")}))? } } else { reply(&id,result)?; }
 
          }
         }
     }
     Ok(())
+}
+
+async fn fetch_prices(id: String) -> (
+    String,
+    Result<remote_pricing::Feed>,
+    Result<tokens_core::pricing::PricingService, String>,
+) {
+    let (official, upstream) = tokio::join!(
+        remote_pricing::fetch(),
+        tokens_core::pricing::PricingService::fetch_snapshot(),
+    );
+    (id, official, upstream)
 }

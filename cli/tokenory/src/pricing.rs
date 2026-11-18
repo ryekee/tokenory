@@ -21,6 +21,8 @@ const TOKENS_CI_REFERENCE: &str = "tokens.ci export reference";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PriceEntry {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_policy: Option<crate::remote_pricing::RemotePolicy>,
     #[serde(default)]
     pub schedule: Option<String>,
     pub provider: String,
@@ -52,6 +54,7 @@ impl PriceSnapshot {
             ("deepseek-v4-flash-vision-exp", 0.3, 1.2, 0.006),
             ("deepseek-v4-pro", 1.32, 3.96, 0.044),
         ].into_iter().map(|(model, input, output, cache)| PriceEntry {
+            remote_policy: None,
             schedule: Some("deepseek-cn-2026-v1".into()),
             provider: "deepseek".into(), model: model.into(), matched_key: model.into(),
             source: "https://api-docs.deepseek.com/quick_start/pricing/".into(),
@@ -85,7 +88,7 @@ impl PriceSnapshot {
             ("claude-haiku-4-5-20251001", 1., 5., 0.1),
             ("claude-3-5-haiku-20241022", 0.8, 4., 0.08),
         ] {
-            p.entries.push(PriceEntry { schedule: None, provider: "anthropic".into(), model: model.into(), matched_key: model.into(),
+            p.entries.push(PriceEntry { remote_policy: None, schedule: None, provider: "anthropic".into(), model: model.into(), matched_key: model.into(),
                 source: "https://platform.claude.com/docs/en/about-claude/pricing".into(),
                 assumption: "Official standard USD API rates verified 2026-11-05; current-rate estimate, not historical billing".into(),
                 explicit_free: false, allow_fast: false,
@@ -110,7 +113,7 @@ impl PriceSnapshot {
             ("gpt-5.2-codex", 1.75, 14., 0.175, false),
             ("gpt-5.1-codex-mini", 0.25, 2., 0.025, false),
         ] {
-            p.entries.push(PriceEntry { schedule: None, provider: "openai".into(), model: model.into(), matched_key: model.into(),
+            p.entries.push(PriceEntry { remote_policy: None, schedule: None, provider: "openai".into(), model: model.into(), matched_key: model.into(),
                 source: "https://developers.openai.com/api/docs/pricing".into(),
                 assumption: if model.starts_with("gpt-6.2-") {
                     "Official USD API rates verified 2026-11-18; full-request long-context tiers; Fast 2x; Ultrafast 3x before 2027-03-01 Pacific, then 6x, based on snapshot date; cache-write retention not available; current-rate estimate, not historical billing"
@@ -132,6 +135,7 @@ impl PriceSnapshot {
             "swe-2-flash-max",
         ] {
             p.entries.push(PriceEntry {
+            remote_policy: None,
                 schedule: None, provider: "devin".into(), model: model.into(),
                 matched_key: "swe-2-flash".into(),
                 source: "https://docs.devin.ai/desktop/models".into(),
@@ -147,6 +151,7 @@ impl PriceSnapshot {
             });
         }
         p.entries.push(PriceEntry {
+            remote_policy: None,
             schedule: None, provider: "xiaomi".into(), model: "mimo-v2-pro".into(), matched_key: "mimo-v2-pro".into(),
             source: "https://mimo.xiaomi.com/mimo-v2-pro".into(),
             assumption: "Archived official launch USD rates (2026-03-18), verified 2026-11-13; not current availability or historical billing; event input above 256K costs 2x, aggregates use base rates; launch cache-write promotion applied".into(),
@@ -154,6 +159,7 @@ impl PriceSnapshot {
             rates: ModelPricing { input_cost_per_token: Some(1e-6), output_cost_per_token: Some(3e-6), cache_read_input_token_cost: Some(0.2e-6), cache_creation_input_token_cost: Some(0.), ..Default::default() },
         });
         p.entries.push(PriceEntry {
+            remote_policy: None,
             schedule: None, provider: "devin".into(), model: "compactor".into(),
             matched_key: "gpt-6-luna".into(), source: COMPACTOR_REFERENCE.into(),
             assumption: "User-selected reference estimate (2026-11-13): Devin compactor uses GPT-6 Luna standard USD rates from https://developers.openai.com/api/docs/pricing; actual underlying model version is unconfirmed; not an actual charge".into(),
@@ -162,6 +168,7 @@ impl PriceSnapshot {
         });
         // Reproduces exported Codex review costs; this routing label has no published API tariff.
         p.entries.push(PriceEntry {
+            remote_policy: None,
             schedule: None, provider: "openai".into(), model: AUTO_REVIEW.into(), matched_key: AUTO_REVIEW.into(),
             source: TOKENS_CI_REFERENCE.into(),
             assumption: "USD reference rates reproduced from tokens.ci exports (2026-11-06); not an OpenAI tariff or charge".into(),
@@ -261,59 +268,57 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     }
     let speed = r.metadata["inferenceSpeed"]["speed"].as_str();
     let official_openai = e.source == "https://developers.openai.com/api/docs/pricing";
+    let remote = e.remote_policy.as_ref();
     let official_anthropic = e.source == "https://platform.claude.com/docs/en/about-claude/pricing";
-    let speed_factor = match speed {
-        Some("ultrafast")
-            if official_openai
-                && matches!(e.matched_key.as_str(), "gpt-6.2-astra" | "gpt-6.2-sol") =>
-        {
-            let Ok(snapshot_time) = chrono::DateTime::parse_from_rfc3339(&p.created_at) else {
-                return unknown("Ultrafast promotion requires a valid snapshot date");
+    let speed_factor = match (remote, speed) {
+        (Some(policy), Some("fast" | "ultrafast")) => {
+            let factor = if speed == Some("fast") { policy.fast } else { policy.ultrafast };
+            let Some(factor) = factor else {
+                return unknown("speed-specific rate not verified");
             };
-            // March 1 is PST (UTC-8). Freeze the current-rate promotion in the snapshot.
-            if snapshot_time.timestamp() < 1_803_888_000 { 3. } else { 6. }
+            factor
         }
-        Some("fast")
-            if official_openai
-                && (e.matched_key.starts_with("gpt-6")
-                    || e.matched_key.starts_with("gpt-5.6-")
-                    || matches!(e.matched_key.as_str(), "gpt-5.3-codex" | "gpt-5.4-mini")) =>
-        {
-            2.
-        }
-        Some("fast")
-            if official_anthropic
-                && matches!(
-                    r.model.as_str(),
-                    "claude-opus-4-8" | "claude-opus-5" | "claude-opus-5-5"
-                ) =>
-        {
-            2.
-        }
-        Some("ultrafast")
-            if official_openai
-                && matches!(e.matched_key.as_str(), "gpt-6-astra" | "gpt-6.1-sol") =>
-        {
-            6.
-        }
-        Some("fast" | "ultrafast") if !e.allow_fast => {
-            return unknown("speed-specific rate not verified")
-        }
-        _ => 1.,
+        _ => match speed {
+            Some("ultrafast")
+                if official_openai
+                    && matches!(e.matched_key.as_str(), "gpt-6.2-astra" | "gpt-6.2-sol") =>
+            {
+                let Ok(snapshot_time) = chrono::DateTime::parse_from_rfc3339(&p.created_at) else {
+                    return unknown("Ultrafast promotion requires a valid snapshot date");
+                };
+                // March 1 is PST (UTC-8). Freeze the current-rate promotion in the snapshot.
+                if snapshot_time.timestamp() < 1_803_888_000 { 3. } else { 6. }
+            }
+            Some("fast")
+                if official_openai
+                    && (e.matched_key.starts_with("gpt-6")
+                        || e.matched_key.starts_with("gpt-5.6-")
+                        || matches!(e.matched_key.as_str(), "gpt-5.3-codex" | "gpt-5.4-mini")) =>
+            {
+                2.
+            }
+            Some("fast")
+                if official_anthropic
+                    && matches!(
+                        r.model.as_str(),
+                        "claude-opus-4-8" | "claude-opus-5" | "claude-opus-5-5"
+                    ) =>
+            {
+                2.
+            }
+            Some("ultrafast")
+                if official_openai
+                    && matches!(e.matched_key.as_str(), "gpt-6-astra" | "gpt-6.1-sol") =>
+            {
+                6.
+            }
+            Some("fast" | "ultrafast") if !e.allow_fast => {
+                return unknown("speed-specific rate not verified")
+            }
+            _ => 1.,
+        },
     };
     let t = &r.tokens;
-    if !e.explicit_free {
-        for (n, rate) in [
-            (t.input, e.rates.input_cost_per_token),
-            (t.output + t.reasoning, e.rates.output_cost_per_token),
-            (t.cache_read, e.rates.cache_read_input_token_cost),
-            (t.cache_write, e.rates.cache_creation_input_token_cost),
-        ] {
-            if n > 0 && rate.is_none() {
-                return unknown("a populated token category has no rate");
-            }
-        }
-    }
     let aggregate = r.timestamp_ms.is_none()
         || matches!(
             r.metadata["granularity"].as_str(),
@@ -337,7 +342,7 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
         rates.output_cost_per_token = rates.output_cost_per_token.map(|v| v * 2.);
         rates.cache_read_input_token_cost = rates.cache_read_input_token_cost.map(|v| v * 2.);
     }
-    let long_context = official_openai
+    let long_context = (official_openai || remote.is_some())
         && !aggregate
         && t.input + t.cache_read + t.cache_write > 272_000
         && rates.input_cost_per_token_above_272k_tokens.is_some();
@@ -345,6 +350,21 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
         rates.input_cost_per_token = rates.input_cost_per_token_above_272k_tokens;
         rates.output_cost_per_token = rates.output_cost_per_token_above_272k_tokens;
         rates.cache_read_input_token_cost = rates.cache_read_input_token_cost_above_272k_tokens;
+        if let Some(policy) = remote {
+            rates.cache_creation_input_token_cost = policy.long_cache_write;
+        }
+    }
+    if !e.explicit_free {
+        for (n, rate) in [
+            (t.input, rates.input_cost_per_token),
+            (t.output + t.reasoning, rates.output_cost_per_token),
+            (t.cache_read, rates.cache_read_input_token_cost),
+            (t.cache_write, rates.cache_creation_input_token_cost),
+        ] {
+            if n > 0 && rate.is_none() {
+                return unknown("a populated token category has no rate");
+            }
+        }
     }
     let ttl = r.metadata["cacheWrite1h"]
         .as_i64()
@@ -366,7 +386,7 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     } else {
         (1., "fixed rate")
     };
-    let cost = (if aggregate || official_openai || official_mimo {
+    let cost = (if aggregate || official_openai || official_mimo || remote.is_some() {
         compute_cost(
             &rates,
             t.input,
@@ -460,6 +480,14 @@ fn deepseek_factor(r: &UsageRecord) -> Result<(f64, &'static str), &'static str>
     Ok((1., "peak; Asia/Shanghai"))
 }
 pub fn save_snapshot(db: &mut Database, p: PriceSnapshot) -> Result<String> {
+    save_snapshot_with_feed(db, p, None)
+}
+
+pub(crate) fn save_snapshot_with_feed(
+    db: &mut Database,
+    p: PriceSnapshot,
+    feed: Option<&crate::remote_pricing::Feed>,
+) -> Result<String> {
     p.validate()?;
     let body = serde_json::to_string(&p)?;
     use sha2::{Digest, Sha256};
@@ -474,6 +502,9 @@ pub fn save_snapshot(db: &mut Database, p: PriceSnapshot) -> Result<String> {
         params![id, p.created_at, body],
     )?;
     tx.execute("INSERT INTO app_state(key,value) VALUES ('activePrice',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[&id])?;
+    if let Some(feed) = feed {
+        tx.execute("INSERT INTO app_state(key,value) VALUES ('remotePricingFeed',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [serde_json::to_string(feed)?])?;
+    }
     for (source, batch, record) in &changes {
         put_record(&tx, source, batch, record)?;
     }
@@ -535,7 +566,23 @@ pub fn assign(source: &str, r: &mut UsageRecord, id: &str, p: &PriceSnapshot) {
     r.price_snapshot_id = Some(id.into());
 }
 pub fn snapshot_from_service(db: &Database, service: &PricingService) -> Result<PriceSnapshot> {
-    let bundled = PriceSnapshot::bundled_reference();
+    let feed = crate::remote_pricing::cached(&db.connection)?;
+    snapshot_with_feed(db, service, feed.as_ref())
+}
+
+pub(crate) fn snapshot_with_feed(
+    db: &Database,
+    service: &PricingService,
+    feed: Option<&crate::remote_pricing::Feed>,
+) -> Result<PriceSnapshot> {
+    let mut bundled = PriceSnapshot::bundled_reference();
+    if let Some(feed) = feed {
+        let at = chrono::DateTime::parse_from_rfc3339(&bundled.created_at)?;
+        for entry in feed.prices(at) {
+            bundled.entries.retain(|old| old.provider != entry.provider || old.model != entry.model);
+            bundled.entries.push(entry);
+        }
+    }
     let mut p = bundled.clone();
     let rows = {
         let mut stmt=db.connection.prepare("SELECT provider,model,sum(input),sum(output),sum(cache_read),sum(cache_write),sum(reasoning) FROM usage_records GROUP BY provider,model")?;
@@ -640,6 +687,7 @@ pub fn snapshot_from_service(db: &Database, service: &PricingService) -> Result<
                 continue;
             }
             p.entries.push(PriceEntry {
+            remote_policy: None,
                 schedule: None,
                 provider,
                 model,

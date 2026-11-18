@@ -2158,6 +2158,7 @@ dependencies = [
  "fs2",
  "notify",
  "predicates",
+ "reqwest",
  "rusqlite",
  "serde",
  "serde_json",

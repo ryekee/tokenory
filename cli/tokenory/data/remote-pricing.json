@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "revision": 1,
+  "effectiveAt": "2026-11-18T00:00:00+08:00",
+  "entries": [
+    {
+      "provider": "openai",
+      "model": "gpt-6.2-astra",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "standard": {"input": 8, "output": 40, "cacheRead": 0.4},
+      "longContext": {"input": 16, "output": 60, "cacheRead": 0.8},
+      "fast": 2,
+      "ultrafast": 3,
+      "ultrafastChange": {"effectiveAt": "2027-03-01T00:00:00-08:00", "multiplier": 6}
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6.2-sol",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "standard": {"input": 2, "output": 10, "cacheRead": 0.1},
+      "longContext": {"input": 4, "output": 15, "cacheRead": 0.2},
+      "fast": 2,
+      "ultrafast": 3,
+      "ultrafastChange": {"effectiveAt": "2027-03-01T00:00:00-08:00", "multiplier": 6}
+    }
+  ]
+}
