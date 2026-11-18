@@ -11,6 +11,7 @@ pub mod queries;
 pub mod usage;
 
 pub mod pricing;
+pub mod remote_pricing;
 
 pub mod ipc;
 

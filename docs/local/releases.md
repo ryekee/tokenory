@@ -1,7 +1,7 @@
 # macOS 发布
 
 更新源固定为 `https://raw.githubusercontent.com/ryekee/tokenory/updates/appcast.xml`。
-每个正式 Release 必须包含同一次打包生成的 ZIP、`appcast.xml`、`SHA256SUMS.txt`，再设置为 latest。发布脚本同步生成 `updates` 分支的清单；该分支只用于发布，不手工编辑。不要单独替换 ZIP，否则 Sparkle 签名会失效。
+每个正式 Release 必须包含同一次打包生成的 ZIP、`appcast.xml`、`SHA256SUMS.txt`，再设置为 latest。发布脚本同步生成 `updates` 分支的清单；该分支同时提供远程费率目录。两个文件各自用发布脚本更新，见 [价格说明](pricing.md)。不要单独替换 ZIP，否则 Sparkle 签名会失效。
 
 raw 清单与 Release 附件均使用公开的 GitHub Release 下载地址，App 下载不依赖匿名 REST API 配额。2026-11-15 的 Sparkle 日志记录了 Asset API 下载返回 403；普通 Release 地址匿名回下载通过 SHA256 校验，因此恢复使用公开下载路径。发布脚本仍通过已认证 API 核验附件；正式验收必须覆盖不带登录凭据的下载路径，不能用认证下载替代。更新包仍由 Sparkle 的 EdDSA 和 Developer ID 校验。
 

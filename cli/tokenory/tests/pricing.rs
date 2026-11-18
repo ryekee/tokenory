@@ -35,6 +35,7 @@ fn record() -> UsageRecord {
 }
 fn snapshot(input: f64, output: f64) -> PriceSnapshot {
     PriceSnapshot::new(vec![PriceEntry {
+        remote_policy: None,
         schedule: None,
         provider: "test".into(),
         model: "model-a".into(),
@@ -741,4 +742,75 @@ fn devin_compactor_reference_fills_missing_cost_without_renaming_the_model() {
     assert!(estimate("local", &r, &p).cost.is_none());
     r.client = "devin-cli".into(); r.provider = "unknown".into();
     assert!(estimate("local", &r, &p).cost.is_none());
+}
+
+#[test]
+fn remote_catalog_reprices_only_pending_rows_and_survives_offline_refresh() {
+    use tokenory::pricing::{active_snapshot, load_snapshot};
+    use tokenory::remote_pricing::{apply_refresh, Feed};
+    use tokens_core::pricing::PricingService;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = Database::open(dir.path()).unwrap();
+    tokenory::pricing::initialize(&mut db).unwrap();
+    let (old_id, _) = active_snapshot(&db.connection).unwrap().unwrap();
+
+    let mut new = record();
+    new.provider = "openai".into();
+    new.model = "gpt-remote-fixture".into();
+    let mut existing = new.clone();
+    existing.key = "b".into();
+    existing.model = "gpt-6.2-sol".into();
+    existing.estimated_cost_usd = Some(0.007);
+    let preview = preview_records(
+        &mut db, "test", b"remote-fee", vec![new.clone(), existing.clone()],
+        Some("Asia/Shanghai".into()),
+    ).unwrap();
+    apply_import(&mut db, &preview.id, &ApplyOptions::default()).unwrap();
+
+    let mut data: serde_json::Value =
+        serde_json::from_str(include_str!("../data/remote-pricing.json")).unwrap();
+    let mut new_model = data["entries"][1].clone();
+    new_model["model"] = "gpt-remote-fixture".into();
+    data["entries"].as_array_mut().unwrap().push(new_model);
+    data["entries"][1]["standard"]["output"] = 20.into();
+    data["effectiveAt"] = "2020-01-01T00:00:00Z".into();
+    // Set a historical cutoff to exercise scheduled rates without a wall-clock dependency.
+    data["entries"][2]["ultrafastChange"]["effectiveAt"] = "2020-02-01T00:00:00Z".into();
+    let parse = |data: &serde_json::Value| Feed::parse(&serde_json::to_vec(data).unwrap());
+    let upstream = PricingService::new(Default::default(), Default::default());
+    let new_id = apply_refresh(&mut db, &upstream, Some(parse(&data).unwrap())).unwrap();
+    let applied = load_snapshot(&db.connection, &new_id).unwrap();
+    let old = load_snapshot(&db.connection, &old_id).unwrap();
+    assert!((estimate("test", &existing, &old).cost.unwrap() - 0.007).abs() < 1e-12);
+    assert!((estimate("test", &existing, &applied).cost.unwrap() - 0.012).abs() < 1e-12);
+
+    let stored = |db: &Database, key: &str| -> f64 {
+        db.connection.query_row(
+            "SELECT estimated_cost FROM usage_records WHERE json_extract(body,'$.key') = ?1",
+            [key], |row| row.get(0),
+        ).unwrap()
+    };
+    assert!((stored(&db, "a") - 0.007).abs() < 1e-12);
+    assert!((stored(&db, "b") - 0.007).abs() < 1e-12);
+
+    new.metadata["inferenceSpeed"] = serde_json::json!({"speed": "ultrafast"});
+    new.tokens = Tokens { input: 300_000, output: 10_000, ..Default::default() };
+    assert!((estimate("test", &new, &applied).cost.unwrap() - 8.1).abs() < 1e-12);
+
+    drop(db);
+    let mut db = Database::open(dir.path()).unwrap();
+    let offline_id = apply_refresh(&mut db, &upstream, None).unwrap();
+    let offline = load_snapshot(&db.connection, &offline_id).unwrap();
+    assert_eq!(estimate("test", &new, &applied).cost, estimate("test", &new, &offline).cost);
+
+    data["entries"][1]["standard"]["output"] = 100.into();
+    let repeated_id = apply_refresh(&mut db, &upstream, Some(parse(&data).unwrap())).unwrap();
+    let repeated = load_snapshot(&db.connection, &repeated_id).unwrap();
+    assert_eq!(estimate("test", &existing, &applied).cost, estimate("test", &existing, &repeated).cost);
+
+    data["entries"][1]["standard"]["output"] = (-1).into();
+    assert!(parse(&data).is_err());
+    data["entries"][1] = data["entries"][0].clone();
+    assert!(parse(&data).is_err());
 }
