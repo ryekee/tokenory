@@ -3,25 +3,17 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.9</title>
-            <pubDate>Thu, 19 Nov 2026 01:05:24 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.9</link>
-            <sparkle:version>12</sparkle:version>
-            <sparkle:shortVersionString>0.1.9</sparkle:shortVersionString>
+            <title>0.1.10</title>
+            <pubDate>Thu, 19 Nov 2026 18:27:22 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.10</link>
+            <sparkle:version>13</sparkle:version>
+            <sparkle:shortVersionString>0.1.10</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.9/Tokenory-0.1.9-macOS-arm64.zip" length="10548241" type="application/octet-stream" sparkle:edSignature="AdmcslSk62CVFnmvxs6nNfzLZAUK0+dQGjjGv18wXNozYLv2siqt89RmmgW3s2ZVxXi5mxCq/w//Fh2EKRGPDQ==" />
-        <description xml:lang="en" sparkle:format="markdown">## New Features
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.10/Tokenory-0.1.10-macOS-arm64.zip" length="10549082" type="application/octet-stream" sparkle:edSignature="v8u4Vv/fzSAumG4S/3bZg+cSVOIdYjYe9KD3G/SnlMOFEF/YhA0tnDpZ6PTqRcATtkvw2vfJ98RIXM0al07eCg==" />
+        <description xml:lang="en" sparkle:format="markdown">## Fixes
 
-- Use the arrows beside the date picker in Overview, Records, and Speed to browse earlier periods.
-- Redesigned the Speed page.
-- The digits in the floating counter roll more smoothly as small increases carry over.
-- Release notes for future in-app updates follow the language you choose in Tokenory.
-
-## Fixes
-
-- Fixed an undercount when Codex omitted context compaction from its cumulative token totals.
-- Fixed duplicate Devin CLI usage when the same request appeared more than once in a session log.
+- The HUD now hides and its roller sounds pause when you watch a video in macOS full screen. The HUD returns when you exit full screen.
 </description></item>
     </channel>
 </rss>

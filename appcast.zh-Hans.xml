@@ -3,25 +3,17 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.9</title>
-            <pubDate>Thu, 19 Nov 2026 01:05:24 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.9</link>
-            <sparkle:version>12</sparkle:version>
-            <sparkle:shortVersionString>0.1.9</sparkle:shortVersionString>
+            <title>0.1.10</title>
+            <pubDate>Thu, 19 Nov 2026 18:27:22 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.10</link>
+            <sparkle:version>13</sparkle:version>
+            <sparkle:shortVersionString>0.1.10</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.9/Tokenory-0.1.9-macOS-arm64.zip" length="10548241" type="application/octet-stream" sparkle:edSignature="AdmcslSk62CVFnmvxs6nNfzLZAUK0+dQGjjGv18wXNozYLv2siqt89RmmgW3s2ZVxXi5mxCq/w//Fh2EKRGPDQ==" />
-        <description xml:lang="zh-Hans" sparkle:format="markdown">## 新功能
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.10/Tokenory-0.1.10-macOS-arm64.zip" length="10549082" type="application/octet-stream" sparkle:edSignature="v8u4Vv/fzSAumG4S/3bZg+cSVOIdYjYe9KD3G/SnlMOFEF/YhA0tnDpZ6PTqRcATtkvw2vfJ98RIXM0al07eCg==" />
+        <description xml:lang="zh-Hans" sparkle:format="markdown">## 修复
 
-- 总览、明细和速度页都可以用日期旁的箭头回看历史。
-- 重新设计了速度页。
-- 悬浮计数器小幅增加时，数字进位更顺滑。
-- 后续的应用内更新说明会跟随你在 Tokenory 中选择的语言。
-
-## 修复
-
-- 补计 Codex 在上下文压缩时遗漏的 Tokens。
-- 修复 Devin CLI 同一请求在会话日志里出现多次时，用量被重复计算的问题。
+- 在 macOS 全屏播放视频时，HUD 会自动隐藏并暂停滚轮音效。退出全屏后，HUD 会自动恢复。
 </description></item>
     </channel>
 </rss>
