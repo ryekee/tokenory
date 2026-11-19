@@ -1,5 +1,5 @@
 // [INPUT]: HUD preferences and the shared usage store.
-// [OUTPUT]: Compact nonactivating floating panel with six safe-area placements, following the pointer display without focus changes.
+// [OUTPUT]: Compact nonactivating panel that follows the pointer display and stays out of other apps' full-screen Spaces.
 // [POS]: App lifecycle owner; a HUD never changes the app's Dock activation policy.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -67,7 +67,8 @@ final class HUDController {
             panel.identifier = NSUserInterfaceItemIdentifier("mechanical-hud")
             panel.title = L("hud.title")
             panel.level = .floating; panel.isFloatingPanel = true
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            // Join desktop Spaces without opting into other apps' full-screen Spaces.
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
             panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = true
             panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
             panel.isMovableByWindowBackground = false
@@ -88,7 +89,9 @@ final class HUDController {
         }
         guard let panel else { return }
         if panel.contentView == nil {
-            panel.contentView = NSHostingView(rootView: MechanicalHUDView()
+            panel.contentView = NSHostingView(rootView: MechanicalHUDView(canPlaySound: { [weak panel] in
+                panel?.isOnActiveSpace == true
+            })
                 .environment(store).environment(preferences).focusEffectDisabled())
         }
         placeOnScreen()

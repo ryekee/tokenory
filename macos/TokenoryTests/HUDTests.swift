@@ -270,6 +270,9 @@ final class HUDTests: XCTestCase {
         preferences.placement = .topLeft
         try await Task.sleep(for: .milliseconds(50))
         let panel = try XCTUnwrap(controller.panel)
+        XCTAssertTrue(panel.collectionBehavior.contains(.canJoinAllSpaces))
+        XCTAssertFalse(panel.collectionBehavior.contains(.fullScreenAuxiliary))
+        XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenNone))
         let screen = try XCTUnwrap(panel.screen)
         XCTAssertEqual(panel.frame.size, MechanicalHUDView.windowSize)
         XCTAssertEqual(panel.frame.maxY, screen.visibleFrame.maxY)

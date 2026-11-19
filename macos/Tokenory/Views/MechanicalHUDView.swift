@@ -1,4 +1,4 @@
-// [INPUT]: Today's real ledger summary, persisted HUD preferences, accessibility settings.
+// [INPUT]: Today's real ledger summary, persisted HUD preferences, accessibility settings, and whether the panel is on the active Space.
 // [OUTPUT]: Half-size orange mechanical counter with snapshot-consistent rolling and sound.
 // [POS]: Floating panel content; no dashboard filters or simulated increments.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
@@ -7,6 +7,7 @@ import SwiftUI
 
 struct MechanicalHUDView: View {
     static let windowSize = CGSize(width: 220, height: 92)
+    let canPlaySound: () -> Bool
     @Environment(UsageStore.self) private var store
     @Environment(HUDPreferences.self) private var preferences
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -71,7 +72,7 @@ struct MechanicalHUDView: View {
             let generation = animator.generation
             let start = ProcessInfo.processInfo.systemUptime
             while !Task.isCancelled, animator.isRolling, animator.generation == generation {
-                if animator.advance(elapsed: ProcessInfo.processInfo.systemUptime - start) {
+                if animator.advance(elapsed: ProcessInfo.processInfo.systemUptime - start), canPlaySound() {
                     HUDSound.shared.tick(preferences: preferences)
                 }
                 do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
