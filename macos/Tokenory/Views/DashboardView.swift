@@ -1,5 +1,5 @@
 // [INPUT]: 接收统计报告、筛选状态和记录详情。
-// [OUTPUT]: 提供主窗口导航、紧凑的日期与刷新工具栏、按需加载的回合页和记录详情。
+// [OUTPUT]: 提供主窗口导航、统计加载与重试、日期与刷新工具栏、回合页和记录详情。
 // [POS]: 主工作区入口；详情操作区独立于长内容滚动。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -37,14 +37,15 @@ struct DashboardView: View {
                 }
         } detail: {
             VStack(spacing: 0) {
-                ErrorBanner().padding(.horizontal, 20)
+                if dashboardSelection == nil || store.connected || store.reportLoadError == nil {
+                    ErrorBanner().padding(.horizontal, 20)
+                }
                 ZStack {
                     // Keep the overview mounted so navigation reuses chart layouts and scroll state.
                     VStack(spacing: 0) {
                         UsageFiltersView(showsSource: false)
                             .padding(.horizontal, 22).padding(.vertical, 14)
-                        if let report = store.report { OverviewView(report: report, isActive: section == .overview) }
-                        else { ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity) }
+                        usageReport { report in OverviewView(report: report, isActive: section == .overview) }
                     }
                     .opacity(section == .overview ? 1 : 0)
                     .allowsHitTesting(section == .overview)
@@ -69,8 +70,9 @@ struct DashboardView: View {
                         VStack(spacing: 0) {
                             UsageFiltersView(showsSource: true)
                                 .padding(.horizontal, 22).padding(.vertical, 14)
-                            if let report = store.report { RecordsView(report: report, isActive: section == .details) { selectedDetail = $0 } }
-                            else { ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity) }
+                            usageReport { report in
+                                RecordsView(report: report, isActive: section == .details) { selectedDetail = $0 }
+                            }
                         }
                         .opacity(section == .details ? 1 : 0)
                         .allowsHitTesting(section == .details)
@@ -95,7 +97,9 @@ struct DashboardView: View {
                         }
                         .accessibilityValue(showsReportProgress ? L("usage.loading_stats") : "")
                         .disabled(store.scanning || !store.connected)
-                        if !store.connected { Button(L("action.reconnect")) { store.start() } }
+                        if !store.connected && (dashboardSelection == nil || store.reportLoadError == nil) {
+                            Button(L("action.reconnect")) { store.start() }
+                        }
                     }
                 }
         }
@@ -105,6 +109,44 @@ struct DashboardView: View {
             if let selection { Task { await store.refreshSelection(selection) } }
         }
         .sheet(item: $selectedDetail) { detail in DetailSheet(detail: detail) }
+    }
+
+    @ViewBuilder
+    private func usageReport<Content: View>(@ViewBuilder content: (UsageReport) -> Content) -> some View {
+        if let report = store.report {
+            if let error = store.reportLoadError {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L("usage.report_failed"))
+                        if let filter = store.reportFilter {
+                            let range = filter.from.flatMap { from in filter.to.map { Localization.dateRange(from, $0) } }
+                            Text(LF("usage.previous_report", range ?? L("range.all"))).foregroundStyle(.secondary)
+                        }
+                        DisclosureGroup(L("error.details")) { Text(error).textSelection(.enabled) }
+                    }
+                    Spacer()
+                    reportRetryButton
+                }
+                .font(.callout)
+                .padding(.horizontal, 22).padding(.bottom, 12)
+            }
+            content(report)
+        } else if let error = store.reportLoadError {
+            ContentUnavailableView {
+                Label(L("usage.report_failed"), systemImage: "exclamationmark.circle")
+            } description: {
+                Text(error).textSelection(.enabled)
+            } actions: {
+                reportRetryButton
+            }
+        } else {
+            ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var reportRetryButton: some View {
+        Button(L("action.retry")) { Task { await store.retryReport() } }
     }
 }
 

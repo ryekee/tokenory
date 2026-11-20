@@ -251,9 +251,15 @@ final class UsageStoreTests: XCTestCase {
             store.filter.from = "2026-11-05"; store.filter.to = "2026-11-05"
             await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-06T16:00:00Z")!)
             XCTAssertEqual(store.filter.to, "2026-11-05")
+            let previousReportFilter = store.reportFilter
             store.filter.from = "2026-02-30"; await store.refresh()
-            XCTAssertNotNil(store.error)
+            XCTAssertNotNil(store.reportLoadError)
+            XCTAssertEqual(store.reportFilter, previousReportFilter)
             XCTAssertEqual(store.report?.summary.tokens, 1000)
+            store.filter.from = "2026-11-05"
+            await store.retryReport()
+            XCTAssertNil(store.reportLoadError)
+            XCTAssertEqual(store.reportFilter, store.filter)
             await engine.stop()
             do { _ = try await engine.request("status"); XCTFail("stopped engine accepted request") } catch {}
             try await engine.start()
@@ -273,6 +279,22 @@ final class UsageStoreTests: XCTestCase {
             throw error
         }
     }
+    func testFirstReportFailureStopsLoadingAndDoesNotCarryToAnotherFilter() async {
+        let store = UsageStore()
+        let first = UsageFilter(from: "2026-11-14", to: "2026-11-14")
+        store.filter = first
+        store.connected = true
+        // The worker has not started, so the first report request fails.
+        await store.refreshSelection(first)
+        XCTAssertNil(store.report)
+        XCTAssertFalse(store.loading)
+        XCTAssertNotNil(store.reportLoadError)
+        XCTAssertNil(store.error)
+
+        store.filter = UsageFilter(from: "2026-11-15", to: "2026-11-15")
+        XCTAssertNil(store.reportLoadError)
+    }
+
     func testDateSelectionKeepsPreviousReportAndOnlyRequestsNewRange() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "Tokenory-range-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
