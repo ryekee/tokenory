@@ -14,7 +14,7 @@ SettingsView.swift: 配置通用、HUD、价格、采集和数据维护；恢复
 MechanicalHUDView.swift: 原生橙色机械计数器按原型 50% 显示（220×92 pt 窗口）；文本片段/费用图标、渐停数字轮，音效仅在面板所在空间可见时播放；复用当日汇总，跨日与唤醒刷新；每帧捕获数字位置快照，避免延迟绘制访问已清空或缩短的数组。
 HUDSettingsView.swift: 六种位置的 2 × 3 选择器； HUD 显隐、指标和独立音效开关、音量；音量仅在设置页调整，HUD 喇叭按钮直接切换音效。
 UsageDatePicker.swift: 通过工具栏和明细空状态打开共用日期浮层；弹出时初始化草稿和两个月的日历，选中日期时复用标签。
-UsageFiltersView.swift: 选择工具、提供方和模型。
+UsageFiltersView.swift: 选择工具、提供方和模型；明细额外按来源及可搜索的对话筛选。
 UsageTrendChart.swift: 绘制双轴日/小时趋势；日期切换时插值 Tokens 柱高，沿时间轴描出费用。
 UsageActivityView.swift: 固定 YlGnBu 活动日历，隔离悬停状态，只更新提示卡片，点击直达当日。
 UsageHabitsView.swift: 独立编码习惯面板，展示最高产星期及占比、单日最高、星期和 24 小时分布；宽窗口并排，窄窗口堆叠。

@@ -1,5 +1,5 @@
 // [INPUT]: 当前日期范围的报表和明细操作。
-// [OUTPUT]: 账本记录、范围记录数和无结果时的下一步。
+// [OUTPUT]: 按日期和对话筛选的记录、记录数、分页及空状态操作。
 // [POS]: 主工作区明细页；保留记录身份与分页。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -15,9 +15,10 @@ struct RecordsView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var pageIndicator
-    private var displayedFilter: UsageFilter { store.reportFilter ?? store.filter }
+    private var displayedFilter: UsageFilter { store.reportFilter ?? store.reportSelection }
     private var hasDimensions: Bool {
-        displayedFilter.client != nil || displayedFilter.provider != nil || displayedFilter.model != nil || displayedFilter.source != nil
+        displayedFilter.client != nil || displayedFilter.provider != nil || displayedFilter.model != nil
+            || displayedFilter.source != nil || displayedFilter.conversation != nil
     }
     private var page: Int { displayedFilter.offset / displayedFilter.limit }
     private var pageCount: Int { max(1, (Int(report.summary.recordCount) + displayedFilter.limit - 1) / displayedFilter.limit) }
@@ -120,11 +121,11 @@ struct RecordsView: View {
         return ContentUnavailableView {
             Label(L(title), systemImage: hasDimensions ? "line.3.horizontal.decrease.circle" : "list.bullet.rectangle")
         } actions: {
-            if displayedFilter == store.filter && !store.loading {
+            if displayedFilter == store.reportSelection && !store.loading {
                 if hasOtherPages {
                     Button(L("record.first_page")) { go(to: 0) }
                 } else if hasDimensions {
-                    Button(L("record.clear_filters"), action: clearDimensions)
+                    Button(L("record.clear_filters"), action: store.clearRecordFilters)
                 } else {
                     Button(L("record.change_dates"), action: openDatePicker)
                 }
@@ -132,12 +133,6 @@ struct RecordsView: View {
         }
     }
 
-    private func clearDimensions() {
-        var filter = store.filter
-        filter.client = nil; filter.provider = nil; filter.model = nil; filter.source = nil
-        filter.offset = 0
-        store.filter = filter
-    }
 
     private func columns<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 12) {

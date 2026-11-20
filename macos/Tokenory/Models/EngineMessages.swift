@@ -1,5 +1,5 @@
 // [INPUT]: 接收 worker 的 JSON 数据流和协议字段。
-// [OUTPUT]: 类型化报告、用量模式证据和增量分行器。
+// [OUTPUT]: 类型化报告、对话身份、用量模式证据和增量分行器。
 // [POS]: 原生 IPC 的解析边界；已扫描的数据不重复遍历。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -57,7 +57,23 @@ struct EngineRequest: Encodable { let version = 1; let id: String; let operation
 struct UsageFilter: Codable, Sendable, Equatable {
     var from: String?; var to: String?; var client: String?; var provider: String?; var model: String?; var source: String?
     var timestampFromMs: Int64? = nil; var timestampToMs: Int64? = nil
+    var conversation: UsageConversation.ID? = nil
     var offset = 0; var limit = 50
+}
+struct UsageConversation: Decodable, Sendable, Identifiable {
+    struct ID: Codable, Sendable, Hashable {
+        let client: String
+        let sessionId: String
+    }
+
+    let id: ID
+    let lastDate: String
+    let model: String?
+    let lastTimestampMs: Int64?
+}
+struct ConversationLookup: Encodable, Equatable, Sendable {
+    var filter: UsageFilter
+    var search: String
 }
 struct TokenBreakdown: Codable, Sendable { let input: Int64; let output: Int64; let cacheRead: Int64; let cacheWrite: Int64; let reasoning: Int64 }
 struct InferenceSpeed: Codable, Equatable, Sendable {

@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 日期范围切换，发布筛选结果及请求失败、全年活动、当日用量、回合、价格和采集状态。
+// [OUTPUT]: 日期与明细对话筛选、请求状态、全年活动、当日用量、回合、价格和采集状态。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -35,7 +35,7 @@ final class UsageStore {
     var report: UsageReport?
     var reportFilter: UsageFilter?
     var reportLoadError: String? {
-        if let reportFailure, reportFailure.selection == filter { return reportFailure.message }
+        if let reportFailure, reportFailure.selection == reportSelection { return reportFailure.message }
         return connected || loading ? nil : error
     }
     var activity: ActivityReport?
@@ -64,6 +64,13 @@ final class UsageStore {
     private var requestedTurnQuery: TurnQuery?
     private var turnsGeneration = 0
     var filter = UsageFilter()
+    var recordsAreActive = false
+    private(set) var recordConversation: UsageConversation.ID?
+    var reportSelection: UsageFilter {
+        var selection = filter
+        selection.conversation = recordsAreActive ? recordConversation : nil
+        return selection
+    }
     var dateRange: UsageDateRange = .week
     var status: EngineStatus?
     var scanning = false
@@ -119,7 +126,28 @@ final class UsageStore {
             start()
             return
         }
-        await refreshSelection(filter, forceReport: true)
+        await refreshSelection(reportSelection, forceReport: true)
+    }
+
+    func selectConversation(_ id: UsageConversation.ID?) {
+        guard recordConversation != id else { return }
+        recordConversation = id
+        filter.offset = 0
+    }
+
+    func clearRecordFilters() {
+        recordConversation = nil
+        var selection = filter
+        selection.client = nil
+        selection.provider = nil
+        selection.model = nil
+        selection.source = nil
+        selection.offset = 0
+        filter = selection
+    }
+
+    func findConversations(_ lookup: ConversationLookup) async throws -> [UsageConversation] {
+        try await engine.request("conversations", payload: .encode(lookup), as: [UsageConversation].self)
     }
     func selectDateRange(_ range: UsageDateRange, now: Date = .now) {
         dateRange = range
@@ -186,7 +214,7 @@ final class UsageStore {
         let generation = refreshGeneration
         let localDay = LocalUsageDay(now: now)
         let quickGeneration = beginTodayRefresh(window: localDay)
-        await refreshReport(filter, force: true)
+        await refreshReport(reportSelection, force: true)
         guard generation == refreshGeneration else { return }
         async let history: Void = refreshActivity(for: filter, now: now, force: true)
         async let quick: Void = loadToday(window: localDay, generation: quickGeneration)
@@ -201,9 +229,9 @@ final class UsageStore {
         _ = await (history, quick)
     }
     func refreshSelection(_ selection: UsageFilter, now: Date = Date(), forceReport: Bool = false) async {
-        guard selection == filter else { return }
+        guard selection == reportSelection else { return }
         await refreshReport(selection, force: forceReport)
-        guard selection == filter, reportFilter == selection else { return }
+        guard selection == reportSelection, reportFilter == selection else { return }
         await refreshActivity(for: selection, now: now, force: false)
     }
     private func refreshReport(_ selection: UsageFilter, force: Bool) async {
@@ -218,11 +246,11 @@ final class UsageStore {
         }
         do {
             let selected = try await engine.request("overview", payload: .encode(selection), as: UsageReport.self)
-            guard generation == reportGeneration, selection == filter else { return }
+            guard generation == reportGeneration, selection == reportSelection else { return }
             report = selected
             reportFilter = selection
         } catch {
-            if generation == reportGeneration, selection == filter {
+            if generation == reportGeneration, selection == reportSelection {
                 reportFailure = (selection, error.localizedDescription)
             }
         }

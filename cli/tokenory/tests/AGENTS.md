@@ -1,7 +1,7 @@
 # cli/tokenory/tests/
 > L2 | Parent: ../../../AGENTS.md
 
-activity.rs: 验证真实有效来源、维度过滤、分页独立、未知费用和 Fast tokens 范围。
+activity.rs: 验证有效来源、维度与对话筛选、对话搜索、分页独立、未知费用和 Fast tokens 范围。
 storage_retention.rs: 验证自动备份轮替、手工备份保留、预览过期及 ID 不重用、压缩后账本与撤销历史不变、连续升级只备份一次。
 backup_restore.rs: 验证 backup_restore 的账本接口和行为。
 cli.rs: 验证 cli 的账本接口和行为。

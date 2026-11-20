@@ -17,7 +17,7 @@ struct DashboardView: View {
     @State private var datePickerDraft: DateRangeDraft?
     @State private var visited: Set<DashboardSection> = [.overview]
     private var dashboardSelection: UsageFilter? {
-        section == .overview || section == .details ? store.filter : nil
+        section == .overview || section == .details ? store.reportSelection : nil
     }
     private var showsReportProgress: Bool {
         (section == .overview || section == .details) && store.report != nil && store.loading
@@ -46,7 +46,9 @@ struct DashboardView: View {
                     VStack(spacing: 0) {
                         UsageFiltersView(showsSource: false)
                             .padding(.horizontal, 22).padding(.vertical, 14)
-                        usageReport { report in OverviewView(report: report, isActive: section == .overview) }
+                        usageReport(allowConversationReport: false) { report in
+                            OverviewView(report: report, isActive: section == .overview)
+                        }
                     }
                     .opacity(section == .overview ? 1 : 0)
                     .allowsHitTesting(section == .overview)
@@ -105,7 +107,8 @@ struct DashboardView: View {
                 }
         }
         .frame(minWidth: 800, minHeight: 560)
-        .onChange(of: section) { _, next in
+        .onChange(of: section, initial: true) { _, next in
+            store.recordsAreActive = next == .details
             visited.insert(next)
             if next != .details { selectedRecordID = nil }
         }
@@ -149,8 +152,11 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private func usageReport<Content: View>(@ViewBuilder content: (UsageReport) -> Content) -> some View {
-        if let report = store.report {
+    private func usageReport<Content: View>(
+        allowConversationReport: Bool = true,
+        @ViewBuilder content: (UsageReport) -> Content
+    ) -> some View {
+        if let report = store.report, allowConversationReport || store.reportFilter?.conversation == nil {
             if let error = store.reportLoadError {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)

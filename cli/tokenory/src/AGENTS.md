@@ -9,13 +9,13 @@ codex_turns.rs: 校验完成主回合、缓存未变化日志、保存无正文�
 config.rs: 保存采集配置。
 db.rs: 维护 SQLite schema、记录和备份；迁移/恢复包含独立回合表；一次升级仅备份一次，自动备份保留 3 份，预览保留 24 小时内最近 3 份。
 import.rs: 预览、提交和撤销历史导入。
-ipc.rs: 向原生应用提供 worker JSON 协议、有效账本的已用模型集合及 codexTurns / turnAnalytics 查询。
+ipc.rs: 向原生应用提供 worker JSON 协议、有效账本的已用模型、对话目录及 codexTurns / turnAnalytics 查询。
 lib.rs: 导出账本引擎模块。
 main.rs: 提供 CLI 命令和单写者锁；compact 回收空闲页。
 remote_pricing.rs: 拉取并校验官方远程费率表，保留最近一次有效修订。
 price_coverage.rs: 从缓存扩展模型覆盖，为未计价记录生成首次估算候选。
 pricing.rs: 保存官方价格快照，计算估算并重估历史；GPT-6.2 支持长上下文、Fast 和按快照日期确定的 Ultrafast 优惠。
-queries.rs: 当日用量支持时间戳半开区间，按设备本地午夜查询；按来源覆盖和筛选条件查询用量及其中有明确证据的 Fast tokens；activity 独立聚合日期/工具/模型及跨日期小时分布，小时仅采用与账本日期相符的时间戳，不受明细分页影响。
+queries.rs: 当日用量支持时间戳半开区间，按设备本地午夜查询；按有效来源、筛选和对话查询用量与 Fast tokens；对话目录按工具与会话 ID 汇总；activity 聚合日期、工具、模型及小时分布。
 usage.rs: 定义用量记录和 token 分类。
 
 
