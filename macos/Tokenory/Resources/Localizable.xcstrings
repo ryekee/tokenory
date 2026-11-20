@@ -4838,7 +4838,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use Left and Right to inspect an hour or turn. Press Return to select it."
+            "value": "Use Left and Right to inspect a time bucket or turn. Press Return to select it."
           }
         },
         "zh-Hans": {

@@ -1,5 +1,5 @@
 // [INPUT]: Multi-agent completed main-turn analytics and support capabilities from the Rust worker.
-// [OUTPUT]: Validated client identities, estimated durations, whole-range summaries and hourly speed distributions.
+// [OUTPUT]: Validated client identities, estimated durations, whole-range summaries and calendar-based speed distributions.
 // [POS]: Turn analytics presentation boundary; independent of priced usage pagination.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -105,7 +105,27 @@ enum TurnSort: String, CaseIterable {
     var title: String { L("turns.sort." + rawValue) }
 }
 
-struct TurnSpeedHour: Sendable {
+enum TurnSpeedGranularity: Sendable {
+    case hour, day, week
+
+    init(dayCount: Int?) {
+        switch dayCount {
+        case 1?: self = .hour
+        case let days? where (2...7).contains(days): self = .day
+        default: self = .week
+        }
+    }
+
+    var component: Calendar.Component {
+        switch self {
+        case .hour: .hour
+        case .day: .day
+        case .week: .weekOfYear
+        }
+    }
+}
+
+struct TurnSpeedBucket: Sendable {
     struct Distribution: Sendable {
         let middle: ClosedRange<Double>
         let median: Double
@@ -114,21 +134,18 @@ struct TurnSpeedHour: Sendable {
         let representative: AgentTurn
     }
 
-    let start: Date
+    let interval: Range<Date>
     let turns: [AgentTurn]
     let distribution: Distribution?
     let containsEstimates: Bool
 
-    var end: Date { start.addingTimeInterval(3600) }
-    var center: Date { start.addingTimeInterval(1800) }
+    var start: Date { interval.lowerBound }
+    var end: Date { interval.upperBound }
+    var center: Date { start + end.timeIntervalSince(start) / 2 }
     var visiblePoints: [AgentTurn] { distribution?.outliers ?? turns }
 
-    static func start(containing date: Date, calendar: Calendar) -> Date {
-        calendar.dateInterval(of: .hour, for: date)?.start ?? date
-    }
-
-    init(start: Date, turns: [AgentTurn]) {
-        self.start = start
+    init(interval: Range<Date>, turns: [AgentTurn]) {
+        self.interval = interval
         self.turns = turns
         containsEstimates = turns.contains(where: \.durationEstimated)
         guard turns.count >= 3 else {
@@ -160,6 +177,71 @@ struct TurnSpeedHour: Sendable {
     }
 }
 
+struct TurnSpeedTimeline: Sendable {
+    let calendar: Calendar
+    let granularity: TurnSpeedGranularity
+    let domain: ClosedRange<Date>?
+    let buckets: [TurnSpeedBucket]
+    let maxSpeed: Double
+    private let bucketsByCalendarStart: [Date: TurnSpeedBucket]
+    private let visiblePoints: [AgentTurn]
+
+    fileprivate init(chronologicalPoints points: [AgentTurn], query: TurnQuery) {
+        var calendar = Localization.reportingCalendar
+        calendar.firstWeekday = 2
+        calendar.minimumDaysInFirstWeek = 4
+        self.calendar = calendar
+
+        let from = query.from.flatMap(Localization.date)
+        let to = query.to.flatMap(Localization.date)
+        let dayCount = from.flatMap { start in to.flatMap { calendar.dateComponents([.day], from: start, to: $0).day } }
+            .map { $0 + 1 }
+        let granularity = TurnSpeedGranularity(dayCount: dayCount)
+        self.granularity = granularity
+        let component = granularity.component
+        let start = from ?? points.first.flatMap { calendar.dateInterval(of: component, for: $0.start)?.start }
+        let end = to.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
+            ?? points.last.flatMap { calendar.dateInterval(of: component, for: $0.start)?.end }
+        guard let start, let end, start < end else {
+            domain = nil; buckets = []; bucketsByCalendarStart = [:]; visiblePoints = []; maxSpeed = 0
+            return
+        }
+
+        domain = start...end
+        let included = points.filter { $0.start >= start && $0.start < end }
+        let groups = Dictionary(grouping: included) { calendar.dateInterval(of: component, for: $0.start) }
+        let mapped = groups.compactMap { interval, rows -> (Date, TurnSpeedBucket)? in
+            guard let interval else { return nil }
+            let clipped = max(start, interval.start)..<min(end, interval.end)
+            return (interval.start, TurnSpeedBucket(interval: clipped, turns: rows))
+        }
+        let buckets = mapped.map(\.1).sorted { $0.start < $1.start }
+        self.buckets = buckets
+        bucketsByCalendarStart = Dictionary(uniqueKeysWithValues: mapped)
+        visiblePoints = buckets.flatMap(\.visiblePoints).sorted { ($0.startMs, $0.id) < ($1.startMs, $1.id) }
+        maxSpeed = included.lazy.map(\.speed).max() ?? 0
+    }
+
+    func bucket(at date: Date) -> TurnSpeedBucket? {
+        guard let start = calendar.dateInterval(of: granularity.component, for: date)?.start,
+              let bucket = bucketsByCalendarStart[start], bucket.interval.contains(date) else { return nil }
+        return bucket
+    }
+
+    func points(in interval: Range<Date>) -> ArraySlice<AgentTurn> {
+        visiblePoints[lowerBound(interval.lowerBound)..<lowerBound(interval.upperBound)]
+    }
+
+    private func lowerBound(_ date: Date) -> Int {
+        var lower = 0, upper = visiblePoints.count
+        while lower < upper {
+            let mid = (lower + upper) / 2
+            if visiblePoints[mid].start < date { lower = mid + 1 } else { upper = mid }
+        }
+        return lower
+    }
+}
+
 struct TurnPresentation: Sendable {
     let revision: Int64
     let models: [String]
@@ -167,8 +249,7 @@ struct TurnPresentation: Sendable {
     let capabilities: [TurnCapability]
     let containsEstimates: Bool
     let points: [AgentTurn]
-    let speedHours: [Date: TurnSpeedHour]
-    let orderedSpeedHours: [TurnSpeedHour]
+    let speedTimeline: TurnSpeedTimeline?
     let averageSpeed: Double?
     let averageTTFTSeconds: Double?
     let averageReasoning: Double?
@@ -176,18 +257,15 @@ struct TurnPresentation: Sendable {
     let reasoningCoverage: Int
     let ttftCoverage: Int
 
-    init(report: TurnReport) {
+    init(report: TurnReport, query: TurnQuery? = nil) {
         clients = report.clients
         capabilities = report.capabilities
         containsEstimates = report.turns.contains { $0.durationEstimated }
         revision = report.revision
         models = report.models
-        points = report.turns.sorted { ($0.startMs, $0.id) < ($1.startMs, $1.id) }
-        let calendar = Localization.reportingCalendar
-        let groups = Dictionary(grouping: points) { TurnSpeedHour.start(containing: $0.start, calendar: calendar) }
-        let hours = groups.map { TurnSpeedHour(start: $0.key, turns: $0.value) }
-        speedHours = Dictionary(uniqueKeysWithValues: hours.map { ($0.start, $0) })
-        orderedSpeedHours = hours.sorted { $0.start < $1.start }
+        let points = report.turns.sorted { ($0.startMs, $0.id) < ($1.startMs, $1.id) }
+        self.points = points
+        speedTimeline = query.map { TurnSpeedTimeline(chronologicalPoints: points, query: $0) }
         let seconds = points.reduce(0.0) { $0 + Double($1.durationMs) / 1000 }
         let generated = points.reduce(0.0) { $0 + Double($1.generatedTokens) }
         averageSpeed = seconds > 0 ? generated / seconds : nil
@@ -202,7 +280,8 @@ struct TurnPresentation: Sendable {
         reasoningShare = knownGenerated > 0 ? reasoning / knownGenerated : nil
     }
 
-    func sorted(by order: TurnSort) -> [AgentTurn] {
+    func sorted(by order: TurnSort, in bucket: TurnSpeedBucket? = nil) -> [AgentTurn] {
+        let points = bucket?.turns ?? points
         switch order {
         case .oldest: return points
         case .newest: return points.reversed()
@@ -234,6 +313,22 @@ enum TurnFormat {
     static func timestamp(_ date: Date) -> String {
         date.formatted(Date.FormatStyle(locale: Localization.locale, calendar: Localization.reportingCalendar,
                                         timeZone: Localization.reportingCalendar.timeZone).month(.twoDigits).day(.twoDigits).hour().minute())
+    }
+    static func speedBucket(_ bucket: TurnSpeedBucket, granularity: TurnSpeedGranularity) -> String {
+        let calendar = Localization.reportingCalendar
+        if granularity == .hour {
+            let clock = Date.FormatStyle(locale: Localization.locale, calendar: calendar, timeZone: calendar.timeZone).hour().minute()
+            return "\(timestamp(bucket.start))–\(bucket.end.formatted(clock))"
+        }
+
+        let lastDay = bucket.end - 1
+        let formatter = DateIntervalFormatter()
+        formatter.locale = Localization.locale
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: bucket.start, to: calendar.startOfDay(for: lastDay))
     }
     static func clockDuration(_ milliseconds: Int64) -> String {
         let seconds = milliseconds / 1000
