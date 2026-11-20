@@ -1,5 +1,5 @@
 // [INPUT]: Native transcripts, agent databases, and the client catalog.
-// [OUTPUT]: Completed turns with timestamp-estimated duration and explicit source capabilities.
+// [OUTPUT]: Completed turns with timestamp-estimated duration, reported Claude inference speed and explicit source capabilities.
 // [POS]: Additional-client parsing boundary; never retain message or tool content.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 mod cline;
@@ -22,6 +22,7 @@ use std::{
     path::{Path, PathBuf},
     time::SystemTime,
 };
+use tokens_core::speed::InferenceSpeed;
 fn ms(v: &Value) -> Option<i64> {
     chrono::DateTime::parse_from_rfc3339(v.as_str()?)
         .ok()
@@ -44,6 +45,7 @@ struct Pending {
     invalid: bool,
     reopened: bool,
     responses: HashMap<String, (String, i64, Option<i64>)>,
+    response_speeds: HashMap<String, Option<InferenceSpeed>>,
     latest_response: Option<String>,
     tools: HashSet<String>,
 }
@@ -130,6 +132,16 @@ impl Pending {
             .responses
             .values()
             .try_fold(0i64, |n, r| n.checked_add(r.2?));
+        let inference_speed = self
+            .response_speeds
+            .values()
+            .next()
+            .copied()
+            .flatten()
+            .filter(|speed| {
+                self.response_speeds.len() == self.responses.len()
+                    && self.response_speeds.values().all(|reported| *reported == Some(*speed))
+            });
         Some(CodexTurn {
             id: serde_json::to_string(&(client, &self.session, &self.id)).ok()?,
             client: client.into(),
@@ -139,6 +151,7 @@ impl Pending {
             project: self.project,
             model: models.into_iter().next()?.into(),
             effort: None,
+            inference_speed,
             start_ms: self.start,
             end_ms: end,
             duration_ms: duration,
@@ -226,6 +239,19 @@ pub fn parse_claude_outcome(reader: impl BufRead) -> Result<ParseOutcome> {
             m["usage"]["output_tokens"].as_i64(),
             reasoning.and_then(Value::as_i64),
         );
+        if let (Some(id), Some(speed)) = (
+            m["id"].as_str(),
+            InferenceSpeed::claude(m["usage"]["speed"].as_str()),
+        ) {
+            t.response_speeds
+                .entry(id.into())
+                .and_modify(|known| {
+                    if *known != Some(speed) {
+                        *known = None;
+                    }
+                })
+                .or_insert(Some(speed));
+        }
         if let Some(blocks) = content.as_array() {
             for b in blocks {
                 if b["type"] == "tool_use" {

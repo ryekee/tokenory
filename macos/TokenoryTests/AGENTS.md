@@ -12,6 +12,6 @@ UsageStoreTests.swift: 真实 Codex 文件追加经 worker 更新当日用量并
 
 UsageStore 的统计回归覆盖首次请求失败、筛选失败保留旧报告和重试。
 
-TurnAnalyticsTests.swift: 验证速度加权、估算标记、协议校验、小时／日／周分组、北京时区周边界、四分位、离群点和稀疏点。
+TurnAnalyticsTests.swift: 验证速度加权、估算标记、可选 Fast 证据、协议校验、小时／日／周分组、周边界、四分位、离群点和稀疏点。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md

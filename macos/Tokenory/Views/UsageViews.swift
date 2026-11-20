@@ -1,8 +1,31 @@
 // [INPUT]: Typed usage summaries and today-only turn statistics.
-// [OUTPUT]: Locale-aware formats, tool names and the three-column menu summary.
+// [OUTPUT]: Locale-aware formats, the shared Fast mark, and the three-column menu summary.
 // [POS]: Shared native usage presentation; speed does not depend on dashboard filters.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
+
+struct FastModeMark: View {
+    var title: String? = nil
+    let helpText: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "bolt.fill")
+            if let title { Text(title).monospacedDigit() }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+        .fixedSize()
+        .help(helpText)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title ?? L("fast.title"))
+        .accessibilityHint(helpText)
+    }
+}
+
+extension InferenceSpeed {
+    var fastHelp: String { L(source == "selected" ? "fast.selected_help" : "fast.reported_help") }
+}
 
 func compactTokens(_ value: Int64, locale: Locale = Localization.locale) -> String {
     // Compact notation suppresses grouping in Chinese (1740.69万). Keep the

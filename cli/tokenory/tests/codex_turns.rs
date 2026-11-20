@@ -21,6 +21,41 @@ fn parsed(e: &[Value]) -> Vec<tokenory::codex_turns::CodexTurn> {
         .join("\n");
     parse(std::io::Cursor::new(lines)).unwrap()
 }
+
+#[test]
+fn codex_speed_uses_the_turns_model_and_own_settings_at_start() {
+    let settings = |thread: &str, tier: &str| {
+        json!({
+            "type": "event_msg",
+            "payload": {
+                "type": "thread_settings_applied",
+                "thread_id": thread,
+                "thread_settings": {"model": "model-a", "service_tier": tier}
+            }
+        })
+    };
+    let mut e = events();
+    e.insert(1, settings("s", "priority"));
+    e.insert(2, settings("other-thread", "default"));
+    e.insert(5, settings("s", "default"));
+    e.insert(6, e[4].clone()); // Repeated context must not relabel a running turn.
+    let speed = |events: &[Value]| {
+        serde_json::to_value(&parsed(events)[0]).unwrap()["inferenceSpeed"].clone()
+    };
+    assert_eq!(speed(&e), json!({"speed":"fast","source":"selected"}));
+
+    let mut e = events();
+    e.insert(1, settings("s", "fast"));
+    e[3]["payload"]["model"] = json!("other-model");
+    assert!(speed(&e).is_null());
+
+    let mut e = events();
+    e.insert(1, settings("s", "priority"));
+    e.insert(2, settings("s", "auto")); // An explicit reset does not carry over Fast.
+    assert!(speed(&e).is_null());
+    assert!(speed(&events()).is_null());
+}
+
 #[test]
 fn deduplicates_and_rejects_incomplete_or_invalid_usage() {
     let mut e = events();
@@ -99,6 +134,10 @@ fn persistence_catalog_dates_and_restore() {
     let r = query(&mut db, &f).unwrap();
     assert_eq!(r.models, vec!["model-a", "model-b"]);
     assert_eq!(r.turns.len(), 1);
+    assert!(r.turns[0].inference_speed.is_none());
+    turns[0].inference_speed = tokens_core::speed::InferenceSpeed::codex(Some("priority"));
+    assert_eq!(persist(&db.connection, &turns, "Asia/Shanghai").unwrap(), 1);
+    assert_eq!(persist(&db.connection, &turns, "Asia/Shanghai").unwrap(), 0);
     let f = Filter {
         to: Some("2026-11-13".into()),
         ..Default::default()
@@ -110,7 +149,9 @@ fn persistence_catalog_dates_and_restore() {
         .execute("DELETE FROM codex_turns", [])
         .unwrap();
     db.restore(&backup).unwrap();
-    assert_eq!(query(&mut db, &Filter::default()).unwrap().turns.len(), 2);
+    let restored = query(&mut db, &Filter::default()).unwrap().turns;
+    assert_eq!(restored.len(), 2);
+    assert_eq!(restored[0].inference_speed, turns[0].inference_speed);
 }
 #[test]
 fn malformed_timing_usage_and_abort_are_safe() {

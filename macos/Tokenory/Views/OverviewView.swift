@@ -1,5 +1,5 @@
 // [INPUT]: Selected-range report and independently loaded annual activity.
-// [OUTPUT]: Rolling totals, growing range charts, and independent annual activity.
+// [OUTPUT]: Rolling totals, known Fast usage, growing range charts, and independent annual activity.
 // [POS]: Native overview composition; disclosure keeps detailed caveats off the canvas.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -84,9 +84,14 @@ struct OverviewView: View {
         store.filter = filter; store.updateDateRange(); self.previousRange = nil
     }
     private var totals: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: 28) { mainTotals; secondaryTotals }
-            VStack(alignment: .leading, spacing: 18) { mainTotals; secondaryTotals }
+        VStack(alignment: .leading, spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 28) { mainTotals; secondaryTotals }
+                VStack(alignment: .leading, spacing: 18) { mainTotals; secondaryTotals }
+            }
+            if let fastTokens = report.summary.fastTokens, fastTokens > 0 {
+                FastModeMark(title: LF("fast.tokens", compactTokens(fastTokens)), helpText: L("fast.tokens_help"))
+            }
         }
     }
     private var mainTotals: some View {

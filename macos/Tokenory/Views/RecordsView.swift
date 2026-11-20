@@ -70,7 +70,12 @@ struct RecordsView: View {
                                                 columns {
                                                     Text(dates[detail.date]!)
                                                     BrandLabel(name: detail.client, kind: .tool, title: clientName(detail.client))
-                                                    BrandLabel(name: detail.model, kind: .model).fontWeight(.medium).help(detail.model)
+                                                    HStack(spacing: 5) {
+                                                        BrandLabel(name: detail.model, kind: .model).fontWeight(.medium).help(detail.model)
+                                                        if let mode = detail.inferenceSpeed, mode.isFast {
+                                                            FastModeMark(helpText: mode.fastHelp)
+                                                        }
+                                                    }
                                                     Text(compactTokens(detail.total)).monospacedDigit()
                                                         .help(detail.total.formatted(.number.locale(Localization.locale)))
                                                     Text(usd(detail.estimatedCostUsd))

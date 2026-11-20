@@ -160,4 +160,21 @@ final class TurnAnalyticsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(AgentTurn.self, from: JSONSerialization.data(withJSONObject: value))
         XCTAssertNil(decoded.ttftMs); XCTAssertNil(decoded.reasoningTokens); XCTAssertNil(decoded.requests); XCTAssertNil(decoded.toolCalls)
     }
+
+    func testFastModeRequiresExplicitWireEvidence() throws {
+        let original = turn("turn", start: 1000, duration: 10000, tokens: 100)
+        let encoded = try JSONEncoder().encode(original)
+        let decoder = JSONDecoder()
+        XCTAssertNil(try decoder.decode(AgentTurn.self, from: encoded).inferenceSpeed)
+        var value = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+
+        for (speed, source, expected) in [
+            ("fast", "selected", true), ("fast", "reported", true), ("fast", "inferred", false),
+            ("standard", "reported", false), ("ultrafast", "selected", false)
+        ] {
+            value["inferenceSpeed"] = ["speed": speed, "source": source]
+            let decoded = try decoder.decode(AgentTurn.self, from: JSONSerialization.data(withJSONObject: value))
+            XCTAssertEqual(decoded.inferenceSpeed?.isFast, expected)
+        }
+    }
 }

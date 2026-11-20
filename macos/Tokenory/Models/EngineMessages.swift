@@ -1,5 +1,5 @@
 // [INPUT]: 接收 worker 的 JSON 数据流和协议字段。
-// [OUTPUT]: 提供类型化消息、报告和增量分行器。
+// [OUTPUT]: 类型化报告、用量模式证据和增量分行器。
 // [POS]: 原生 IPC 的解析边界；已扫描的数据不重复遍历。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -60,9 +60,17 @@ struct UsageFilter: Codable, Sendable, Equatable {
     var offset = 0; var limit = 50
 }
 struct TokenBreakdown: Codable, Sendable { let input: Int64; let output: Int64; let cacheRead: Int64; let cacheWrite: Int64; let reasoning: Int64 }
+struct InferenceSpeed: Codable, Equatable, Sendable {
+    let speed: String
+    let source: String
+
+    var isFast: Bool { speed == "fast" && (source == "selected" || source == "reported") }
+}
+
 struct UsageSummary: Decodable, Sendable {
     let tokens: Int64; let tokenBreakdown: TokenBreakdown; let knownEstimatedCostUsd: Double?; let unpricedTokens: Int64
     let costStatus: String; let recordCount: Int64; let activeDays: Int64; let partialDays: Int64?; let requests: Int64?
+    var fastTokens: Int64? = nil
 }
 struct UsageGroup: Decodable, Identifiable, Sendable { let key: String; let summary: UsageSummary; var id: String { key } }
 struct UsageDetail: Decodable, Identifiable, Sendable {
@@ -71,6 +79,11 @@ struct UsageDetail: Decodable, Identifiable, Sendable {
     let sourceCostUsd: Double?; let estimatedCostUsd: Double?; let costBasis: String?; let priceSnapshotId: String?; let metadata: JSONValue
     var id: String { "\(source)|\(batchId)|\(key)" }
     var total: Int64 { tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite + tokens.reasoning }
+    var inferenceSpeed: InferenceSpeed? {
+        let mode = metadata["inferenceSpeed"]
+        guard let speed = mode["speed"].string, let source = mode["source"].string else { return nil }
+        return InferenceSpeed(speed: speed, source: source)
+    }
 }
 struct UsageReport: Decodable, Sendable {
     let revision: Int64; let summary: UsageSummary; let daily: [UsageGroup]; let clients: [UsageGroup]; let providers: [UsageGroup]; let models: [UsageGroup]; let details: [UsageDetail]

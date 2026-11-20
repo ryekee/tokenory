@@ -114,6 +114,7 @@ fn parse_stream(reader: impl BufRead) -> Result<ParseOutcome> {
         project: String::new(),
         model: model.clone(),
         effort: None,
+        inference_speed: None,
         start_ms: start,
         end_ms: end,
         duration_ms: duration,

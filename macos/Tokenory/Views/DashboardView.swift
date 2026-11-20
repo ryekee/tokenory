@@ -213,6 +213,10 @@ private struct RecordDetailContent: View {
                 BrandLabel(name: detail.model, kind: .model, size: 22)
                     .font(.title2).lineLimit(1).truncationMode(.middle)
                     .help(detail.model).textSelection(.enabled)
+                if let mode = detail.inferenceSpeed, mode.isFast {
+                    FastModeMark(title: L("fast.title"), helpText: mode.fastHelp)
+                        .padding(.top, 4)
+                }
                 if let closeInspector {
                     Spacer(minLength: 8)
                     Button(action: closeInspector) {
