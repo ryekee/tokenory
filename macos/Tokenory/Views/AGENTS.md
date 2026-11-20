@@ -9,12 +9,12 @@ ImportView.swift: 单击选择导入格式，展示导入预览、来源冲突�
 MenuBarView.swift: HUD 显隐使用文案后的勾选菜单项； 展示今日 Tokens、费用、加权速度及来源用量，保留未知/估算标记。
 OverviewView.swift: 滚动更新所选范围的摘要、Token 构成与排行读数，排行条随范围生长；共用分段控件切换 Tokens/费用。
 PriceCatalogView.swift: 展示默认收起、按供应商独立折叠的完整价格目录；支持全部和账本已用模型切换，搜索展开匹配项，标明 compactor 参考估算，在 DeepSeek 表内展示峰谷价格和时段说明。
-RecordsView.swift: 展示用量明细及滚动记录数；无记录时提供清除筛选或更改日期；同页重复日期只格式化一次。
+RecordsView.swift: 展示用量明细及当前筛选下所有记录的 Tokens 和估算费用合计。无记录时提供清除筛选或更改日期。同页重复日期只格式化一次。
 SettingsView.swift: 配置通用、HUD、价格、采集和数据维护；恢复前确认文件与影响，操作旁显示进度、结果和重试。
 MechanicalHUDView.swift: 原生橙色机械计数器按原型 50% 显示（220×92 pt 窗口）；双击读数或外壳打开统计窗口；文本片段/费用图标、渐停数字轮，音效仅在面板所在空间可见时播放；复用当日汇总，跨日与唤醒刷新；每帧捕获数字位置快照，避免延迟绘制访问已清空或缩短的数组。
 HUDSettingsView.swift: 六种位置的 2 × 3 选择器； HUD 显隐、指标和独立音效开关、音量；音量仅在设置页调整，HUD 喇叭按钮直接切换音效。
 UsageDatePicker.swift: 通过工具栏和明细空状态打开共用日期浮层；弹出时初始化草稿和两个月的日历，选中日期时复用标签。
-UsageFiltersView.swift: 选择工具、提供方和模型。明细额外按来源及对话筛选，显示可搜索的本地标题或最近活动信息。
+UsageFiltersView.swift: 单行选择工具、提供方和模型。工具和提供方按全账本 Tokens 排序，模型按名称排序。明细额外按来源及最近活动优先的对话筛选。
 UsageTrendChart.swift: 绘制双轴日/小时趋势；日期切换时插值 Tokens 柱高，沿时间轴描出费用。
 UsageActivityView.swift: 固定 YlGnBu 活动日历，隔离悬停状态，只更新提示卡片，点击直达当日。
 UsageHabitsView.swift: 独立编码习惯面板，展示最高产星期及占比、单日最高、星期和 24 小时分布；宽窗口并排，窄窗口堆叠。

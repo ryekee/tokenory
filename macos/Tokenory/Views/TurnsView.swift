@@ -34,7 +34,7 @@ struct TurnsView: View {
                         get: { store.turnModel ?? "" },
                         set: { store.turnModel = $0.isEmpty ? nil : $0 }
                     ),
-                    models: Set((store.turnAnalytics?.models ?? []) + [store.turnModel].compactMap { $0 }).sorted()
+                    models: Array(Set((store.turnAnalytics?.models ?? []) + [store.turnModel].compactMap { $0 }))
                 )
                 Spacer(minLength: 0)
                 WorkspaceInfoPopover(title: L("turns.support")) {

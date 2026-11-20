@@ -15,6 +15,11 @@ fn conversation_selection_is_client_scoped_and_precedes_pagination() {
         let row: UsageRecord = serde_json::from_value(json!({
             "key": key, "date": date, "client": client, "provider": "test", "model": "model",
             "sessionId": session,
+            "timestampMs": match key {
+                "latest" => Some(1793606400000_i64),
+                "other" => Some(1793602800000_i64),
+                _ => None,
+            },
             "tokens": {"input": tokens, "output": 0, "cacheRead": 0, "cacheWrite": 0, "reasoning": 0}
         })).unwrap();
         put_record(&db.connection, "local", "", &row).unwrap();
@@ -37,7 +42,13 @@ fn conversation_selection_is_client_scoped_and_precedes_pagination() {
     let matches = lookup(filters.clone(), "SESSION_");
     assert_eq!(matches.as_array().unwrap().len(), 2);
     assert!(matches.as_array().unwrap().iter().all(|row| row["id"]["sessionId"] == "session_1"));
-    assert_eq!(lookup(filters.clone(), "").as_array().unwrap().len(), 3);
+    let recent = lookup(filters.clone(), "");
+    let recent = recent.as_array().unwrap();
+    assert_eq!(recent.len(), 3);
+    assert_eq!(recent[0]["id"]["sessionId"], "session_1");
+    assert_eq!(recent[0]["id"]["client"], "codex");
+    assert_eq!(recent[1]["id"]["sessionId"], "session-2");
+    assert_eq!(recent[2]["id"]["client"], "claude");
     let date = Filter { to: Some("2026-11-01".into()), ..filters };
     assert_eq!(lookup(date, "")[0]["lastDate"], "2026-11-01");
 }
