@@ -5716,6 +5716,57 @@
           }
         }
       }
+    },
+    "data.restore_confirm_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore this backup?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复此备份？"
+          }
+        }
+      }
+    },
+    "data.restore_confirm_action": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Backup"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复此备份"
+          }
+        }
+      }
+    },
+    "data.restore_confirm_message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring “%@” replaces your current ledger. Tokenory saves a backup of the current ledger first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复“%@”将替换当前账本。Tokenory 会先备份当前账本。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
