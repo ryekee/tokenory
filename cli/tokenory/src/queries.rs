@@ -1,5 +1,5 @@
-// [INPUT]: Validated filters and the effective ledger view.
-// [OUTPUT]: Effective usage reports, searchable conversation identities, and activity by day or hour.
+// [INPUT]: Validated filters, the effective ledger view, and the local Codex title index.
+// [OUTPUT]: Effective usage reports, searchable conversation identities and titles, and activity by day or hour.
 // [POS]: Read-only aggregation boundary; never aggregate paginated details.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -9,6 +9,13 @@ use crate::{
 use anyhow::{ensure, Result};
 use rusqlite::{params_from_iter, types::Null, Connection, Row, ToSql};
 use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufRead, BufReader},
+    path::Path,
+};
+use tokens_core::sessions::codex::thread_id_from_rollout_path;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
@@ -80,39 +87,95 @@ pub struct ConversationQuery {
 #[serde(rename_all = "camelCase")]
 pub struct ConversationOption {
     pub id: ConversationId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     pub last_date: String,
     pub model: Option<String>,
     pub last_timestamp_ms: Option<i64>,
 }
 
-pub fn conversations(db: &Database, mut query: ConversationQuery) -> Result<Vec<ConversationOption>> {
+#[derive(Deserialize)]
+struct IndexedCodexTitle {
+    id: String,
+    thread_name: String,
+}
+
+fn codex_titles(home: &Path) -> HashMap<String, String> {
+    let Ok(index) = File::open(home.join(".codex/session_index.jsonl")) else {
+        return HashMap::new();
+    };
+    // Codex appends new entries on rename. Keep the last readable title per thread.
+    BufReader::new(index)
+        .split(b'\n')
+        .map_while(std::result::Result::ok)
+        .filter_map(|line| serde_json::from_slice::<IndexedCodexTitle>(&line).ok())
+        .filter_map(|entry| {
+            let title = entry.thread_name.split_whitespace().collect::<Vec<_>>().join(" ");
+            (!title.is_empty() && !entry.id.is_empty()).then_some((entry.id, title))
+        })
+        .collect()
+}
+
+pub fn conversations(
+    db: &Database,
+    home: &Path,
+    mut query: ConversationQuery,
+) -> Result<Vec<ConversationOption>> {
     // Show alternatives to the selected conversation across all result pages.
     query.filter.conversation = None;
     query.filter.validate()?;
     let search = query.search.trim();
+    let title_search = search.to_lowercase();
+    let titles = if matches!(query.filter.client.as_deref(), None | Some("codex")) {
+        codex_titles(home)
+    } else {
+        HashMap::new()
+    };
     let sql = format!(
         "SELECT client, {SESSION_SQL} AS session, max(date),
             CASE WHEN min(model) = max(model) THEN min(model) END,
-            max(json_extract(body, '$.timestampMs')) AS last_timestamp
+            max(json_extract(body, '$.timestampMs')) AS last_timestamp,
+            ?11 = '' OR instr(lower({SESSION_SQL}), lower(?11)) > 0
+                OR instr(lower(client), lower(?11)) > 0
+                OR max(instr(lower(model), lower(?11))) > 0 AS matches_search
         FROM effective_usage{WHERE_SQL}
         AND {SESSION_SQL} != ''
         GROUP BY client, session
-        HAVING ?11 = '' OR instr(lower(session), lower(?11)) > 0
-            OR instr(lower(client), lower(?11)) > 0
-            OR max(instr(lower(model), lower(?11))) > 0
-        ORDER BY max(date) DESC, last_timestamp DESC, client, session
-        LIMIT 100"
+        ORDER BY max(date) DESC, last_timestamp DESC, client, session"
     );
     let mut stmt = db.connection.prepare(&sql)?;
     let params = query.filter.sql_parameters().into_iter().chain([&search as &dyn ToSql]);
-    let options = stmt.query_map(params_from_iter(params), |row| {
-        Ok(ConversationOption {
-            id: ConversationId { client: row.get(0)?, session_id: row.get(1)? },
+    let mut rows = stmt.query(params_from_iter(params))?;
+    let mut options = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id = ConversationId {
+            client: row.get(0)?,
+            session_id: row.get(1)?,
+        };
+        let title = if id.client == "codex" {
+            titles.get(&id.session_id).or_else(|| {
+                let thread = thread_id_from_rollout_path(Path::new(&id.session_id))?;
+                titles.get(&thread)
+            })
+        } else {
+            None
+        };
+        if !row.get::<_, bool>(5)?
+            && !title.is_some_and(|value| value.to_lowercase().contains(&title_search))
+        {
+            continue;
+        }
+        options.push(ConversationOption {
+            id,
+            title: title.cloned(),
             last_date: row.get(2)?,
             model: row.get(3)?,
             last_timestamp_ms: row.get(4)?,
-        })
-    })?.collect::<rusqlite::Result<_>>()?;
+        });
+        if options.len() == 100 {
+            break;
+        }
+    }
     Ok(options)
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

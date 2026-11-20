@@ -12,8 +12,11 @@ final class UsageStoreTests: XCTestCase {
         let store = UsageStore()
         store.filter.offset = 100
         let id = UsageConversation.ID(client: "codex", sessionId: "conversation")
-        store.selectConversation(id)
+        let option = UsageConversation(id: id, title: "Review usage filters", lastDate: "2026-11-05",
+                                       model: "gpt-5", lastTimestampMs: nil)
+        store.selectConversation(option)
         XCTAssertEqual(store.filter.offset, 0)
+        XCTAssertEqual(store.recordConversation?.title, "Review usage filters")
         XCTAssertNil(store.reportSelection.conversation)
         store.recordsAreActive = true
         XCTAssertEqual(store.reportSelection.conversation, id)
@@ -24,6 +27,7 @@ final class UsageStoreTests: XCTestCase {
         let dates = (store.filter.from, store.filter.to)
         store.clearRecordFilters()
         XCTAssertNil(store.reportSelection.conversation)
+        XCTAssertNil(store.recordConversation)
         XCTAssertEqual(store.filter.from, dates.0)
         XCTAssertEqual(store.filter.to, dates.1)
     }

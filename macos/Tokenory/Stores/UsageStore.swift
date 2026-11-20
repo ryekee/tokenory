@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 日期与明细对话筛选、请求状态、全年活动、当日用量、回合、价格和采集状态。
+// [OUTPUT]: 日期与明细对话筛选、选中的对话名称、请求状态、全年活动、当日用量、回合、价格和采集状态。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -65,10 +65,10 @@ final class UsageStore {
     private var turnsGeneration = 0
     var filter = UsageFilter()
     var recordsAreActive = false
-    private(set) var recordConversation: UsageConversation.ID?
+    private(set) var recordConversation: UsageConversation?
     var reportSelection: UsageFilter {
         var selection = filter
-        selection.conversation = recordsAreActive ? recordConversation : nil
+        selection.conversation = recordsAreActive ? recordConversation?.id : nil
         return selection
     }
     var dateRange: UsageDateRange = .week
@@ -129,10 +129,9 @@ final class UsageStore {
         await refreshSelection(reportSelection, forceReport: true)
     }
 
-    func selectConversation(_ id: UsageConversation.ID?) {
-        guard recordConversation != id else { return }
-        recordConversation = id
-        filter.offset = 0
+    func selectConversation(_ conversation: UsageConversation?) {
+        if recordConversation?.id != conversation?.id { filter.offset = 0 }
+        recordConversation = conversation
     }
 
     func clearRecordFilters() {

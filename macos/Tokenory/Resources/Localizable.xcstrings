@@ -6114,13 +6114,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Search conversations"
+            "value": "Search titles or session IDs"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "搜索对话"
+            "value": "搜索标题或会话 ID"
           }
         }
       }

@@ -31,7 +31,7 @@ fn conversation_selection_is_client_scoped_and_precedes_pagination() {
     assert_eq!(scoped.summary.tokens, 30);
     assert_eq!(scoped.details[0].record.key, "first");
 
-    let lookup = |filter, search: &str| serde_json::to_value(conversations(&db, ConversationQuery {
+    let lookup = |filter, search: &str| serde_json::to_value(conversations(&db, root.path(), ConversationQuery {
         filter, search: search.into(),
     }).unwrap()).unwrap();
     let matches = lookup(filters.clone(), "SESSION_");
@@ -40,6 +40,56 @@ fn conversation_selection_is_client_scoped_and_precedes_pagination() {
     assert_eq!(lookup(filters.clone(), "").as_array().unwrap().len(), 3);
     let date = Filter { to: Some("2026-11-01".into()), ..filters };
     assert_eq!(lookup(date, "")[0]["lastDate"], "2026-11-01");
+}
+
+#[test]
+fn conversation_title_search_uses_latest_indexed_name_before_the_result_limit() {
+    let root = tempfile::tempdir().unwrap();
+    let db = Database::open(root.path()).unwrap();
+    let codex = root.path().join(".codex");
+    std::fs::create_dir(&codex).unwrap();
+    let thread = "01912345-1234-7abc-8abc-abcdef123456";
+    let rollout = format!("rollout-2026-11-01T09-00-00-{thread}");
+    let index = [
+        json!({"id": thread, "thread_name": "Previous title"}).to_string(),
+        "invalid record".into(),
+        json!({"id": thread, "thread_name": "  Review\n仪表盘  "}).to_string(),
+        json!({"id": thread, "thread_name": " "}).to_string(),
+    ];
+    std::fs::write(codex.join("session_index.jsonl"), index.join("\n")).unwrap();
+    let row = |key: &str, date: &str, client: &str, session: &str| {
+        let record: UsageRecord = serde_json::from_value(json!({
+            "key": key, "date": date, "client": client, "provider": "test", "model": "model",
+            "sessionId": session,
+            "tokens": {"input": 1, "output": 0, "cacheRead": 0, "cacheWrite": 0, "reasoning": 0}
+        })).unwrap();
+        put_record(&db.connection, "local", "", &record).unwrap();
+    };
+    for i in 0..100 {
+        let key = format!("recent-{i}");
+        row(&key, "2026-11-02", "codex", &key);
+    }
+    row("older", "2026-11-01", "codex", &rollout);
+    row("same-id-other-client", "2026-11-01", "claude", &rollout);
+    db.connection.execute_batch(
+        "INSERT INTO coverage_choices VALUES
+        ('2026-11-01','codex','local',''),('2026-11-02','codex','local',''),('2026-11-01','claude','local','');"
+    ).unwrap();
+
+    let lookup = |search: &str| conversations(&db, root.path(), ConversationQuery {
+        filter: Filter::default(), search: search.into(),
+    }).unwrap();
+    let recent = lookup("");
+    assert_eq!(recent.len(), 100);
+    assert!(recent.iter().all(|option| option.title.is_none()));
+    assert!(lookup("Previous title").is_empty());
+    let matches = lookup("REVIEW 仪表盘");
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].title.as_deref(), Some("Review 仪表盘"));
+    assert_eq!(matches[0].id.session_id, rollout);
+    let id_matches = lookup(thread);
+    assert_eq!(id_matches.len(), 2);
+    assert!(id_matches.iter().any(|option| option.id.client == "claude" && option.title.is_none()));
 }
 
 #[test]

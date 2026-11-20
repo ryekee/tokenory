@@ -15,7 +15,7 @@ main.rs: 提供 CLI 命令和单写者锁；compact 回收空闲页。
 remote_pricing.rs: 拉取并校验官方远程费率表，保留最近一次有效修订。
 price_coverage.rs: 从缓存扩展模型覆盖，为未计价记录生成首次估算候选。
 pricing.rs: 保存官方价格快照，计算估算并重估历史；GPT-6.2 支持长上下文、Fast 和按快照日期确定的 Ultrafast 优惠。
-queries.rs: 当日用量支持时间戳半开区间，按设备本地午夜查询；按有效来源、筛选和对话查询用量与 Fast tokens；对话目录按工具与会话 ID 汇总；activity 聚合日期、工具、模型及小时分布。
+queries.rs: 当日用量支持时间戳半开区间，按设备本地午夜查询。按有效来源、筛选和对话查询用量与 Fast tokens。对话目录按工具与会话 ID 汇总，实时读取 Codex 本地标题索引。activity 聚合日期、工具、模型及小时分布。
 usage.rs: 定义用量记录和 token 分类。
 
 

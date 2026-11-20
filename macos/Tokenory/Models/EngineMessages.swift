@@ -1,5 +1,5 @@
 // [INPUT]: 接收 worker 的 JSON 数据流和协议字段。
-// [OUTPUT]: 类型化报告、对话身份、用量模式证据和增量分行器。
+// [OUTPUT]: 类型化报告、对话身份与标题、用量模式证据和增量分行器。
 // [POS]: 原生 IPC 的解析边界；已扫描的数据不重复遍历。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -67,6 +67,7 @@ struct UsageConversation: Decodable, Sendable, Identifiable {
     }
 
     let id: ID
+    let title: String?
     let lastDate: String
     let model: String?
     let lastTimestampMs: Int64?
