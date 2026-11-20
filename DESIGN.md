@@ -27,6 +27,7 @@ Native macOS utility for checking AI usage and USD cost estimates. Preserve the 
 Watermelon references are recorded in `docs/design/watermelon-reference-2026-11-05.md` and `docs/design/watermelon-refinement-2026-11-06.md`. Implement the borrowed composition and interaction patterns with SwiftUI and Swift Charts.
 
 - Align to visible control edges: fixed-width containers must not hide the actual edges of segmented controls. Avoid duplicate spacing between parent and child layouts.
+- Dropdowns use the same single downward chevron and anchored option popover as the model chooser. Show the active value in the trigger and mark the choice in the list. Keep search for longer lists and preserve single-click segmented controls.
 - Canvas: neutral gray in light mode, ink charcoal in dark mode. Panels use a small luminance step, a 12 pt radius and 18 pt padding. Fields use an 8 pt radius. Preserve native sidebar materials.
 - Typography: system body/callout for controls and rows, semibold headings, 32 pt primary totals and monospaced numeric digits. Chart readouts and record details show full integer token counts; costs retain the common two-decimal display format.
 - Blue identifies the main series and selection. Stable tool colors distinguish model history layers. Do not use green/red to judge changes in usage.

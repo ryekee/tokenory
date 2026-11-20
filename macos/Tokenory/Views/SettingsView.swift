@@ -149,9 +149,11 @@ struct SettingsView: View {
                 HStack {
                     Text(L("language.title"))
                     Spacer()
-                    Picker(L("language.title"), selection: $language) {
-                        ForEach(AppLanguage.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
-                    }.labelsHidden().fixedSize().frame(width: 180, alignment: .trailing)
+                    WorkspaceDropdown(
+                        label: L("language.title"), selection: $language,
+                        options: AppLanguage.allCases.map(\.rawValue), width: 156,
+                        title: { (AppLanguage(rawValue: $0) ?? .system).title }
+                    )
                 }
                 Divider()
                 HStack {
@@ -185,14 +187,11 @@ struct SettingsView: View {
                     HStack {
                         Text(L("update.frequency"))
                         Spacer()
-                        Picker(L("update.frequency"), selection: Binding(
-                            get: { updates.checkIntervalHours },
-                            set: { updates.setIntervalHours($0) }
-                        )) {
-                            ForEach(UpdateChecker.intervalHours, id: \.self) { hours in
-                                Text(L("update.interval_\(hours)")).tag(hours)
-                            }
-                        }.labelsHidden().fixedSize()
+                        WorkspaceDropdown(
+                            label: L("update.frequency"),
+                            selection: Binding(get: { updates.checkIntervalHours }, set: { updates.setIntervalHours($0) }),
+                            options: UpdateChecker.intervalHours, width: 156, title: { L("update.interval_\($0)") }
+                        )
                     }
                 }
                 if let error = updates.startupError {
@@ -261,10 +260,14 @@ struct SettingsView: View {
             .disabled(collectionStatus?.isPending == true)
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 12) {
-                    Picker(L("field.tool"), selection: $selectedClient) {
-                        ForEach(store.clients.filter(\.supportsExtraPaths)) { client in
-                            Text(client.name).tag(client.id)
-                        }
+                    let clients = store.clients.filter(\.supportsExtraPaths)
+                    HStack(spacing: 10) {
+                        Text(L("field.tool"))
+                        WorkspaceDropdown(
+                            label: L("field.tool"), selection: $selectedClient, options: clients.map(\.id), width: 156,
+                            title: { id in clients.first(where: { $0.id == id })?.name ?? clientName(id) },
+                            brand: { ($0, .tool) }
+                        ).disabled(clients.isEmpty)
                     }
                     pathEditor(L("settings.extra_paths"), tool: selectedClient, text: Binding(
                         get: { scanPaths[selectedClient] ?? "" },
