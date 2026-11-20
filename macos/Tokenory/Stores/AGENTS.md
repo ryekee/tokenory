@@ -7,6 +7,8 @@ UsageStore.swift: 按北京时间移动统计日期范围且重置分页，空�
 
 Codex todayUsageChanged 事件只刷新当日汇总，实时传给 HUD，完整统计沿用全扫描刷新。
 
+总览及明细统计失败跟随发起请求的筛选条件。重试使用当前筛选，已有报告保留到下一次成功。
+
 UsageStore 的 todayDay / todayTimeZone / todayUsageError 供 HUD 识别跨日与不可用读数，沿用今日独立查询与代际保护。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md

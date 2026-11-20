@@ -10,6 +10,8 @@ PresentationDataTests.swift: 验证统计展示数据、日期图表入场、统
 UpdateCheckerTests.swift: 验证更新检查状态及应用语言对应的清单。
 UsageStoreTests.swift: 真实 Codex 文件追加经 worker 更新当日用量并连续追加当前滚动；验证今日速度独立筛选、跨日旧响应不覆盖、完整来源能力目录；验证日期切换保留上一份报告且复用全年活动、按天数移动日期范围、今日上限及恢复滚动预设。
 
+UsageStore 的统计回归覆盖首次请求失败、筛选失败保留旧报告和重试。
+
 TurnAnalyticsTests.swift: 验证速度加权、跨 agent 估算标记、缺失值、时间排序、小时分组、四分位、离群点、稀疏点和协议校验。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md

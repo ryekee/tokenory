@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 日期范围切换，独立发布筛选结果、全年活动、当日用量、回合、价格和采集状态。
+// [OUTPUT]: 日期范围切换，发布筛选结果及请求失败、全年活动、当日用量、回合、价格和采集状态。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -34,6 +34,10 @@ final class UsageStore {
     private(set) var todayDay: String?
     var report: UsageReport?
     var reportFilter: UsageFilter?
+    var reportLoadError: String? {
+        if let reportFailure, reportFailure.selection == filter { return reportFailure.message }
+        return connected || loading ? nil : error
+    }
     var activity: ActivityReport?
     var activityCalendar: UsageActivity?
     @ObservationIgnored private var historyCache: [HistorySelection: UsageHistory] = [:]
@@ -77,6 +81,7 @@ final class UsageStore {
     private var refreshGeneration = 0
     private var reportGeneration = 0
     private var requestedReportFilter: UsageFilter?
+    private var reportFailure: (selection: UsageFilter, message: String)?
     private var activityFilter: UsageFilter?
     private var requestedActivityFilter: UsageFilter?
     private var activityGeneration = 0
@@ -105,6 +110,16 @@ final class UsageStore {
             do { try await engine.start(); connected = true; error = nil; await refresh() }
             catch { fail(error) }
         }
+    }
+
+    func retryReport() async {
+        guard connected else {
+            reportFailure = nil
+            error = nil
+            start()
+            return
+        }
+        await refreshSelection(filter, forceReport: true)
     }
     func selectDateRange(_ range: UsageDateRange, now: Date = .now) {
         dateRange = range
@@ -185,9 +200,9 @@ final class UsageStore {
         } catch { if generation == refreshGeneration { fail(error) } }
         _ = await (history, quick)
     }
-    func refreshSelection(_ selection: UsageFilter, now: Date = Date()) async {
+    func refreshSelection(_ selection: UsageFilter, now: Date = Date(), forceReport: Bool = false) async {
         guard selection == filter else { return }
-        await refreshReport(selection, force: false)
+        await refreshReport(selection, force: forceReport)
         guard selection == filter, reportFilter == selection else { return }
         await refreshActivity(for: selection, now: now, force: false)
     }
@@ -196,6 +211,7 @@ final class UsageStore {
         reportGeneration += 1
         let generation = reportGeneration
         requestedReportFilter = selection
+        reportFailure = nil
         loading = true
         defer {
             if generation == reportGeneration { requestedReportFilter = nil; loading = false }
@@ -206,7 +222,9 @@ final class UsageStore {
             report = selected
             reportFilter = selection
         } catch {
-            if generation == reportGeneration, selection == filter { fail(error) }
+            if generation == reportGeneration, selection == filter {
+                reportFailure = (selection, error.localizedDescription)
+            }
         }
     }
     private func refreshActivity(for selection: UsageFilter, now: Date, force: Bool) async {
