@@ -1,5 +1,5 @@
 // [INPUT]: Shared usage filters and the Records conversation selection.
-// [OUTPUT]: Dimension controls and a title-aware conversation picker with a bounded result list.
+// [OUTPUT]: Single-row dimension controls and a title-aware conversation picker with a bounded result list.
 // [POS]: Filter toolbar; the conversation lookup runs only while its popover is open.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -9,53 +9,50 @@ struct UsageFiltersView: View {
     let showsSource: Bool
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                primaryFilters
-                if showsSource { recordFilters }
-                Spacer(minLength: 0)
-            }.fixedSize(horizontal: true, vertical: false)
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) { primaryFilters; Spacer(minLength: 0) }
-                if showsSource { recordFilters }
+        HStack(spacing: 8) {
+            primaryFilters
+            if showsSource {
+                sourcePicker
+                ConversationPicker()
             }
+            Spacer(minLength: 0)
         }
         .controlSize(.regular)
     }
 
-    private var recordFilters: some View {
-        HStack(spacing: 10) {
-            WorkspaceDropdown(
-                label: L("field.source"), selection: dimension(\.source),
-                options: ["", "local", "cc-switch", "tokens-ci"], width: 116,
-                title: { source in
-                    switch source {
-                    case "local": L("source.local")
-                    case "cc-switch": "CC Switch"
-                    case "tokens-ci": "tokens.ci"
-                    default: L("filter.sources")
-                    }
+    private var sourcePicker: some View {
+        WorkspaceDropdown(
+            label: L("field.source"), selection: dimension(\.source),
+            options: ["", "local", "cc-switch", "tokens-ci"], width: 90, flexibleWidth: true,
+            title: { source in
+                switch source {
+                case "local": L("source.local")
+                case "cc-switch": "CC Switch"
+                case "tokens-ci": "tokens.ci"
+                default: L("filter.sources")
                 }
-            )
-            ConversationPicker()
-        }
+            }
+        )
     }
 
     private var primaryFilters: some View {
         Group {
             WorkspaceDropdown(
                 label: L("field.tool"), selection: dimension(\.client),
-                options: [""] + (store.catalog?.clients.map(\.key) ?? []), width: 124,
+                options: [""] + (store.catalog?.clients.map(\.key) ?? []), width: 104, flexibleWidth: true,
                 title: { $0.isEmpty ? L("filter.tools") : clientName($0) },
                 brand: { $0.isEmpty ? nil : ($0, .tool) }
             )
             WorkspaceDropdown(
                 label: L("field.provider"), selection: dimension(\.provider),
-                options: [""] + (store.catalog?.providers.map(\.key) ?? []), width: 121,
+                options: [""] + (store.catalog?.providers.map(\.key) ?? []), width: 104, flexibleWidth: true,
                 title: { $0.isEmpty ? L("filter.providers") : $0 },
                 brand: { $0.isEmpty ? nil : ($0, .provider) }
             )
-            WorkspaceModelDropdown(selection: dimension(\.model), models: store.catalog?.models.map(\.key) ?? [])
+            WorkspaceModelDropdown(
+                selection: dimension(\.model), models: store.catalog?.models.map(\.key) ?? [],
+                width: 140, flexibleWidth: true
+            )
         }
     }
 
@@ -73,11 +70,14 @@ struct UsageFiltersView: View {
 struct WorkspaceModelDropdown: View {
     @Binding var selection: String
     let models: [String]
+    var width: CGFloat = 180
+    var flexibleWidth = false
 
     var body: some View {
         WorkspaceDropdown(
-            label: L("field.model"), selection: $selection, options: models, width: 180, popoverWidth: 330,
+            label: L("field.model"), selection: $selection, options: models, width: width, popoverWidth: 330,
             search: .init(prompt: L("filter.search_models"), noResults: L("filter.no_models"), clearValue: ""),
+            flexibleWidth: flexibleWidth,
             title: { $0.isEmpty ? L("filter.models") : $0 },
             brand: { $0.isEmpty ? nil : ($0, .model) }
         )
@@ -103,8 +103,8 @@ private struct ConversationPicker: View {
         let selected = store.recordConversation
         let title = selected.map(conversationName) ?? L("record.conversations_all")
         WorkspaceDropdownTrigger(
-            label: L("record.conversation"), value: title, width: 174,
-            brand: selected.map { ($0.id.client, .tool) }, help: selected.map(conversationHelp)
+            label: L("record.conversation"), value: title, width: 148,
+            brand: selected.map { ($0.id.client, .tool) }, help: selected.map(conversationHelp), flexibleWidth: true
         ) {
             search = ""
             completedLookup = nil

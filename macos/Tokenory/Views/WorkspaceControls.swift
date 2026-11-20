@@ -28,18 +28,21 @@ struct WorkspaceDropdownTrigger: View {
     let width: CGFloat
     var brand: (name: String, kind: BrandKind)? = nil
     var help: String? = nil
+    var flexibleWidth = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 if let brand { BrandIcon(name: brand.name, kind: brand.kind) }
-                Text(value).lineLimit(1).truncationMode(.tail)
-                Spacer(minLength: 0)
+                Text(value)
+                    .lineLimit(1).truncationMode(.tail)
+                    .minimumScaleFactor(flexibleWidth ? 0.9 : 1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
-            }.frame(width: width)
+            }.frame(minWidth: flexibleWidth ? 0 : width, idealWidth: width, maxWidth: width)
         }
         .buttonStyle(.bordered)
         .accessibilityLabel(label)
@@ -107,6 +110,7 @@ struct WorkspaceDropdown<Value: Hashable>: View {
     let width: CGFloat
     var popoverWidth: CGFloat? = nil
     var search: Search? = nil
+    var flexibleWidth = false
     let title: (Value) -> String
     var brand: (Value) -> (name: String, kind: BrandKind)? = { _ in nil }
 
@@ -116,7 +120,9 @@ struct WorkspaceDropdown<Value: Hashable>: View {
     @FocusState private var focusedOption: Value?
 
     var body: some View {
-        WorkspaceDropdownTrigger(label: label, value: title(selection), width: width, brand: brand(selection)) {
+        WorkspaceDropdownTrigger(
+            label: label, value: title(selection), width: width, brand: brand(selection), flexibleWidth: flexibleWidth
+        ) {
             query = ""
             showing = true
         }
