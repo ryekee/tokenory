@@ -30,7 +30,7 @@ Tokenory 展示标准费率下的等价费用估算。官方自助套餐免费�
 
 ## Codex 自动审批
 
-在 Codex 的 `codex-auto-review` 记录上，tokens.ci 导出已有正金额时保留该项估算；没有正金额的导出记录和本地 OpenAI Codex 记录，按每百万 tokens **输入 $0.25、缓存读取 $0.03、输出（含推理）$2.00** 估算。导出未提供供应商时仍保留 `unknown`。这条规则不套用到其他模型、工具或转售商。
+在 Codex 的 `codex-auto-review` 记录上，tokens.ci 导出已有正金额时保留该项估算。没有正金额的导出记录和本地 OpenAI Codex 记录，按每百万 tokens **输入 $0.25、缓存读取 $0.03、输出（含推理）$2.00** 估算。自动审批统一使用这份等价参考价，Fast 和 Ultrafast 标签照常保留，费用不乘速度倍率。导出未提供供应商时仍保留 `unknown`。这条规则不套用到其他模型、工具或转售商。
 
 该公式逐条复现了 117 条有效日汇总（2026-05-27 至 2026-11-01）。这是已观察到的 tokens.ci 估算口径，不是 OpenAI 官方 API 价格，也不保证与 tokens.ci 未来版本相同。[上游计价代码](https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/cli/tokens-core/src/pricing/mod.rs)也区分了估算和可用于提交的权威费率。[OpenAI 说明](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan)：使用 ChatGPT 账户登录时，自动审批安全检查免费。Tokenory 展示的是等价用量估算，不是订阅扣费。
 
@@ -63,7 +63,7 @@ Tokenory 从 [远程目录](https://raw.githubusercontent.com/ryekee/tokenory/up
 
 - 官方 OpenAI 长上下文模型以整条请求的输入（含缓存读取）判断 272,000 tokens 门槛，超过时整条请求使用长上下文费率。
 - Anthropic 按缓存读取、5 分钟写入、已观察到的 1 小时写入分别计算。
-- 已核实的 OpenAI Fast/Ultrafast 与 Anthropic Opus Fast 档位自动计算；未核实的速度档位保持待计价。
+- 已核实的 OpenAI Fast/Ultrafast 与 Anthropic Opus Fast 档位自动计算。自动审批使用上述固定参考估算。其他未核实的速度档位保持待计价。
 - 日汇总和新增客户端的 `sourceRecord` 不作为一条长请求，也不以缓存同步时刻推断峰谷折扣。来源原成本、订阅支出和 API 费率估算互相独立。
 - 当前官方价格不能证明历史账单当时的费率。界面始终称为估算；没有发起付费 API 请求。
 

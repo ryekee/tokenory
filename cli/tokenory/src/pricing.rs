@@ -1,5 +1,5 @@
 // [INPUT]: 读取 UsageRecord、官方费率和 SQLite 账本。
-// [OUTPUT]: 提供价格快照、费用估算和带备份的重估流程；预览限时限量且应用后删除。
+// [OUTPUT]: 提供价格快照、自动审批的等价估算和带备份的重估流程。
 // [POS]: 在采集与查询之间保存可追溯的计价依据；GPT-6.2 Ultrafast 按快照日期选择优惠价。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -166,13 +166,13 @@ impl PriceSnapshot {
             explicit_free: false, allow_fast: false,
             rates: ModelPricing { input_cost_per_token: Some(0.10e-6), cache_read_input_token_cost: Some(0.01e-6), output_cost_per_token: Some(0.50e-6), ..Default::default() },
         });
-        // Reproduces exported Codex review costs; this routing label has no published API tariff.
+        // A fixed standard-equivalent estimate for the approval reviewer, independent of its requested speed.
         p.entries.push(PriceEntry {
             remote_policy: None,
             schedule: None, provider: "openai".into(), model: AUTO_REVIEW.into(), matched_key: AUTO_REVIEW.into(),
             source: TOKENS_CI_REFERENCE.into(),
-            assumption: "USD reference rates reproduced from tokens.ci exports (2026-11-06); not an OpenAI tariff or charge".into(),
-            explicit_free: false, allow_fast: false,
+            assumption: "Fixed standard-equivalent USD reference from tokens.ci exports (2026-11-06), including Fast and Ultrafast; no speed multiplier; not an OpenAI tariff or charge".into(),
+            explicit_free: false, allow_fast: true,
             rates: ModelPricing {
                 input_cost_per_token: Some(0.25e-6),
                 cache_read_input_token_cost: Some(0.03e-6),
@@ -534,7 +534,7 @@ pub fn active_snapshot(c: &rusqlite::Connection) -> Result<Option<(String, Price
         .transpose()
 }
 pub fn initialize(db: &mut Database) -> Result<()> {
-    const VERSION: &str = "2026-11-18-openai-6.2-v1";
+    const VERSION: &str = "2026-11-20-codex-review-reference-v1";
     let installed: Option<String> = db
         .connection
         .query_row(
