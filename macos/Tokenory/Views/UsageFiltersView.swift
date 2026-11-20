@@ -39,13 +39,13 @@ struct UsageFiltersView: View {
         Group {
             WorkspaceDropdown(
                 label: L("field.tool"), selection: dimension(\.client),
-                options: [""] + (store.catalog?.clients.map(\.key) ?? []), width: 104, flexibleWidth: true,
+                options: [""] + rankedKeys(store.catalog?.clients), width: 104, flexibleWidth: true,
                 title: { $0.isEmpty ? L("filter.tools") : clientName($0) },
                 brand: { $0.isEmpty ? nil : ($0, .tool) }
             )
             WorkspaceDropdown(
                 label: L("field.provider"), selection: dimension(\.provider),
-                options: [""] + (store.catalog?.providers.map(\.key) ?? []), width: 104, flexibleWidth: true,
+                options: [""] + rankedKeys(store.catalog?.providers), width: 104, flexibleWidth: true,
                 title: { $0.isEmpty ? L("filter.providers") : $0 },
                 brand: { $0.isEmpty ? nil : ($0, .provider) }
             )
@@ -54,6 +54,13 @@ struct UsageFiltersView: View {
                 width: 140, flexibleWidth: true
             )
         }
+    }
+
+    private func rankedKeys(_ groups: [UsageGroup]?) -> [String] {
+        (groups ?? []).sorted { left, right in
+            if left.summary.tokens != right.summary.tokens { return left.summary.tokens > right.summary.tokens }
+            return left.key < right.key
+        }.map(\.key)
     }
 
     private func dimension(_ keyPath: WritableKeyPath<UsageFilter, String?>) -> Binding<String> {
@@ -74,8 +81,12 @@ struct WorkspaceModelDropdown: View {
     var flexibleWidth = false
 
     var body: some View {
+        let alphabeticalModels = models.sorted { left, right in
+            let order = left.localizedStandardCompare(right)
+            return order == .orderedSame ? left < right : order == .orderedAscending
+        }
         WorkspaceDropdown(
-            label: L("field.model"), selection: $selection, options: models, width: width, popoverWidth: 330,
+            label: L("field.model"), selection: $selection, options: alphabeticalModels, width: width, popoverWidth: 330,
             search: .init(prompt: L("filter.search_models"), noResults: L("filter.no_models"), clearValue: ""),
             flexibleWidth: flexibleWidth,
             title: { $0.isEmpty ? L("filter.models") : $0 },
