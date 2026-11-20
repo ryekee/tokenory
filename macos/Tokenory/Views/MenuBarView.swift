@@ -3,7 +3,6 @@
 // [POS]: Menu bar popover; missing speed remains unavailable.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
-import OSLog
 import SwiftUI
 
 struct MenuBarView: View {
@@ -42,7 +41,7 @@ struct MenuBarView: View {
             .buttonStyle(.plain)
             .accessibilityAddTraits(hud.enabled ? .isSelected : [])
             HStack {
-                Button(L("action.open_stats")) { Logger(subsystem: "ee.ryek.tokenory", category: "windows").info("Opening dashboard"); openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }.keyboardShortcut("o")
+                Button(L("action.open_stats")) { openDashboard(using: openWindow) }.keyboardShortcut("o")
                 Spacer()
                 SettingsLink { Image(systemName: "gearshape") }.help(L("settings.title"))
                 Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }.help(L("action.quit"))
