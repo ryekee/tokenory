@@ -47,7 +47,7 @@ struct DashboardView: View {
                         UsageFiltersView(showsSource: false)
                             .padding(.horizontal, 22).padding(.vertical, 14)
                         usageReport(allowConversationReport: false) { report in
-                            OverviewView(report: report, isActive: section == .overview)
+                            OverviewView(report: report, isActive: section == .overview, openDatePicker: openDatePicker)
                         }
                     }
                     .opacity(section == .overview ? 1 : 0)
@@ -56,7 +56,7 @@ struct DashboardView: View {
                     .accessibilityHidden(section != .overview)
                     if section == .imports { ImportView() }
                     if section == .turns || visited.contains(.turns) {
-                        TurnsView(isActive: section == .turns)
+                        TurnsView(isActive: section == .turns, openDatePicker: openDatePicker)
                             .opacity(section == .turns ? 1 : 0)
                             .allowsHitTesting(section == .turns)
                             .disabled(section != .turns)
@@ -133,9 +133,7 @@ struct DashboardView: View {
                     selectedID: selected?.id,
                     compactColumns: wide && selected != nil,
                     openDetail: { selectedRecordID = $0.id },
-                    openDatePicker: {
-                        datePickerDraft = DateRangeDraft(filter: store.filter, selectedRange: store.dateRange)
-                    }
+                    openDatePicker: openDatePicker
                 )
                 if wide, let selected {
                     RecordDetailContent(detail: selected, closeInspector: { selectedRecordID = nil })
@@ -149,6 +147,10 @@ struct DashboardView: View {
             }
         }
         .padding(.horizontal, 22).padding(.bottom, 22)
+    }
+
+    private func openDatePicker() {
+        datePickerDraft = DateRangeDraft(filter: store.filter, selectedRange: store.dateRange)
     }
 
     @ViewBuilder

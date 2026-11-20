@@ -4227,13 +4227,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No completed Codex turns in this period"
+            "value": "No completed turns in this period"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此范围暂无已完成的 Codex 回合"
+            "value": "此范围暂无已完成回合"
           }
         }
       }

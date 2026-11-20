@@ -94,7 +94,9 @@ struct ImportView: View {
                         if batch["active"].bool == true { Button(L("import.undo")) { undo(batch["id"].string ?? "") }.disabled(busy) }
                     }.padding(.vertical, 4)
                 }
-                if store.sources["batches"].array.isEmpty { Text(L("import.no_batches")).foregroundStyle(.secondary) }
+                if store.sources != .null && store.sources["batches"].array.isEmpty {
+                    Text(L("import.no_batches")).foregroundStyle(.secondary)
+                }
             }.padding(24)
         }.disclosureGroupStyle(WorkspaceDisclosureStyle()).task { await store.loadManagement() }
     }
@@ -157,6 +159,9 @@ struct SourcesView: View {
                     }
                 }
                 Text(L("source.coverage")).font(.headline)
+                if store.sources != .null && store.sources["coverage"].array.isEmpty {
+                    Text(L("source.empty")).foregroundStyle(.secondary)
+                }
                 ForEach(store.sources["coverage"].array, id: \.self) { source in
                     HStack {
                         BrandIcon(name: source["client"].string ?? "", kind: .tool)
