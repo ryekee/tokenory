@@ -1,5 +1,5 @@
 // [INPUT]: 接收用量存储、更新服务及系统登录项状态。
-// [OUTPUT]: 提供通用、HUD、价格、采集和数据设置界面。
+// [OUTPUT]: 提供通用、HUD、价格、采集和数据设置界面；恢复账本前显示确认。
 // [POS]: 设置窗口入口；价格目录交给 PriceCatalogView 展示。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -35,6 +35,7 @@ struct SettingsView: View {
     @State private var busy = false
     @State private var notice: String?
     @State private var preview: RepricePreview?
+    @State private var pendingRestore: URL?
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
@@ -83,6 +84,17 @@ struct SettingsView: View {
                         HStack { Button(L("action.cancel")) { preview = nil }; Spacer(); Button(L("price.apply")) { applyReprice(p) }.buttonStyle(.borderedProminent).disabled(busy) }
                     }.padding(24).frame(width: 500)
                 }
+            }
+            .alert(
+                L("data.restore_confirm_title"),
+                isPresented: Binding(get: { pendingRestore != nil }, set: { if !$0 { pendingRestore = nil } }),
+                presenting: pendingRestore
+            ) { backup in
+                Button(L("action.cancel"), role: .cancel) {}
+                    .keyboardShortcut(.defaultAction)
+                Button(L("data.restore_confirm_action"), role: .destructive) { restore(from: backup) }
+            } message: { backup in
+                Text(LF("data.restore_confirm_message", backup.lastPathComponent))
             }
     }
     private var generalSettings: some View {
@@ -247,7 +259,7 @@ struct SettingsView: View {
                     Text(L("data.backup_note")).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     HStack {
                         Button(L("data.backup")) { backup() }.disabled(busy)
-                        Button(L("data.restore")) { restore() }.disabled(busy)
+                        Button(L("data.restore")) { pendingRestore = FilePanels.open(types: [.data]) }.disabled(busy)
                     }
                 }
             }
@@ -277,8 +289,7 @@ struct SettingsView: View {
         guard let file = FilePanels.save(name: "Tokenory-\(UsageStore.day(Date())).sqlite3") else { return }
         Task { do { _ = try await store.perform("backup", payload: .object(["path": .string(file.path)])); notice = L("data.backed_up") } catch { store.fail(error) } }
     }
-    private func restore() {
-        guard let file = FilePanels.open(types: [.data]) else { return }
+    private func restore(from file: URL) {
         busy = true
         Task { defer { busy = false }; do { try await store.restore(from: file); notice = L("data.restored") } catch { store.fail(error) } }
     }
