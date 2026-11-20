@@ -1,5 +1,5 @@
 // [INPUT]: Real daily client/model aggregates for the annual range.
-// [OUTPUT]: Stacked model history, raw totals and daily/moving-average inspection.
+// [OUTPUT]: Stacked model history, raw totals and single-click daily/moving-average inspection.
 // [POS]: Annual overview chart; known costs remain visible when another model has unpriced usage.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -62,7 +62,7 @@ struct UsageHistoryChart: View {
             Picker(L("history.display"), selection: $average) {
                 Text(L("history.average")).tag(true)
                 Text(L("history.daily")).tag(false)
-            }.labelsHidden().fixedSize().help(L("history.average_help"))
+            }.labelsHidden().pickerStyle(.segmented).fixedSize().help(L("history.average_help"))
         }
     }
     private var filterControls: some View {

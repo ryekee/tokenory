@@ -1,5 +1,5 @@
 // [INPUT]: 接收导入预览、采集状态和来源覆盖记录。
-// [OUTPUT]: 提供导入交互、来源概览和导出入口。
+// [OUTPUT]: 提供导入格式切换、预览、来源概览和导出入口。
 // [POS]: 来源页面使用自适应卡片，导入控件按原生尺寸对齐。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -30,7 +30,10 @@ struct ImportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 HStack(spacing: 12) {
-                    Picker(L("import.format"), selection: $source) { Text("CC Switch").tag("cc-switch"); Text(L("import.tokens_ci")).tag("tokens-ci") }.fixedSize()
+                    Picker(L("import.format"), selection: $source) {
+                        Text("CC Switch").tag("cc-switch")
+                        Text(L("import.tokens_ci")).tag("tokens-ci")
+                    }.pickerStyle(.segmented).fixedSize()
                     Button(L("import.choose")) { choose() }.disabled(busy)
                     if busy { ProgressView().controlSize(.small) }
                 }
