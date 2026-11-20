@@ -1,5 +1,46 @@
 use serde_json::json;
-use tokenory::{db::{put_record, Database}, queries::{activity, report, Filter}, usage::UsageRecord};
+use tokenory::{db::{put_record, Database}, queries::{activity, conversations, report, ConversationId, ConversationQuery, Filter}, usage::UsageRecord};
+
+#[test]
+fn conversation_selection_is_client_scoped_and_precedes_pagination() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = Database::open(root.path()).unwrap();
+    for (key, date, client, session, tokens) in [
+        ("first", "2026-11-01", "codex", Some("session_1"), 10),
+        ("latest", "2026-11-02", "codex", Some("session_1"), 20),
+        ("other", "2026-11-02", "codex", Some("session-2"), 50),
+        ("same_id", "2026-11-02", "claude", Some("session_1"), 100),
+        ("no_id", "2026-11-02", "claude", None, 150),
+    ] {
+        let row: UsageRecord = serde_json::from_value(json!({
+            "key": key, "date": date, "client": client, "provider": "test", "model": "model",
+            "sessionId": session,
+            "tokens": {"input": tokens, "output": 0, "cacheRead": 0, "cacheWrite": 0, "reasoning": 0}
+        })).unwrap();
+        put_record(&db.connection, "local", "", &row).unwrap();
+    }
+    db.connection.execute_batch(
+        "INSERT INTO coverage_choices VALUES
+        ('2026-11-01','codex','local',''),('2026-11-02','codex','local',''),('2026-11-02','claude','local','');"
+    ).unwrap();
+    let filters = Filter { limit: Some(1), offset: 1, conversation: Some(ConversationId {
+        client: "codex".into(), session_id: "session_1".into(),
+    }), ..Default::default() };
+    let scoped = report(&mut db, &filters).unwrap();
+    assert_eq!(scoped.summary.record_count, 2);
+    assert_eq!(scoped.summary.tokens, 30);
+    assert_eq!(scoped.details[0].record.key, "first");
+
+    let lookup = |filter, search: &str| serde_json::to_value(conversations(&db, ConversationQuery {
+        filter, search: search.into(),
+    }).unwrap()).unwrap();
+    let matches = lookup(filters.clone(), "SESSION_");
+    assert_eq!(matches.as_array().unwrap().len(), 2);
+    assert!(matches.as_array().unwrap().iter().all(|row| row["id"]["sessionId"] == "session_1"));
+    assert_eq!(lookup(filters.clone(), "").as_array().unwrap().len(), 3);
+    let date = Filter { to: Some("2026-11-01".into()), ..filters };
+    assert_eq!(lookup(date, "")[0]["lastDate"], "2026-11-01");
+}
 
 #[test]
 fn fast_tokens_are_a_filtered_subset_of_effective_usage() {

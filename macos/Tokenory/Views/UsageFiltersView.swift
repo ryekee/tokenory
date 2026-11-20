@@ -1,3 +1,7 @@
+// [INPUT]: Shared usage filters and the Records conversation selection.
+// [OUTPUT]: Dimension controls and a searchable conversation picker scoped to Records.
+// [POS]: Filter toolbar; the conversation lookup runs only while its popover is open.
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 struct UsageFiltersView: View {
@@ -17,15 +21,22 @@ struct UsageFiltersView: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 10) {
                 primaryFilters
-                if showsSource { sourcePicker }
+                if showsSource { recordFilters }
                 Spacer(minLength: 0)
-            }
+            }.fixedSize(horizontal: true, vertical: false)
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) { primaryFilters; Spacer(minLength: 0) }
-                if showsSource { sourcePicker }
+                if showsSource { recordFilters }
             }
         }
         .controlSize(.regular)
+    }
+
+    private var recordFilters: some View {
+        HStack(spacing: 10) {
+            sourcePicker
+            ConversationPicker()
+        }
     }
 
     private var primaryFilters: some View {
@@ -128,5 +139,134 @@ struct UsageFiltersView: View {
             Text("CC Switch").tag("cc-switch")
             Text("tokens.ci").tag("tokens-ci")
         }.labelsHidden().frame(width: 140)
+    }
+}
+
+private struct ConversationPicker: View {
+    @Environment(UsageStore.self) private var store
+    @State private var showing = false
+    @State private var search = ""
+    @State private var completedLookup: ConversationLookup?
+    @State private var options: [UsageConversation] = []
+    @State private var failed = false
+    @FocusState private var searchFocused: Bool
+
+    private var lookup: ConversationLookup {
+        var filter = store.filter
+        filter.offset = 0
+        return ConversationLookup(filter: filter, search: search.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    var body: some View {
+        let selected = store.recordConversation
+        let title = selected?.sessionId ?? L("record.conversations_all")
+        Button {
+            search = ""
+            completedLookup = nil
+            showing = true
+        } label: {
+            HStack(spacing: 8) {
+                if let selected { BrandIcon(name: selected.client, kind: .tool) }
+                Text(title).lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }.frame(width: 174)
+        }
+        .accessibilityLabel(L("record.conversation"))
+        .accessibilityValue(title)
+        .help(title)
+        .popover(isPresented: $showing, arrowEdge: .bottom) {
+            let request = lookup
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField(L("record.conversation_search"), text: $search)
+                        .textFieldStyle(.plain).focused($searchFocused)
+                        .onSubmit {
+                            if completedLookup == request, let first = options.first { select(first.id) }
+                        }
+                }.padding(14)
+                Divider()
+                option(nil)
+                Divider()
+                if completedLookup != request {
+                    ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(16)
+                        .accessibilityLabel(L("usage.loading"))
+                } else if failed {
+                    HStack {
+                        Text(L("record.conversations_failed")).foregroundStyle(.secondary)
+                        Button(L("action.retry")) { Task { await load(request) } }
+                    }.padding(16)
+                } else if options.isEmpty {
+                    Text(L("record.conversations_empty")).foregroundStyle(.secondary).padding(16)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(options) { option($0) }
+                        }.padding(6)
+                    }.frame(maxHeight: 300)
+                }
+            }
+            .frame(width: 385)
+            .onAppear { searchFocused = true }
+            .task(id: request) { await load(request) }
+        }
+    }
+
+    private func option(_ conversation: UsageConversation?) -> some View {
+        let selected = store.recordConversation == conversation?.id
+        return Button { select(conversation?.id) } label: {
+            HStack(spacing: 8) {
+                if let conversation {
+                    BrandIcon(name: conversation.id.client, kind: .tool)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(conversation.id.sessionId).lineLimit(1).truncationMode(.middle)
+                        Text(([clientName(conversation.id.client), conversation.model, lastActivity(conversation)] as [String?])
+                            .compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                } else {
+                    Text(L("record.conversations_all"))
+                }
+                Spacer(minLength: 4)
+                if selected { Image(systemName: "checkmark").foregroundStyle(Color.accentColor) }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(WorkspaceHoverStyle())
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .help(conversation?.id.sessionId ?? L("record.conversations_all"))
+    }
+
+    private func select(_ id: UsageConversation.ID?) {
+        store.selectConversation(id)
+        showing = false
+    }
+
+    private func lastActivity(_ conversation: UsageConversation) -> String {
+        if let timestamp = conversation.lastTimestampMs {
+            return TurnFormat.timestamp(Date(timeIntervalSince1970: Double(timestamp) / 1000))
+        }
+        return Localization.day(conversation.lastDate)
+    }
+
+    private func load(_ request: ConversationLookup) async {
+        guard !Task.isCancelled, showing, lookup == request else { return }
+        completedLookup = nil
+        do {
+            if !request.search.isEmpty { try await Task.sleep(for: .milliseconds(180)) }
+            let matches = try await store.findConversations(request)
+            guard !Task.isCancelled, showing, lookup == request else { return }
+            options = matches
+            failed = false
+        } catch {
+            guard !Task.isCancelled, showing, lookup == request else { return }
+            options = []
+            failed = true
+        }
+        completedLookup = request
     }
 }

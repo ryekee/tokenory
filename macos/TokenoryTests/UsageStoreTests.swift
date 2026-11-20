@@ -8,6 +8,26 @@ import XCTest
 
 @MainActor
 final class UsageStoreTests: XCTestCase {
+    func testConversationSelectionResetsPaginationAndStaysInRecords() {
+        let store = UsageStore()
+        store.filter.offset = 100
+        let id = UsageConversation.ID(client: "codex", sessionId: "conversation")
+        store.selectConversation(id)
+        XCTAssertEqual(store.filter.offset, 0)
+        XCTAssertNil(store.reportSelection.conversation)
+        store.recordsAreActive = true
+        XCTAssertEqual(store.reportSelection.conversation, id)
+        store.recordsAreActive = false
+        XCTAssertNil(store.reportSelection.conversation)
+        store.recordsAreActive = true
+        XCTAssertEqual(store.reportSelection.conversation, id)
+        let dates = (store.filter.from, store.filter.to)
+        store.clearRecordFilters()
+        XCTAssertNil(store.reportSelection.conversation)
+        XCTAssertEqual(store.filter.from, dates.0)
+        XCTAssertEqual(store.filter.to, dates.1)
+    }
+
     func testDateArrowsKeepRangeLengthAndFiltersAcrossMonths() throws {
         let store = UsageStore()
         let today = try XCTUnwrap(Localization.date("2026-11-05"))
