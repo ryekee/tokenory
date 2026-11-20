@@ -93,6 +93,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 - Keep the date and scan buttons adjacent. Show report progress in the scan icon's existing space.
 - Keep the current content visible until the new date-range report arrives. Drive rolling readouts from one count with carry and borrow. For large changes, briefly fade to the final portion of the same count, then roll to the result. For unit changes, fade between the two formatted values. Move plot marks independently of axis layout. Bars start at zero after an empty range, and lines draw left to right. Empty results mount only the empty state. Respect Reduce Motion and reuse annual data across range changes.
 - If a report request fails, offer Retry for the current selection. Keep any previous results visible and identify their date range. A first-load failure replaces the loading indicator.
+- An empty Speed report shows one state with a date or filter action. In Overview, hide empty totals and rankings and show one state for the selected dates. Show the annual panels when their scope has records. Use inline text for a missing hourly breakdown or an empty management section.
 - Cache annual presentation data per refresh; isolate hover observation to readouts. Lazy-load overview sections and reuse cached history on navigation.
 - Keep details and sources mounted after first visit. Sources requests do not fetch price catalogs; already loaded source data refreshes after scans. Keep overview, details and sources responsive when entering and switching pages.
 

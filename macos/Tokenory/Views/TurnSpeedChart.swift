@@ -41,8 +41,6 @@ struct TurnSpeedChart: View {
             if let timeline = data.speedTimeline, let domain = timeline.domain, !timeline.buckets.isEmpty {
                 plot(timeline, domain: domain)
                     .frame(height: 190)
-            } else {
-                ContentUnavailableView(L("turns.empty"), systemImage: "chart.xyaxis.line").frame(height: 190)
             }
         }
         .onChange(of: presence, initial: true) { _, next in

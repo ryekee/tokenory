@@ -1,11 +1,12 @@
 // [INPUT]: Lazy multi-agent turn report, shared date range and local client/model selection.
-// [OUTPUT]: Turn analytics and details with rolling metrics, calendar-based speed boxes, and bucket drill-down.
+// [OUTPUT]: Turn analytics, one page-level empty state, and a distinct retry state for failed requests.
 // [POS]: Native speed-analysis page; list pagination never limits summaries or chart data.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 struct TurnsView: View {
     let isActive: Bool
+    let openDatePicker: () -> Void
     @Environment(UsageStore.self) private var store
     @State private var selectedID: String?
     @State private var order: TurnSort = .duration
@@ -44,31 +45,55 @@ struct TurnsView: View {
                     if waiting && store.turnAnalytics != nil { ProgressView().controlSize(.small) }
                 }.frame(width: 16, height: 16)
             }.padding(.horizontal, 22).padding(.vertical, 14)
-            if let error = store.turnsError {
-                HStack(alignment: .top) {
-                    Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(L("turns.load_failed"))
-                        DisclosureGroup(L("error.details")) { Text(error).textSelection(.enabled) }
-                    }
-                    Spacer()
-                    Button(L("turns.retry")) { Task { await store.loadAgentTurns(query, force: true) } }
-                }.font(.caption).padding(.horizontal, 22).padding(.bottom, 12)
-            }
-            if let data = store.turnAnalytics, let displayed = store.turnsQuery,
+            if let data = store.turnAnalytics, !data.points.isEmpty, let displayed = store.turnsQuery,
                requestedQuery == nil || displayed == requestedQuery || waiting {
+                if let error = store.turnsError {
+                    HStack(alignment: .top) {
+                        Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L("turns.load_failed"))
+                            DisclosureGroup(L("error.details")) { Text(error).textSelection(.enabled) }
+                        }
+                        Spacer()
+                        retryButton
+                    }.font(.caption).padding(.horizontal, 22).padding(.bottom, 12)
+                }
                 TurnsContent(data: data, range: DashboardDateSpan(from: displayed.from, to: displayed.to),
                              isActive: isActive, selectedID: $selectedID, order: $order, page: $page)
             } else if waiting {
                 ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = store.turnsError {
+                ContentUnavailableView {
+                    Label(L("turns.load_failed"), systemImage: "exclamationmark.circle")
+                } description: {
+                    Text(error).textSelection(.enabled)
+                } actions: {
+                    retryButton
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView(L("turns.empty"), systemImage: "stopwatch")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ContentUnavailableView {
+                    Label(L("turns.empty"), systemImage: "stopwatch")
+                } actions: {
+                    if query.client != nil || query.model != nil {
+                        Button(L("record.clear_filters")) {
+                            store.turnClient = nil
+                            store.turnModel = nil
+                        }
+                    } else {
+                        Button(L("record.change_dates"), action: openDatePicker)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .task(id: requestedQuery) {
             if let requestedQuery, !Task.isCancelled { await store.loadAgentTurns(requestedQuery) }
         }
+    }
+
+    private var retryButton: some View {
+        Button(L("turns.retry")) { Task { await store.loadAgentTurns(query, force: true) } }
     }
 }
 
@@ -154,20 +179,17 @@ private struct TurnsContent: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     WorkspacePanel { summary }
-                    WorkspacePanel {
-                        TurnSpeedChart(data: data, range: range, animateRangeChanges: isActive,
-                                       selected: selected, selectedBucketStart: selectedBucket?.start, onSelect: select)
-                    }
-                    if data.points.isEmpty {
-                        ContentUnavailableView(L("turns.empty"), systemImage: "stopwatch")
-                            .frame(maxWidth: .infinity).padding(.vertical, 20)
-                    } else {
-                        let wide = geometry.size.width - 44 >= 720
-                        let layout = wide ? AnyLayout(HStackLayout(alignment: .top, spacing: 18)) : AnyLayout(VStackLayout(spacing: 18))
-                        layout {
-                            turnList(sorted: sorted, selected: selected).frame(maxWidth: .infinity)
-                            if let selected { WorkspacePanel { TurnDetail(turn: selected) }.frame(maxWidth: .infinity) }
+                    if data.speedTimeline?.buckets.isEmpty == false {
+                        WorkspacePanel {
+                            TurnSpeedChart(data: data, range: range, animateRangeChanges: isActive,
+                                           selected: selected, selectedBucketStart: selectedBucket?.start, onSelect: select)
                         }
+                    }
+                    let wide = geometry.size.width - 44 >= 720
+                    let layout = wide ? AnyLayout(HStackLayout(alignment: .top, spacing: 18)) : AnyLayout(VStackLayout(spacing: 18))
+                    layout {
+                        turnList(sorted: sorted, selected: selected).frame(maxWidth: .infinity)
+                        if let selected { WorkspacePanel { TurnDetail(turn: selected) }.frame(maxWidth: .infinity) }
                     }
                 }.padding(.horizontal, 22).padding(.bottom, 22)
             }

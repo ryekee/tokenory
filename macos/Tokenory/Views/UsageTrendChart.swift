@@ -10,6 +10,7 @@ struct UsageTrendChart: View {
     let report: UsageReport
     let filter: UsageFilter
     let animateRangeChanges: Bool
+    let openDatePicker: () -> Void
     @State private var selectedDate: Date?
     @State private var transition = DashboardPlotTransition()
     @Environment(\.colorScheme) private var scheme
@@ -28,31 +29,40 @@ struct UsageTrendChart: View {
         let presence = DashboardPlotPresence(range: range, hasData: report.summary.recordCount > 0 && hasHourlyData)
         let unallocatedTokens = report.hourly?.unallocated.tokens ?? 0
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(L(hourly ? "usage.hourly" : "usage.trend")).font(.headline)
-                Spacer()
-                HStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 2).fill(Color.accentColor).frame(width: 8, height: 12)
-                    Text("Tokens")
-                }
-                HStack(spacing: 6) {
-                    Capsule().fill(costColor).frame(width: 18, height: 2)
-                    Text(L(report.summary.costStatus == "partial" ? "cost.known" : "cost.estimate"))
-                }.padding(.leading, 10)
-            }.font(.caption)
-            if report.summary.recordCount == 0 {
-                ContentUnavailableView(L("usage.empty"), systemImage: "chart.bar.xaxis").frame(height: 210)
-            } else if !hasHourlyData {
-                ContentUnavailableView(L("usage.no_hourly"), systemImage: "clock").frame(height: 210)
-            } else {
+            if report.summary.recordCount > 0 {
                 HStack {
-                    Text("Tokens").foregroundStyle(Color.accentColor)
+                    Text(L(hourly ? "usage.hourly" : "usage.trend")).font(.headline)
                     Spacer()
-                    Text("USD").foregroundStyle(costColor)
-                }.font(.caption2).monospacedDigit()
-                let trend = UsageTrend(report: report, filter: filter)
-                let selected = trend.points.first { $0.id == selectedDate && !$0.isFuture }
-                plot(trend, selected: selected, presence: presence).frame(height: 210)
+                    if hasHourlyData {
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 2).fill(Color.accentColor).frame(width: 8, height: 12)
+                            Text("Tokens")
+                        }
+                        HStack(spacing: 6) {
+                            Capsule().fill(costColor).frame(width: 18, height: 2)
+                            Text(L(report.summary.costStatus == "partial" ? "cost.known" : "cost.estimate"))
+                        }.padding(.leading, 10)
+                    }
+                }.font(.caption)
+                if hasHourlyData {
+                    HStack {
+                        Text("Tokens").foregroundStyle(Color.accentColor)
+                        Spacer()
+                        Text("USD").foregroundStyle(costColor)
+                    }.font(.caption2).monospacedDigit()
+                    let trend = UsageTrend(report: report, filter: filter)
+                    let selected = trend.points.first { $0.id == selectedDate && !$0.isFuture }
+                    plot(trend, selected: selected, presence: presence).frame(height: 210)
+                } else {
+                    Text(L("usage.no_hourly")).font(.callout).foregroundStyle(.secondary)
+                }
+            } else {
+                ContentUnavailableView {
+                    Label(L("usage.empty"), systemImage: "chart.bar.xaxis")
+                } actions: {
+                    Button(L("record.change_dates"), action: openDatePicker)
+                }
+                .frame(maxWidth: .infinity, minHeight: 210)
             }
             if unallocatedTokens > 0 {
                 Text(LF("usage.hourly_unallocated", compactTokens(unallocatedTokens)))

@@ -7,6 +7,7 @@ import SwiftUI
 struct OverviewView: View {
     let report: UsageReport
     let isActive: Bool
+    let openDatePicker: () -> Void
     @Environment(UsageStore.self) private var store
     @State private var rankingMetric: UsageMetric = .tokens
     @State private var previousRange: (UsageDateRange, String?, String?)?
@@ -30,28 +31,33 @@ struct OverviewView: View {
                             }
                             WorkspacePanel {
                                 VStack(alignment: .leading, spacing: 20) {
-                                    totals
-                                    TokenMixView(tokens: report.summary.tokenBreakdown, range: range)
-                                    Divider()
-                                    UsageTrendChart(report: report, filter: reportFilter, animateRangeChanges: isActive)
+                                    if report.summary.recordCount > 0 {
+                                        totals
+                                        TokenMixView(tokens: report.summary.tokenBreakdown, range: range)
+                                        Divider()
+                                    }
+                                    UsageTrendChart(report: report, filter: reportFilter,
+                                                    animateRangeChanges: isActive, openDatePicker: openDatePicker)
                                 }
                             }
-                            let layout = geometry.size.width >= 720
-                                ? AnyLayout(HStackLayout(alignment: .top, spacing: 18))
-                                : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
-                            WorkspacePanel {
-                                VStack(alignment: .leading, spacing: 16) {
-                                    Picker(L("overview.sort"), selection: $rankingMetric) {
-                                        ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
-                                    }.labelsHidden().pickerStyle(.segmented).fixedSize()
-                                    Divider()
-                                    layout {
-                                        UsageRankingView(groups: report.clients, kind: .tool, metric: rankingMetric, range: range)
-                                        UsageRankingView(groups: report.models, kind: .model, metric: rankingMetric, range: range)
+                            if report.summary.recordCount > 0 {
+                                let layout = geometry.size.width >= 720
+                                    ? AnyLayout(HStackLayout(alignment: .top, spacing: 18))
+                                    : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
+                                WorkspacePanel {
+                                    VStack(alignment: .leading, spacing: 16) {
+                                        Picker(L("overview.sort"), selection: $rankingMetric) {
+                                            ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
+                                        }.labelsHidden().pickerStyle(.segmented).fixedSize()
+                                        Divider()
+                                        layout {
+                                            UsageRankingView(groups: report.clients, kind: .tool, metric: rankingMetric, range: range)
+                                            UsageRankingView(groups: report.models, kind: .model, metric: rankingMetric, range: range)
+                                        }
                                     }
                                 }
                             }
-                            if let activity = store.activity, let calendar = store.activityCalendar {
+                            if let activity = store.activity, !activity.daily.isEmpty, let calendar = store.activityCalendar {
                                 UsageActivityView(report: activity, activity: calendar) { day in
                                     if previousRange == nil { previousRange = (store.dateRange, store.filter.from, store.filter.to) }
                                     store.dateRange = .custom

@@ -35,7 +35,7 @@ struct UsageHistoryChart: View {
                     VStack(alignment: .leading, spacing: 10) { metricControls; filterControls }.frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if data.series.isEmpty {
-                    ContentUnavailableView(L("usage.empty"), systemImage: "chart.xyaxis.line").frame(height: 220)
+                    Text(L("usage.empty")).font(.callout).foregroundStyle(.secondary)
                 } else {
                     HistoryPlot(data: data).frame(height: 240)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)], alignment: .leading, spacing: 10) {
