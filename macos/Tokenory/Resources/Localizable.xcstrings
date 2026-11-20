@@ -1420,24 +1420,6 @@
         }
       }
     },
-    "record.daily_note": {
-      "comment": "Tokenory UI: record.daily_note. Keep product names and technical IDs unchanged.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Daily totals keep their original granularity."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日汇总保留原粒度"
-          }
-        }
-      }
-    },
     "price.snapshot": {
       "comment": "Tokenory UI: price.snapshot. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",

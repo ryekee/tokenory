@@ -40,9 +40,6 @@ struct RecordsView: View {
                                       range: isActive ? DashboardDateSpan(from: displayedFilter.from, to: displayedFilter.to) : nil,
                                       style: .headline)
                 Spacer()
-                if report.summary.recordCount > 0 {
-                    Text(L("record.daily_note")).font(.caption).foregroundStyle(.secondary)
-                }
             }.padding(16)
             Divider()
             GeometryReader { geometry in
