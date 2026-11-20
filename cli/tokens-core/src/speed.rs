@@ -27,7 +27,7 @@ pub struct InferenceSpeed {
 impl InferenceSpeed {
     /// Anthropic's response usage.speed, NOT usage.service_tier (Priority Tier).
     /// https://platform.claude.com/docs/en/build-with-claude/fast-mode
-    pub(crate) fn claude(raw: Option<&str>) -> Option<Self> {
+    pub fn claude(raw: Option<&str>) -> Option<Self> {
         let speed = match raw? {
             "standard" => Speed::Standard,
             "fast" => Speed::Fast,
@@ -41,7 +41,7 @@ impl InferenceSpeed {
 
     /// Codex's explicit thread preference. Missing/auto/flex are not Standard,
     /// and requests can be downgraded, so never label this provider-reported.
-    pub(crate) fn codex(raw: Option<&str>) -> Option<Self> {
+    pub fn codex(raw: Option<&str>) -> Option<Self> {
         let speed = match raw? {
             "default" => Speed::Standard,
             "fast" | "priority" => Speed::Fast,

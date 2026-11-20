@@ -1,5 +1,5 @@
 // [INPUT]: Validated filters and the effective ledger view.
-// [OUTPUT]: Local-day timestamp windows, selected-range reports, complete daily client/model activity and timestamp-qualified hourly patterns.
+// [OUTPUT]: Local-day timestamp windows, reports with known Fast tokens, complete daily client/model activity and timestamp-qualified hourly patterns.
 // [POS]: Read-only aggregation boundary; never aggregate paginated details.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -50,6 +50,8 @@ impl Filter {
 #[serde(rename_all = "camelCase")]
 pub struct Summary {
     pub tokens: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fast_tokens: Option<i64>,
     pub token_breakdown: Tokens,
     pub known_estimated_cost_usd: Option<f64>,
     pub unpriced_tokens: i64,
@@ -129,7 +131,10 @@ pub fn activity(db: &mut Database, f: &Filter) -> Result<ActivityReport> {
     Ok(result)
 }
 const WHERE_SQL:&str=" WHERE (CASE WHEN ?7 IS NOT NULL AND json_extract(body,'$.timestampMs') IS NOT NULL AND coalesce(json_extract(body,'$.metadata.granularity')!='day',1) THEN json_extract(body,'$.timestampMs')>=?7 AND json_extract(body,'$.timestampMs')<?8 ELSE (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) END) AND (?3 IS NULL OR client=?3) AND (?4 IS NULL OR provider=?4) AND (?5 IS NULL OR model=?5) AND (?6 IS NULL OR source=?6)";
-const SUMMARY_SQL:&str="coalesce(sum(tokens),0),coalesce(sum(input),0),coalesce(sum(output),0),coalesce(sum(cache_read),0),coalesce(sum(cache_write),0),coalesce(sum(reasoning),0),sum(estimated_cost),coalesce(sum(CASE WHEN estimated_cost IS NULL THEN tokens ELSE 0 END),0),count(*),count(DISTINCT CASE WHEN tokens>0 THEN date END),sum(requests),count(DISTINCT CASE WHEN json_extract(body, '$.metadata.partialDay')=1 THEN date END)";
+const SUMMARY_SQL:&str="coalesce(sum(tokens),0),coalesce(sum(input),0),coalesce(sum(output),0),coalesce(sum(cache_read),0),coalesce(sum(cache_write),0),coalesce(sum(reasoning),0),sum(estimated_cost),coalesce(sum(CASE WHEN estimated_cost IS NULL THEN tokens ELSE 0 END),0),count(*),count(DISTINCT CASE WHEN tokens>0 THEN date END),sum(requests),count(DISTINCT CASE WHEN json_extract(body, '$.metadata.partialDay')=1 THEN date END),
+    sum(CASE WHEN json_extract(body, '$.metadata.inferenceSpeed.speed')='fast'
+        AND json_extract(body, '$.metadata.inferenceSpeed.source') IN ('selected', 'reported')
+        THEN tokens END)";
 fn read_summary(row: &Row<'_>, start: usize) -> rusqlite::Result<Summary> {
     let known: Option<f64> = row.get(start + 6)?;
     let pending: i64 = row.get(start + 7)?;
@@ -159,6 +164,7 @@ fn read_summary(row: &Row<'_>, start: usize) -> rusqlite::Result<Summary> {
         active_days: row.get(start + 9)?,
         requests: row.get(start + 10)?,
         partial_days: row.get(start + 11)?,
+        fast_tokens: row.get(start + 12)?,
     })
 }
 fn grouped(c: &Connection, f: &Filter, column: &str) -> Result<Vec<Group>> {

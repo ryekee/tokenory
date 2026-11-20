@@ -83,6 +83,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 
 - Follow [the bilingual copy review](docs/design/copy-review.md). Use Input / 输入, Coding patterns / 编码习惯, Most productive day / 最高产的一天, Biggest day / 单日最高 and Usage over time / 用量走势.
 - Keep permanent copy to titles, metric/range labels and controls. Place useful explanations next to the relevant content; put cost basis and average definitions in help and show missing-price details on inspection. Remove information icons that have neither click nor hover behavior.
+- Use the same small lightning mark for documented Fast mode in Overview, Records and Speed. Overview displays tokens attributed to Fast for the selected filters. Records and Speed mark individual entries, with the mode evidence in help.
 
 ## Performance
 

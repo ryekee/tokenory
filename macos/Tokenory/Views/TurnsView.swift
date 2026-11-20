@@ -240,7 +240,13 @@ private struct TurnsContent: View {
                                 Button { selectedID = turn.id } label: {
                                     rowColumns {
                                         VStack(alignment: .leading, spacing: 5) {
-                                            HStack(spacing: 5) { BrandIcon(name: turn.client, kind: .tool).help(clientName(turn.client)); Text(turn.project).fontWeight(.medium).lineLimit(1).truncationMode(.middle).help(turn.project) }
+                                            HStack(spacing: 5) {
+                                                BrandIcon(name: turn.client, kind: .tool).help(clientName(turn.client))
+                                                Text(turn.project).fontWeight(.medium).lineLimit(1).truncationMode(.middle).help(turn.project)
+                                                if let mode = turn.inferenceSpeed, mode.isFast {
+                                                    FastModeMark(helpText: mode.fastHelp)
+                                                }
+                                            }
                                             Text(TurnFormat.timestamp(turn.start)).font(.caption2).foregroundStyle(.secondary)
                                         }
                                         Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.clockDuration(turn.durationMs)).help(TurnFormat.duration(turn.durationMs))
@@ -329,6 +335,9 @@ private struct TurnDetail: View {
                         .fixedSize()
                     BrandLabel(name: turn.model, kind: .model)
                         .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    if let mode = turn.inferenceSpeed, mode.isFast {
+                        FastModeMark(title: L("fast.title"), helpText: mode.fastHelp)
+                    }
                     if let effort = turn.effort {
                         Text(effort).foregroundStyle(.secondary).fixedSize()
                     }

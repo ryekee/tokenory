@@ -52,6 +52,7 @@ struct AgentTurn: Codable, Identifiable, Equatable, Sendable {
     let requests: Int64?
     let toolCalls: Int64?
     let toolWaitMs: Int64?
+    let inferenceSpeed: InferenceSpeed?
 
     var start: Date { Date(timeIntervalSince1970: Double(startMs) / 1000) }
     var speed: Double { Double(generatedTokens) * 1000 / Double(durationMs) }
@@ -62,12 +63,14 @@ struct AgentTurn: Codable, Identifiable, Equatable, Sendable {
 
     init(id: String, sessionId: String, turnId: String, project: String, model: String, effort: String?,
          startMs: Int64, endMs: Int64, durationMs: Int64, ttftMs: Int64?, generatedTokens: Int64,
-         reasoningTokens: Int64?, requests: Int64?, toolCalls: Int64?, toolWaitMs: Int64?, client: String = "codex", durationEstimated: Bool = false) {
+         reasoningTokens: Int64?, requests: Int64?, toolCalls: Int64?, toolWaitMs: Int64?, client: String = "codex",
+         durationEstimated: Bool = false, inferenceSpeed: InferenceSpeed? = nil) {
         self.client = client; self.durationEstimated = durationEstimated
         self.id = id; self.sessionId = sessionId; self.turnId = turnId; self.project = project; self.model = model
         self.effort = effort; self.startMs = startMs; self.endMs = endMs; self.durationMs = durationMs
         self.ttftMs = ttftMs; self.generatedTokens = generatedTokens; self.reasoningTokens = reasoningTokens
         self.requests = requests; self.toolCalls = toolCalls; self.toolWaitMs = toolWaitMs
+        self.inferenceSpeed = inferenceSpeed
     }
 
     init(from decoder: Decoder) throws {
@@ -89,6 +92,7 @@ struct AgentTurn: Codable, Identifiable, Equatable, Sendable {
         requests = try c.decodeIfPresent(Int64.self, forKey: .requests)
         toolCalls = try c.decodeIfPresent(Int64.self, forKey: .toolCalls)
         toolWaitMs = try c.decodeIfPresent(Int64.self, forKey: .toolWaitMs)
+        inferenceSpeed = try c.decodeIfPresent(InferenceSpeed.self, forKey: .inferenceSpeed)
         guard !client.isEmpty, !id.isEmpty, !sessionId.isEmpty, !turnId.isEmpty,
               startMs > 0, endMs >= startMs, durationMs > 0, generatedTokens >= 0,
               requests.map({ $0 >= 0 }) ?? true, toolCalls.map({ $0 >= 0 }) ?? true,

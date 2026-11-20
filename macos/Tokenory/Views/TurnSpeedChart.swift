@@ -264,7 +264,12 @@ struct TurnSpeedChart: View {
                     Text(LF("turns.chart_typical", prefix + TurnFormat.number(stats.median)))
                 }
             case .turn(let turn):
-                Text(clientName(turn.client) + " · " + turn.project).fontWeight(.semibold).lineLimit(1).truncationMode(.middle)
+                HStack(spacing: 6) {
+                    Text(clientName(turn.client) + " · " + turn.project).fontWeight(.semibold).lineLimit(1).truncationMode(.middle)
+                    if let mode = turn.inferenceSpeed, mode.isFast {
+                        FastModeMark(title: L("fast.title"), helpText: mode.fastHelp)
+                    }
+                }
                 Text(TurnFormat.timestamp(turn.start)).foregroundStyle(.secondary)
                 readoutRow("turns.speed", LF("turns.speed_value",
                                              (turn.durationEstimated ? "≈ " : "") + TurnFormat.number(turn.speed)))

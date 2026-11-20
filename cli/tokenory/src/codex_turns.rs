@@ -1,5 +1,5 @@
 // [INPUT]: Local Codex JSONL events, independently of priced usage records.
-// [OUTPUT]: Completed main-turn metadata and date/model-scoped reports.
+// [OUTPUT]: Completed main-turn metadata, selected inference speed and date/model-scoped reports.
 // [POS]: External-event validation, unchanged-file cache and private-text-free storage.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -16,6 +16,7 @@ use std::{
     path::{Path, PathBuf},
     time::SystemTime,
 };
+use tokens_core::speed::InferenceSpeed;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,6 +31,8 @@ pub struct CodexTurn {
     pub project: String,
     pub model: String,
     pub effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inference_speed: Option<InferenceSpeed>,
     pub start_ms: i64,
     pub end_ms: i64,
     pub duration_ms: i64,
@@ -89,6 +92,7 @@ pub struct Report {
 struct Turn {
     models: BTreeSet<String>,
     efforts: BTreeSet<String>,
+    inference_speed: Option<InferenceSpeed>,
     usage: HashMap<String, (i64, Option<i64>)>,
     total: Option<(i64, Option<i64>)>,
     invalid: bool,
@@ -126,6 +130,7 @@ pub(crate) fn parse_client(
     let mut turns = BTreeMap::<String, Turn>::new();
     let mut current = None::<String>;
     let mut call_owners = HashMap::<String, String>::new();
+    let mut speed_selection = None::<(String, InferenceSpeed)>;
     for line in reader.lines() {
         let line = line?;
         let Ok(d) = serde_json::from_str::<Value>(&line) else {
@@ -169,6 +174,19 @@ pub(crate) fn parse_client(
                     })
             });
         }
+        if kind == "event_msg" && typ == "thread_settings_applied" {
+            if session
+                .as_deref()
+                .is_some_and(|id| p["thread_id"].as_str() == Some(id))
+            {
+                let settings = &p["thread_settings"];
+                speed_selection = settings["model"].as_str().and_then(|model| {
+                    InferenceSpeed::codex(settings["service_tier"].as_str())
+                        .map(|speed| (model.to_owned(), speed))
+                });
+            }
+            continue;
+        }
         if kind == "event_msg" && typ == "task_started" {
             current = p["turn_id"]
                 .as_str()
@@ -205,6 +223,13 @@ pub(crate) fn parse_client(
         match kind {
             "turn_context" => {
                 if let Some(model) = p["model"].as_str().filter(|s| !s.is_empty()) {
+                    // A settings change during a turn applies to the next turn.
+                    if t.models.is_empty() {
+                        t.inference_speed = speed_selection
+                            .as_ref()
+                            .filter(|(selected, _)| selected == model)
+                            .map(|(_, speed)| *speed);
+                    }
                     t.models.insert(model.into());
                 }
                 if let Some(e) = p["effort"]
@@ -325,6 +350,7 @@ pub(crate) fn parse_client(
             project: project.clone(),
             model: t.models.into_iter().next().unwrap(),
             effort: (t.efforts.len() == 1).then(|| t.efforts.into_iter().next().unwrap()),
+            inference_speed: t.inference_speed,
             start_ms: start,
             end_ms: end,
             duration_ms: duration,

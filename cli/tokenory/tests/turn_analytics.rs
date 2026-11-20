@@ -22,6 +22,23 @@ fn parsed(v: &[Value]) -> Vec<codex_turns::CodexTurn> {
     ))
     .unwrap()
 }
+
+#[test]
+fn claude_turn_speed_requires_consistent_reports_for_all_replies() {
+    let speed = |events: &[Value]| {
+        serde_json::to_value(&parsed(events)[0]).unwrap()["inferenceSpeed"].clone()
+    };
+    let mut e = claude();
+    e[1]["message"]["usage"]["service_tier"] = json!("priority");
+    assert!(speed(&e).is_null());
+    e[1]["message"]["usage"]["speed"] = json!("fast");
+    assert!(speed(&e).is_null());
+    e[3]["message"]["usage"]["speed"] = json!("fast");
+    assert_eq!(speed(&e), json!({"speed":"fast","source":"reported"}));
+    e[3]["message"]["usage"]["speed"] = json!("standard");
+    assert!(speed(&e).is_null());
+}
+
 #[test]
 fn claude_completed_main_turns_deduplicate_blocks_and_exclude_tools_from_input() {
     let mut e = claude();

@@ -1,13 +1,13 @@
 # cli/tokenory/tests/
 > L2 | Parent: ../../../AGENTS.md
 
-activity.rs: 验证真实有效来源、维度过滤、分页独立和未知费用。
+activity.rs: 验证真实有效来源、维度过滤、分页独立、未知费用和 Fast tokens 范围。
 storage_retention.rs: 验证自动备份轮替、手工备份保留、预览过期及 ID 不重用、压缩后账本与撤销历史不变、连续升级只备份一次。
 backup_restore.rs: 验证 backup_restore 的账本接口和行为。
 cli.rs: 验证 cli 的账本接口和行为。
 clients.rs: 验证 clients 的账本接口和行为。
-turn_analytics.rs: 验证多客户端完成边界、分支排除、分列推理量、筛选目录和 Codex 兼容；续跑撤销、最终恢复、损坏源历史保留及分析失败不阻断账本。
-codex_turns.rs: 验证回合去重、用量对账、未知值、工具阻塞区间、扫描缓存、查询及迁移恢复。
+turn_analytics.rs: 验证多客户端完成边界、分支排除、分列推理量、筛选目录和 Codex 兼容；续跑撤销、最终恢复、损坏源历史保留及分析失败不阻断账本；Claude 推理速度须由全部回复一致报告。
+codex_turns.rs: 验证回合去重、用量对账、未知值、工具阻塞区间、扫描缓存、查询及迁移恢复；所选推理速度归属于回合开头的线程和模型。
 collection.rs: 验证采集和入账，覆盖 Devin CLI 重扫去重及原价格依据。
 coverage.rs: 验证 coverage 的账本接口和行为。
 history_import.rs: 验证 history_import 的账本接口和行为。
