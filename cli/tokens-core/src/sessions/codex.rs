@@ -424,10 +424,9 @@ pub(crate) const OPENCLAW_CLIENT_ID: &str = "openclaw";
 
 /// Codex thread id from a rollout filename, `rollout-<timestamp>-<uuid>.jsonl`.
 ///
-/// Used where a rollout's ownership comes from its location rather than its
-/// `session_meta.originator`, so the parser did not already put the thread id
-/// on its messages. Returns `None` for any other spelling rather than guessing.
-pub(crate) fn thread_id_from_rollout_path(path: &Path) -> Option<String> {
+/// Also accepts the extensionless rollout stem stored in older usage records.
+/// Returns `None` for other spellings.
+pub fn thread_id_from_rollout_path(path: &Path) -> Option<String> {
     let stem = path.file_stem()?.to_str()?;
     let stem = stem.strip_prefix("rollout-")?;
     // `2026-08-30T10-00-00-` is 20 chars; everything after is the thread id.

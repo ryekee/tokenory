@@ -1,5 +1,5 @@
 // [INPUT]: Shared usage filters and the Records conversation selection.
-// [OUTPUT]: Dimension controls and a searchable conversation picker scoped to Records.
+// [OUTPUT]: Dimension controls and a title-aware conversation picker scoped to Records.
 // [POS]: Filter toolbar; the conversation lookup runs only while its popover is open.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -159,15 +159,15 @@ private struct ConversationPicker: View {
 
     var body: some View {
         let selected = store.recordConversation
-        let title = selected?.sessionId ?? L("record.conversations_all")
+        let title = selected.map(conversationName) ?? L("record.conversations_all")
         Button {
             search = ""
             completedLookup = nil
             showing = true
         } label: {
             HStack(spacing: 8) {
-                if let selected { BrandIcon(name: selected.client, kind: .tool) }
-                Text(title).lineLimit(1).truncationMode(.middle)
+                if let selected { BrandIcon(name: selected.id.client, kind: .tool) }
+                Text(title).lineLimit(1)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
@@ -175,7 +175,7 @@ private struct ConversationPicker: View {
         }
         .accessibilityLabel(L("record.conversation"))
         .accessibilityValue(title)
-        .help(title)
+        .help(selected.map(conversationHelp) ?? title)
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             let request = lookup
             VStack(spacing: 0) {
@@ -184,7 +184,7 @@ private struct ConversationPicker: View {
                     TextField(L("record.conversation_search"), text: $search)
                         .textFieldStyle(.plain).focused($searchFocused)
                         .onSubmit {
-                            if completedLookup == request, let first = options.first { select(first.id) }
+                            if completedLookup == request, let first = options.first { select(first) }
                         }
                 }.padding(14)
                 Divider()
@@ -202,7 +202,7 @@ private struct ConversationPicker: View {
                     Text(L("record.conversations_empty")).foregroundStyle(.secondary).padding(16)
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 2) {
+                        VStack(spacing: 2) {
                             ForEach(options) { option($0) }
                         }.padding(6)
                     }.frame(maxHeight: 300)
@@ -215,15 +215,14 @@ private struct ConversationPicker: View {
     }
 
     private func option(_ conversation: UsageConversation?) -> some View {
-        let selected = store.recordConversation == conversation?.id
-        return Button { select(conversation?.id) } label: {
+        let selected = store.recordConversation?.id == conversation?.id
+        return Button { select(conversation) } label: {
             HStack(spacing: 8) {
                 if let conversation {
                     BrandIcon(name: conversation.id.client, kind: .tool)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(conversation.id.sessionId).lineLimit(1).truncationMode(.middle)
-                        Text(([clientName(conversation.id.client), conversation.model, lastActivity(conversation)] as [String?])
-                            .compactMap { $0 }.joined(separator: " · "))
+                        Text(conversationName(conversation)).lineLimit(2).multilineTextAlignment(.leading)
+                        Text(conversationContext(conversation))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                 } else {
@@ -238,12 +237,32 @@ private struct ConversationPicker: View {
         .buttonStyle(WorkspaceHoverStyle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .help(conversation?.id.sessionId ?? L("record.conversations_all"))
+        .help(conversation.map(conversationHelp) ?? L("record.conversations_all"))
     }
 
-    private func select(_ id: UsageConversation.ID?) {
-        store.selectConversation(id)
+    private func select(_ conversation: UsageConversation?) {
+        store.selectConversation(conversation)
         showing = false
+    }
+
+    private func conversationName(_ conversation: UsageConversation) -> String {
+        conversation.title ?? "\(clientName(conversation.id.client)) · \(lastActivity(conversation))"
+    }
+
+    private func conversationContext(_ conversation: UsageConversation) -> String {
+        let context: [String?]
+        if conversation.title != nil {
+            context = [clientName(conversation.id.client), conversation.model, lastActivity(conversation)]
+        } else {
+            let id = conversation.id.sessionId
+            let shortID = id.count > 8 ? "…\(id.suffix(8))" : id
+            context = [conversation.model, shortID]
+        }
+        return context.compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func conversationHelp(_ conversation: UsageConversation) -> String {
+        "\(conversationName(conversation))\n\(conversation.id.sessionId)"
     }
 
     private func lastActivity(_ conversation: UsageConversation) -> String {
