@@ -1,5 +1,5 @@
 // [INPUT]: Shared usage filters and the Records conversation selection.
-// [OUTPUT]: Dimension controls and a title-aware conversation picker scoped to Records.
+// [OUTPUT]: Dimension controls and a title-aware conversation picker with a bounded result list.
 // [POS]: Filter toolbar; the conversation lookup runs only while its popover is open.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -200,18 +200,23 @@ private struct ConversationPicker: View {
                     }.padding(16)
                 } else if options.isEmpty {
                     Text(L("record.conversations_empty")).foregroundStyle(.secondary).padding(16)
+                } else if options.count <= 4 {
+                    conversationRows
                 } else {
-                    ScrollView {
-                        VStack(spacing: 2) {
-                            ForEach(options) { option($0) }
-                        }.padding(6)
-                    }.frame(maxHeight: 300)
+                    ScrollView { conversationRows }
+                        .frame(height: 300)
                 }
             }
             .frame(width: 385)
             .onAppear { searchFocused = true }
             .task(id: request) { await load(request) }
         }
+    }
+
+    private var conversationRows: some View {
+        LazyVStack(spacing: 2) {
+            ForEach(options) { option($0) }
+        }.padding(6)
     }
 
     private func option(_ conversation: UsageConversation?) -> some View {
