@@ -3,20 +3,44 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.10</title>
-            <pubDate>Thu, 19 Nov 2026 18:27:22 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.10</link>
-            <sparkle:version>13</sparkle:version>
-            <sparkle:shortVersionString>0.1.10</sparkle:shortVersionString>
+            <title>0.1.11</title>
+            <pubDate>Sat, 21 Nov 2026 00:40:52 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.11</link>
+            <sparkle:version>14</sparkle:version>
+            <sparkle:shortVersionString>0.1.11</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.10/Tokenory-0.1.10-macOS-arm64.zip" length="10549082" type="application/octet-stream" sparkle:edSignature="v8u4Vv/fzSAumG4S/3bZg+cSVOIdYjYe9KD3G/SnlMOFEF/YhA0tnDpZ6PTqRcATtkvw2vfJ98RIXM0al07eCg==" />
-        <description xml:lang="en" sparkle:format="markdown">## Fixes
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.11/Tokenory-0.1.11-macOS-arm64.zip" length="10748554" type="application/octet-stream" sparkle:edSignature="5mjt/IgE6h49spjLeuNbK99o7hajr7ocXYeCmeHHiJVZ46wt7KV3RD3QB0wW9m72eWtwXcqNilJSB5W47vvHDA==" />
+        <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- The HUD now hides and its roller sounds pause when you watch a video in macOS full screen. The HUD returns when you exit full screen.
-</description><description xml:lang="zh-Hans" sparkle:format="markdown">## 修复
+- Filter Records by conversation. The Tokens and cost columns show totals for all matching records.
+- See saved Codex conversation titles in the Records filter and in the details for a selected turn on Speed.
+- Spot logged Fast mode with a lightning icon in Overview, Records, and Speed.
+- Double-click the floating HUD to open the main window.
+- Speed charts group the last seven days by day and longer ranges by week.
 
-- 在 macOS 全屏播放视频时，HUD 会自动隐藏并暂停滚轮音效。退出全屏后，HUD 会自动恢复。
+## Fixes
+
+- Keep filters on one row in narrow windows and show a short date format in Simplified Chinese Records.
+- Show one message when Speed or Overview has no results, with a way to adjust the range or filters.
+- Open cost and agent-support explanations on click, and use the same dropdown style throughout the app.
+- Fill missing Codex auto-review estimates using its existing fixed reference rate, including records marked Fast or Ultrafast.
+- Confirm the selected backup before restoring it and show save and backup results next to their controls.
+</description><description xml:lang="zh-Hans" sparkle:format="markdown">## 新功能
+
+- 明细支持按对话筛选，Tokens 和费用列上方显示全部匹配记录的合计。
+- 在明细筛选和速度页的回合详情中查看 Codex 保存的会话标题。
+- 总览、明细和速度页用闪电图标标记日志中记录的 Fast 模式。
+- 双击悬浮 HUD 打开主窗口。
+- 速度图在最近 7 天按日分组，范围更长时按周分组。
+
+## 修复
+
+- 窄窗口中筛选器保持单行，简体中文明细使用短日期。
+- 速度和总览没有结果时，只显示一处提示，并提供调整日期或筛选的入口。
+- 费用和 Agent 支持说明可以点击展开，应用内的下拉选择器统一样式。
+- 沿用固定参考价补齐 Codex 自动审批费用估算，涵盖标记为 Fast 或 Ultrafast 的记录。
+- 恢复账本前确认所选备份，保存和备份的结果显示在对应按钮旁。
 </description></item>
     </channel>
 </rss>

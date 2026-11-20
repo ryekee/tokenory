@@ -3,17 +3,29 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.10</title>
-            <pubDate>Thu, 19 Nov 2026 18:27:22 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.10</link>
-            <sparkle:version>13</sparkle:version>
-            <sparkle:shortVersionString>0.1.10</sparkle:shortVersionString>
+            <title>0.1.11</title>
+            <pubDate>Sat, 21 Nov 2026 00:40:52 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.11</link>
+            <sparkle:version>14</sparkle:version>
+            <sparkle:shortVersionString>0.1.11</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.10/Tokenory-0.1.10-macOS-arm64.zip" length="10549082" type="application/octet-stream" sparkle:edSignature="v8u4Vv/fzSAumG4S/3bZg+cSVOIdYjYe9KD3G/SnlMOFEF/YhA0tnDpZ6PTqRcATtkvw2vfJ98RIXM0al07eCg==" />
-        <description xml:lang="en" sparkle:format="markdown">## Fixes
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.11/Tokenory-0.1.11-macOS-arm64.zip" length="10748554" type="application/octet-stream" sparkle:edSignature="5mjt/IgE6h49spjLeuNbK99o7hajr7ocXYeCmeHHiJVZ46wt7KV3RD3QB0wW9m72eWtwXcqNilJSB5W47vvHDA==" />
+        <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- The HUD now hides and its roller sounds pause when you watch a video in macOS full screen. The HUD returns when you exit full screen.
+- Filter Records by conversation. The Tokens and cost columns show totals for all matching records.
+- See saved Codex conversation titles in the Records filter and in the details for a selected turn on Speed.
+- Spot logged Fast mode with a lightning icon in Overview, Records, and Speed.
+- Double-click the floating HUD to open the main window.
+- Speed charts group the last seven days by day and longer ranges by week.
+
+## Fixes
+
+- Keep filters on one row in narrow windows and show a short date format in Simplified Chinese Records.
+- Show one message when Speed or Overview has no results, with a way to adjust the range or filters.
+- Open cost and agent-support explanations on click, and use the same dropdown style throughout the app.
+- Fill missing Codex auto-review estimates using its existing fixed reference rate, including records marked Fast or Ultrafast.
+- Confirm the selected backup before restoring it and show save and backup results next to their controls.
 </description></item>
     </channel>
 </rss>
