@@ -37,7 +37,7 @@ Watermelon references are recorded in `docs/design/watermelon-reference-2026-11-
 - With at least 936 pt of space inside the Records content margins, display the selected record beside the table. Keep the selected row visible and let the detail scroll separately. Use a sheet with less space.
 - In Records, zero matches replace pagination with a clear-filters or date-picker action. Clearing dimensions keeps the current dates.
 - In Records, the Conversation picker searches effective records within the current date and dimension filters. Use the saved Codex title as the row and selection label when available. For untitled conversations, use the tool and latest activity as the label, with the model and a short session ID for reference. Selecting a conversation resets pagination and leaves the Overview scope intact.
-- The main window supports an 800 pt minimum width. Below a 720 pt detail width, distribution panels stack. Filter controls can wrap in Records.
+- The main window supports an 800 pt minimum width. Below a 720 pt detail width, distribution panels stack. In Overview and Records, the filter bar fits one row and contracts dropdowns as the window narrows.
 - Settings uses vertical category buttons, a single content heading and a stable content-sized window. Control edges align to the trailing column. Disclosure headers are full-width buttons. Pricing groups by provider and identical complete pricing rules, with a model/provider search.
 - After a user chooses a backup file, confirm the file name and ledger replacement in a native dialog. Cancel is the default action.
 - Show the progress and outcome of collection save, backup and restore beside those controls. Offer Retry and expandable details on failure.
