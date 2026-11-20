@@ -1,5 +1,5 @@
 // [INPUT]: 当前日期范围的报表和明细操作。
-// [OUTPUT]: 按日期和对话筛选的记录、记录数、分页及空状态操作。
+// [OUTPUT]: 按筛选范围显示记录和合计，提供分页及空状态操作。
 // [POS]: 主工作区明细页；保留记录身份与分页。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -15,6 +15,19 @@ struct RecordsView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var pageIndicator
+
+    private struct TableLayout {
+        let date: CGFloat
+        let tool: CGFloat
+        let tokens: CGFloat
+        let cost: CGFloat
+        let spacing: CGFloat
+        let inset: CGFloat
+        let arrow: CGFloat = 12
+
+        static let standard = Self(date: 108, tool: 104, tokens: 102, cost: 100, spacing: 12, inset: 16)
+        static let compact = Self(date: 92, tool: 72, tokens: 96, cost: 84, spacing: 8, inset: 12)
+    }
     private var displayedFilter: UsageFilter { store.reportFilter ?? store.reportSelection }
     private var hasDimensions: Bool {
         displayedFilter.client != nil || displayedFilter.provider != nil || displayedFilter.model != nil
@@ -34,18 +47,13 @@ struct RecordsView: View {
     var body: some View {
         let dates = Dictionary(uniqueKeysWithValues: Set(report.details.map(\.date)).map { ($0, Localization.day($0)) })
         VStack(spacing: 0) {
-            HStack {
-                DashboardRollingValue(text: LF("usage.record_count", report.summary.recordCount),
-                                      value: Double(report.summary.recordCount),
-                                      range: isActive ? DashboardDateSpan(from: displayedFilter.from, to: displayedFilter.to) : nil,
-                                      style: .headline)
-                Spacer()
-            }.padding(16)
-            Divider()
             GeometryReader { geometry in
+                let layout: TableLayout = compactColumns || geometry.size.width < 670 ? .compact : .standard
                 ScrollView(.horizontal) {
                     VStack(spacing: 0) {
-                        columns {
+                        reportHeader(layout)
+                        Divider()
+                        columns(layout) {
                             Text(L("field.date"))
                             Text(L("field.tool"))
                             Text(L("field.model"))
@@ -65,7 +73,7 @@ struct RecordsView: View {
                                         Color.clear.frame(height: 0).id("top")
                                         ForEach(report.details) { detail in
                                             Button { openDetail(detail) } label: {
-                                                columns {
+                                                columns(layout) {
                                                     Text(dates[detail.date]!)
                                                     BrandLabel(name: detail.client, kind: .tool, title: clientName(detail.client))
                                                     HStack(spacing: 5) {
@@ -94,7 +102,7 @@ struct RecordsView: View {
                                 .onChange(of: displayedFilter) { _, _ in scroll.scrollTo("top", anchor: .top) }
                             }
                         }
-                    }.frame(width: max(compactColumns ? 600 : 650, geometry.size.width), height: geometry.size.height)
+                    }.frame(width: max(550, geometry.size.width), height: geometry.size.height)
                 }
             }
             if report.summary.recordCount > 0 {
@@ -110,6 +118,35 @@ struct RecordsView: View {
         }
         .background(WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: 12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func reportHeader(_ layout: TableLayout) -> some View {
+        let summary = report.summary
+        let tokenTotal = summary.tokens.formatted(.number.locale(Localization.locale))
+        let costTotal = usd(summary.knownEstimatedCostUsd)
+        return HStack(spacing: layout.spacing) {
+            DashboardRollingValue(text: LF("usage.record_count", summary.recordCount),
+                                  value: Double(summary.recordCount),
+                                  range: isActive ? DashboardDateSpan(from: displayedFilter.from, to: displayedFilter.to) : nil,
+                                  style: .headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if summary.recordCount > 0 {
+                Text(tokenTotal)
+                    .accessibilityLabel(L("usage.tokens"))
+                    .accessibilityValue(tokenTotal)
+                    .frame(width: layout.tokens, alignment: .trailing)
+                Text(summary.knownEstimatedCostUsd == nil ? "—" : costTotal)
+                    .accessibilityLabel(L(summary.costStatus == "partial" ? "cost.known" : "cost.estimate"))
+                    .accessibilityValue(costTotal)
+                    .help(summary.unpricedTokens > 0 ? LF("usage.unpriced", compactTokens(summary.unpricedTokens)) : costTotal)
+                    .frame(width: layout.cost, alignment: .trailing)
+                Color.clear.frame(width: layout.arrow, height: 1).accessibilityHidden(true)
+            }
+        }
+        .font(.callout.weight(.medium)).monospacedDigit()
+        .lineLimit(1).minimumScaleFactor(0.8)
+        .padding(.horizontal, layout.inset)
+        .frame(height: 50)
     }
 
     private var emptyRecords: some View {
@@ -131,17 +168,17 @@ struct RecordsView: View {
     }
 
 
-    private func columns<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 12) {
+    private func columns<Content: View>(_ layout: TableLayout, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: layout.spacing) {
             Group(subviews: content()) { columns in
-                columns[0].frame(width: 108, alignment: .leading)
-                columns[1].frame(width: 104, alignment: .leading)
+                columns[0].frame(width: layout.date, alignment: .leading)
+                columns[1].frame(width: layout.tool, alignment: .leading)
                 columns[2].frame(maxWidth: .infinity, alignment: .leading)
-                columns[3].frame(width: 82, alignment: .trailing)
-                columns[4].frame(width: 100, alignment: .trailing)
-                columns[5].frame(width: 12)
+                columns[3].frame(width: layout.tokens, alignment: .trailing)
+                columns[4].frame(width: layout.cost, alignment: .trailing)
+                columns[5].frame(width: layout.arrow)
             }
-        }.lineLimit(1).truncationMode(.middle).padding(.horizontal, 16)
+        }.lineLimit(1).truncationMode(.middle).padding(.horizontal, layout.inset)
     }
     private var rangeLabel: some View {
         Text(LF("record.range", report.details.isEmpty ? 0 : displayedFilter.offset + 1,
