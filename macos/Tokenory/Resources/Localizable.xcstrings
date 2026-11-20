@@ -3735,6 +3735,23 @@
         }
       }
     },
+    "overview.cost_info": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About estimated cost"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "费用估算说明"
+          }
+        }
+      }
+    },
     "overview.cost_help": {
       "extractionState": "manual",
       "localizations": {

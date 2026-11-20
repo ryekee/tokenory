@@ -1,8 +1,26 @@
 // [INPUT]: 接收导航项、选择状态和折叠内容。
-// [OUTPUT]: 提供统一导航、悬停和折叠控件。
+// [OUTPUT]: 提供统一导航、悬停、折叠和点击说明控件。
 // [POS]: 共享控件保持同一前缘，展开间距由组件统一控制。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
+
+struct WorkspaceInfoPopover<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing.toggle() } label: {
+            Image(systemName: "info.circle")
+                .foregroundStyle(showing ? Color.accentColor : Color.secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(WorkspaceHoverStyle())
+        .accessibilityLabel(title)
+        .popover(isPresented: $showing, arrowEdge: .bottom) { content }
+    }
+}
 
 struct WorkspaceTab<ID: Hashable>: Identifiable {
     let id: ID

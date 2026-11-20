@@ -10,7 +10,6 @@ struct TurnsView: View {
     @State private var selectedID: String?
     @State private var order: TurnSort = .duration
     @State private var page = 0
-    @State private var showsCoverage = false
     private var query: TurnQuery {
         TurnQuery(from: store.filter.from, to: store.filter.to, model: store.turnModel, client: store.turnClient)
     }
@@ -36,11 +35,9 @@ struct TurnsView: View {
                     }
                 }.labelsHidden().fixedSize().frame(maxWidth: 280, alignment: .leading)
                 Spacer(minLength: 0)
-                Button { showsCoverage = true } label: { Image(systemName: "info.circle") }
-                    .buttonStyle(.plain).help(L("turns.support"))
-                    .popover(isPresented: $showsCoverage) {
-                        AgentCoveragePopover(capabilities: store.turnAnalytics?.capabilities ?? [])
-                    }
+                WorkspaceInfoPopover(title: L("turns.support")) {
+                    AgentCoveragePopover(capabilities: store.turnAnalytics?.capabilities ?? [])
+                }
                 ZStack {
                     if waiting && store.turnAnalytics != nil { ProgressView().controlSize(.small) }
                 }.frame(width: 16, height: 16)

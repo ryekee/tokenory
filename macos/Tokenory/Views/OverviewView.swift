@@ -99,20 +99,28 @@ struct OverviewView: View {
             metric(L("usage.tokens"), compactTokens(report.summary.tokens), amount: report.summary.tokens, large: true)
                 .help(report.summary.tokens.formatted(.number.locale(Localization.locale)))
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 5) {
+                HStack(spacing: 3) {
                     Text(L(report.summary.costStatus == "partial" ? "cost.known" : "cost.estimate"))
                         .font(.subheadline).foregroundStyle(.secondary)
-                    if report.summary.unpricedTokens > 0 || (report.summary.partialDays ?? 0) > 0 {
-                        Image(systemName: "info.circle").foregroundStyle(.secondary)
-                            .help([report.summary.unpricedTokens > 0 ? LF("usage.unpriced", compactTokens(report.summary.unpricedTokens)) : nil,
-                                   (report.summary.partialDays ?? 0) > 0 ? LF("usage.partial_days", report.summary.partialDays!) : nil]
-                                .compactMap { $0 }.joined(separator: "\n"))
+                    WorkspaceInfoPopover(title: L("overview.cost_info")) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(L("overview.cost_help"))
+                            if report.summary.unpricedTokens > 0 {
+                                Text(LF("usage.unpriced", compactTokens(report.summary.unpricedTokens)))
+                            }
+                            if let partialDays = report.summary.partialDays, partialDays > 0 {
+                                Text(LF("usage.partial_days", partialDays))
+                            }
+                        }
+                        .padding(16)
+                        .frame(width: 280, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 DashboardRollingValue(text: usd(report.summary.knownEstimatedCostUsd), value: report.summary.knownEstimatedCostUsd,
                                       range: range, style: .semibold(32))
                     .lineLimit(1).minimumScaleFactor(0.7)
-            }.frame(maxWidth: .infinity, alignment: .leading).help(L("overview.cost_help"))
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
     private var secondaryTotals: some View {
