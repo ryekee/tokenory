@@ -1,5 +1,5 @@
 // [INPUT]: 当前日期范围的报表和明细操作。
-// [OUTPUT]: 按筛选范围显示记录和合计，提供分页及空状态操作。
+// [OUTPUT]: 按筛选范围显示记录和合计，窄布局使用简体中文短日期。
 // [POS]: 主工作区明细页；保留记录身份与分页。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -45,10 +45,12 @@ struct RecordsView: View {
         return result
     }
     var body: some View {
-        let dates = Dictionary(uniqueKeysWithValues: Set(report.details.map(\.date)).map { ($0, Localization.day($0)) })
+        let days = Set(report.details.map(\.date))
         VStack(spacing: 0) {
             GeometryReader { geometry in
-                let layout: TableLayout = compactColumns || geometry.size.width < 670 ? .compact : .standard
+                let compact = compactColumns || geometry.size.width < 670
+                let layout: TableLayout = compact ? .compact : .standard
+                let dates = Dictionary(uniqueKeysWithValues: days.map { ($0, Localization.day($0, compact: compact)) })
                 ScrollView(.horizontal) {
                     VStack(spacing: 0) {
                         reportHeader(layout)

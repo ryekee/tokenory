@@ -40,9 +40,18 @@ enum Localization {
         return formatter
     }()
     static func date(_ day: String) -> Date? { dayParser.date(from: day) }
-    static func day(_ value: String) -> String {
+    static func day(_ value: String) -> String { day(value, compact: false) }
+
+    static func day(_ value: String, compact: Bool, language: String = Localization.identifier) -> String {
         guard let date = date(value) else { return value }
-        let f = DateFormatter(); f.locale = locale; f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateStyle = .medium
+        let f = DateFormatter()
+        f.locale = Locale(identifier: language)
+        f.timeZone = reportingCalendar.timeZone
+        if compact && language == AppLanguage.simplifiedChinese.rawValue {
+            f.dateFormat = "yyyy/M/d"
+        } else {
+            f.dateStyle = .medium
+        }
         return f.string(from: date)
     }
     static func month(_ date: Date) -> String {
