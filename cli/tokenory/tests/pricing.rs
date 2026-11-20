@@ -1,5 +1,5 @@
 // [INPUT]: 使用真实计价、导入和 SQLite 接口。
-// [OUTPUT]: 验证价格匹配、费用计算、GPT-6.2 档位与优惠截止边界和历史重估。
+// [OUTPUT]: 验证价格匹配、自动审批参考价回填、GPT-6.2 档位与优惠截止边界和历史重估。
 // [POS]: 隔离测试账本，验证计价规则的外部行为。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use tokenory::{
@@ -100,11 +100,16 @@ fn codex_review_reference_matches_export_and_is_scoped_to_codex() {
         reasoning: 1_565,
         cache_write: 0,
     };
-    let local = estimate("local", &r, &p);
-    assert!((local.cost.unwrap() - 0.07652815).abs() < 1e-12);
-    assert!(local.basis.contains("tokens.ci"));
-    r.metadata["inferenceSpeed"] = serde_json::json!({"speed":"fast"});
+    for speed in ["standard", "fast", "ultrafast"] {
+        r.metadata["inferenceSpeed"] = serde_json::json!({"speed": speed, "source": "selected"});
+        let local = estimate("local", &r, &p);
+        assert!((local.cost.unwrap() - 0.07652815).abs() < 1e-12);
+        assert!(local.basis.contains("tokens.ci"));
+        assert!(local.basis.contains("no speed multiplier"));
+    }
+    r.tokens.cache_write = 1;
     assert!(estimate("local", &r, &p).cost.is_none());
+    r.tokens.cache_write = 0;
     r.metadata = serde_json::json!({});
     r.client = "claude".into();
     assert!(estimate("local", &r, &p).cost.is_none());
@@ -119,6 +124,50 @@ fn codex_review_reference_matches_export_and_is_scoped_to_codex() {
     assert!(estimate("tokens-ci", &r, &PriceSnapshot::new(vec![]))
         .cost
         .is_none());
+}
+
+#[test]
+fn catalog_upgrade_fills_pending_review_without_repricing_known_usage() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = Database::open(root.path()).unwrap();
+    let mut previous = PriceSnapshot::bundled_reference();
+    previous.entries.iter_mut().find(|e| e.model == "codex-auto-review").unwrap().allow_fast = false;
+    let old_id = save_snapshot(&mut db, previous).unwrap();
+    db.connection.execute(
+        "INSERT INTO app_state(key,value) VALUES ('officialCatalog','2026-11-18-openai-6.2-v1')",
+        [],
+    ).unwrap();
+
+    let mut pending = record();
+    pending.client = "codex".into();
+    pending.provider = "openai".into();
+    pending.model = "codex-auto-review".into();
+    pending.metadata["inferenceSpeed"] = serde_json::json!({"speed": "fast", "source": "selected"});
+    let old = tokenory::pricing::load_snapshot(&db.connection, &old_id).unwrap();
+    tokenory::pricing::assign("local", &mut pending, &old_id, &old);
+    assert!(pending.estimated_cost_usd.is_none());
+    tokenory::db::put_record(&db.connection, "local", "", &pending).unwrap();
+
+    let mut known = pending.clone();
+    known.key = "known".into();
+    known.estimated_cost_usd = Some(0.25);
+    tokenory::db::put_record(&db.connection, "local", "", &known).unwrap();
+    db.connection.execute("INSERT INTO coverage_choices VALUES ('2026-11-04','codex','local','')", []).unwrap();
+
+    tokenory::pricing::initialize(&mut db).unwrap();
+    let report = report(&mut db, &Filter::default()).unwrap();
+    assert_eq!(report.summary.unpriced_tokens, 0);
+    assert_eq!(report.summary.tokens, 3_000);
+    assert_eq!(report.summary.fast_tokens, Some(3_000));
+    let filled = &report.details[0].record;
+    assert!((filled.estimated_cost_usd.unwrap() - 0.00125).abs() < 1e-12);
+    assert_eq!(filled.metadata, pending.metadata);
+    let unchanged = &report.details[1].record;
+    assert_eq!(unchanged.estimated_cost_usd, known.estimated_cost_usd);
+    assert_eq!(unchanged.price_snapshot_id, Some(old_id));
+    assert!(std::fs::read_dir(root.path().join("backups"))
+        .unwrap()
+        .any(|entry| entry.unwrap().file_name().to_string_lossy().ends_with("-price-coverage.sqlite3")));
 }
 #[test]
 fn direct_openai_event_uses_full_request_context_tier_but_daily_uses_base_rates() {
