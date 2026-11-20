@@ -1,5 +1,5 @@
 // [INPUT]: 当前日期范围的报表和明细操作。
-// [OUTPUT]: 已显示的账本记录，以及随日期范围滚动更新的记录数。
+// [OUTPUT]: 账本记录、范围记录数和无结果时的下一步。
 // [POS]: 主工作区明细页；保留记录身份与分页。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -8,11 +8,15 @@ struct RecordsView: View {
     let report: UsageReport
     let isActive: Bool
     let openDetail: (UsageDetail) -> Void
+    let openDatePicker: () -> Void
     @Environment(UsageStore.self) private var store
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var pageIndicator
     private var displayedFilter: UsageFilter { store.reportFilter ?? store.filter }
+    private var hasDimensions: Bool {
+        displayedFilter.client != nil || displayedFilter.provider != nil || displayedFilter.model != nil || displayedFilter.source != nil
+    }
     private var page: Int { displayedFilter.offset / displayedFilter.limit }
     private var pageCount: Int { max(1, (Int(report.summary.recordCount) + displayedFilter.limit - 1) / displayedFilter.limit) }
     private var pageItems: [Int] {
@@ -33,7 +37,9 @@ struct RecordsView: View {
                                       range: isActive ? DashboardDateSpan(from: displayedFilter.from, to: displayedFilter.to) : nil,
                                       style: .headline)
                 Spacer()
-                Text(L("record.daily_note")).font(.caption).foregroundStyle(.secondary)
+                if report.summary.recordCount > 0 {
+                    Text(L("record.daily_note")).font(.caption).foregroundStyle(.secondary)
+                }
             }.padding(16)
             Divider()
             GeometryReader { geometry in
@@ -51,8 +57,7 @@ struct RecordsView: View {
                         .frame(height: 36).background(WorkspaceStyle.canvas(scheme).opacity(0.65))
                         Divider()
                         if report.details.isEmpty {
-                            ContentUnavailableView(L("usage.empty"), systemImage: "line.3.horizontal.decrease.circle")
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            emptyRecords.frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             ScrollViewReader { scroll in
                                 ScrollView(.vertical) {
@@ -85,18 +90,45 @@ struct RecordsView: View {
                     }.frame(width: max(650, geometry.size.width), height: geometry.size.height)
                 }
             }
-            Divider()
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 16) { rangeLabel; Spacer(minLength: 8); pageSize; pageButtons }
-                VStack(spacing: 10) {
-                    HStack { rangeLabel; Spacer(); pageSize }
-                    HStack { Spacer(); pageButtons }
-                }
-            }.padding(12)
+            if report.summary.recordCount > 0 {
+                Divider()
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 16) { rangeLabel; Spacer(minLength: 8); pageSize; pageButtons }
+                    VStack(spacing: 10) {
+                        HStack { rangeLabel; Spacer(); pageSize }
+                        HStack { Spacer(); pageButtons }
+                    }
+                }.padding(12)
+            }
         }
         .background(WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: 12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 22).padding(.bottom, 22)
+    }
+
+    private var emptyRecords: some View {
+        let hasOtherPages = report.summary.recordCount > 0
+        let title = hasOtherPages ? "record.empty_page" : hasDimensions ? "record.no_matches" : "usage.empty"
+        return ContentUnavailableView {
+            Label(L(title), systemImage: hasDimensions ? "line.3.horizontal.decrease.circle" : "list.bullet.rectangle")
+        } actions: {
+            if displayedFilter == store.filter && !store.loading {
+                if hasOtherPages {
+                    Button(L("record.first_page")) { go(to: 0) }
+                } else if hasDimensions {
+                    Button(L("record.clear_filters"), action: clearDimensions)
+                } else {
+                    Button(L("record.change_dates"), action: openDatePicker)
+                }
+            }
+        }
+    }
+
+    private func clearDimensions() {
+        var filter = store.filter
+        filter.client = nil; filter.provider = nil; filter.model = nil; filter.source = nil
+        filter.offset = 0
+        store.filter = filter
     }
 
     private func columns<Content: View>(@ViewBuilder content: () -> Content) -> some View {
