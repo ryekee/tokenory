@@ -60,9 +60,21 @@ struct ImportView: View {
                                             Text(LF("import.compare", compactTokens(conflict.existingTokens), compactTokens(conflict.incomingTokens))).font(.caption).foregroundStyle(.secondary)
                                         }
                                         Spacer()
-                                        Picker(L("import.source"), selection: Binding(get: { choices[conflict.id] ?? "" }, set: { choices[conflict.id] = $0 })) {
-                                            Text(L("import.select")).tag(""); Text(LF("import.existing", conflict.existingSource)).tag("existing"); Text(L("import.incoming")).tag("imported")
-                                        }.labelsHidden().frame(width: 190)
+                                        WorkspaceDropdown(
+                                            label: L("import.source"),
+                                            selection: Binding(
+                                                get: { choices[conflict.id] ?? "" },
+                                                set: { choices[conflict.id] = $0.isEmpty ? nil : $0 }
+                                            ),
+                                            options: ["", "existing", "imported"], width: 166,
+                                            title: { choice in
+                                                switch choice {
+                                                case "existing": LF("import.existing", conflict.existingSource)
+                                                case "imported": L("import.incoming")
+                                                default: L("import.select")
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             }

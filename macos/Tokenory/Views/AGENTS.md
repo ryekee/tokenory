@@ -20,7 +20,7 @@ UsageActivityView.swift: 固定 YlGnBu 活动日历，隔离悬停状态，只�
 UsageHabitsView.swift: 独立编码习惯面板，展示最高产星期及占比、单日最高、星期和 24 小时分布；宽窗口并排，窄窗口堆叠。
 UsageHistoryChart.swift: 按工具分组的模型堆叠走势和原始总量；单击切换 30 天平均和每日数据。
 UsageViews.swift: 提供用量格式、跨页 Fast 闪电标记和菜单栏三项摘要。
-WorkspaceControls.swift: 提供前缘对齐、展开间距统一的原生窗口控件。
+WorkspaceControls.swift: 提供前缘对齐、展开间距统一的工作区控件。下拉共用触发按钮、搜索框、选项行和带勾选的弹窗。说明按钮点击展开原生浮层。
 WorkspaceStyle.swift: 定义统计窗口颜色、共享输出/推理色和独立工具等待/其余耗时色及布局样式。
 
 TurnsView.swift: 多 agent 回合摘要、工具与模型筛选、能力弹窗、时间分组筛选、分页排序和详情；切换范围时保留上一份报告；窄窗口上下排列。

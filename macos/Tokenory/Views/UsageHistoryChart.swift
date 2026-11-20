@@ -67,10 +67,11 @@ struct UsageHistoryChart: View {
     }
     private var filterControls: some View {
         HStack(spacing: 12) {
-            Picker(L("field.tool"), selection: $client) {
-                Text(L("filter.tools")).tag("")
-                ForEach(clients, id: \.self) { Text(clientName($0)).tag($0) }
-            }.labelsHidden().frame(maxWidth: 150)
+            WorkspaceDropdown(
+                label: L("field.tool"), selection: $client, options: [""] + clients, width: 124,
+                title: { $0.isEmpty ? L("filter.tools") : clientName($0) },
+                brand: { $0.isEmpty ? nil : ($0, .tool) }
+            )
         }
     }
 }

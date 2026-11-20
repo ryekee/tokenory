@@ -152,13 +152,16 @@ struct RecordsView: View {
             .font(.caption).foregroundStyle(.secondary).monospacedDigit().fixedSize()
     }
     private var pageSize: some View {
-        Picker(L("pagination.page_size"), selection: Binding(
-            get: { store.filter.limit },
-            set: { value in
-                var filter = store.filter; filter.limit = value; filter.offset = 0; store.filter = filter
-            })) {
-            ForEach([50, 100, 200], id: \.self) { Text(LF("pagination.per_page", $0)).tag($0) }
-        }.labelsHidden().fixedSize().controlSize(.small).disabled(store.loading)
+        WorkspaceDropdown(
+            label: L("pagination.page_size"),
+            selection: Binding(
+                get: { store.filter.limit },
+                set: { value in
+                    var filter = store.filter; filter.limit = value; filter.offset = 0; store.filter = filter
+                }
+            ),
+            options: [50, 100, 200], width: 100, title: { LF("pagination.per_page", $0) }
+        ).controlSize(.small).disabled(store.loading)
     }
     private var pageButtons: some View {
         HStack(spacing: 3) {

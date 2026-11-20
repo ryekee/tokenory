@@ -18,22 +18,24 @@ struct TurnsView: View {
         let waiting = isActive && (store.turnsLoading || (store.turnsQuery != requestedQuery && store.turnsError == nil))
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Picker(L("field.tool"), selection: Binding(
-                    get: { store.turnClient ?? "" },
-                    set: { store.turnClient = $0.isEmpty ? nil : $0; store.turnModel = nil })) {
-                    Text(L("filter.tools")).tag("")
-                    ForEach(store.turnAnalytics?.capabilities.filter(\.supported).map(\.client) ?? ["codex"], id: \.self) { client in
-                        Text(clientName(client)).tag(client)
-                    }
-                }.labelsHidden().fixedSize().help(L("turns.scope"))
-                Picker(L("field.model"), selection: Binding(
-                    get: { store.turnModel ?? "" },
-                    set: { store.turnModel = $0.isEmpty ? nil : $0 })) {
-                    Text(L("filter.models")).tag("")
-                    ForEach(Array(Set((store.turnAnalytics?.models ?? []) + [store.turnModel].compactMap { $0 })).sorted(), id: \.self) { model in
-                        Text(model).tag(model)
-                    }
-                }.labelsHidden().fixedSize().frame(maxWidth: 280, alignment: .leading)
+                WorkspaceDropdown(
+                    label: L("field.tool"),
+                    selection: Binding(
+                        get: { store.turnClient ?? "" },
+                        set: { store.turnClient = $0.isEmpty ? nil : $0; store.turnModel = nil }
+                    ),
+                    options: [""] + (store.turnAnalytics?.capabilities.filter(\.supported).map(\.client) ?? ["codex"]),
+                    width: 124,
+                    title: { $0.isEmpty ? L("filter.tools") : clientName($0) },
+                    brand: { $0.isEmpty ? nil : ($0, .tool) }
+                ).help(L("turns.scope"))
+                WorkspaceModelDropdown(
+                    selection: Binding(
+                        get: { store.turnModel ?? "" },
+                        set: { store.turnModel = $0.isEmpty ? nil : $0 }
+                    ),
+                    models: Set((store.turnAnalytics?.models ?? []) + [store.turnModel].compactMap { $0 }).sorted()
+                )
                 Spacer(minLength: 0)
                 WorkspaceInfoPopover(title: L("turns.support")) {
                     AgentCoveragePopover(capabilities: store.turnAnalytics?.capabilities ?? [])
@@ -291,9 +293,9 @@ private struct TurnsContent: View {
         }
     }
     private var sortPicker: some View {
-        Picker(L("overview.sort"), selection: $order) {
-            ForEach(TurnSort.allCases, id: \.self) { Text($0.title).tag($0) }
-        }.labelsHidden().fixedSize().controlSize(.small)
+        WorkspaceDropdown(label: L("overview.sort"), selection: $order, options: TurnSort.allCases,
+                          width: 105, title: { $0.title })
+            .controlSize(.small)
     }
     private func rowColumns<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 8) {
