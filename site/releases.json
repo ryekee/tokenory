@@ -1,5 +1,43 @@
 [
   {
+    "tag": "v0.1.11",
+    "date": "2026-11-21",
+    "notes": {
+      "en": {
+        "features": [
+          "Filter Records by conversation. The Tokens and cost columns show totals for all matching records.",
+          "See saved Codex conversation titles in the Records filter and in the details for a selected turn on Speed.",
+          "Spot logged Fast mode with a lightning icon in Overview, Records, and Speed.",
+          "Double-click the floating HUD to open the main window.",
+          "Speed charts group the last seven days by day and longer ranges by week."
+        ],
+        "fixes": [
+          "Keep filters on one row in narrow windows and show a short date format in Simplified Chinese Records.",
+          "Show one message when Speed or Overview has no results, with a way to adjust the range or filters.",
+          "Open cost and agent-support explanations on click, and use the same dropdown style throughout the app.",
+          "Fill missing Codex auto-review estimates using its existing fixed reference rate, including records marked Fast or Ultrafast.",
+          "Confirm the selected backup before restoring it and show save and backup results next to their controls."
+        ]
+      },
+      "zh-Hans": {
+        "features": [
+          "明细支持按对话筛选，Tokens 和费用列上方显示全部匹配记录的合计。",
+          "在明细筛选和速度页的回合详情中查看 Codex 保存的会话标题。",
+          "总览、明细和速度页用闪电图标标记日志中记录的 Fast 模式。",
+          "双击悬浮 HUD 打开主窗口。",
+          "速度图在最近 7 天按日分组，范围更长时按周分组。"
+        ],
+        "fixes": [
+          "窄窗口中筛选器保持单行，简体中文明细使用短日期。",
+          "速度和总览没有结果时，只显示一处提示，并提供调整日期或筛选的入口。",
+          "费用和 Agent 支持说明可以点击展开，应用内的下拉选择器统一样式。",
+          "沿用固定参考价补齐 Codex 自动审批费用估算，涵盖标记为 Fast 或 Ultrafast 的记录。",
+          "恢复账本前确认所选备份，保存和备份的结果显示在对应按钮旁。"
+        ]
+      }
+    }
+  },
+  {
     "tag": "v0.1.10",
     "date": "2026-11-19",
     "notes": {
