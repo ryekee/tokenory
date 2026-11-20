@@ -2,6 +2,7 @@
 // [OUTPUT]: 提供统一导航、下拉选择、悬停、折叠和点击说明控件。
 // [POS]: 共享控件保持同一前缘，展开间距由组件统一控制。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
+import AppKit
 import SwiftUI
 
 struct WorkspaceInfoPopover<Content: View>: View {
@@ -23,6 +24,9 @@ struct WorkspaceInfoPopover<Content: View>: View {
 }
 
 struct WorkspaceDropdownTrigger: View {
+    private static let labelSpacing: CGFloat = 8
+    private static let chevronSize: CGFloat = 9
+
     let label: String
     let value: String
     let width: CGFloat
@@ -31,16 +35,25 @@ struct WorkspaceDropdownTrigger: View {
     var flexibleWidth = false
     let action: () -> Void
 
+    static func fittingWidth(for titles: [String], includesChevron: Bool = true) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        let textWidth = titles.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
+        guard includesChevron else { return ceil(textWidth) }
+        let symbol = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: chevronSize, weight: .semibold))
+        return ceil(textWidth + labelSpacing + (symbol?.size.width ?? chevronSize))
+    }
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: Self.labelSpacing) {
                 if let brand { BrandIcon(name: brand.name, kind: brand.kind) }
                 Text(value)
                     .lineLimit(1).truncationMode(.tail)
                     .minimumScaleFactor(flexibleWidth ? 0.9 : 1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: Self.chevronSize, weight: .semibold))
                     .foregroundStyle(.secondary)
             }.frame(minWidth: flexibleWidth ? 0 : width, idealWidth: width, maxWidth: width)
         }

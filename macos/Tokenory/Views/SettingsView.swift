@@ -1,5 +1,5 @@
 // [INPUT]: 接收用量存储、更新服务及系统登录项状态。
-// [OUTPUT]: 提供通用、HUD、价格、采集和数据设置；确认账本恢复，在操作旁显示采集和备份结果。
+// [OUTPUT]: 提供通用、HUD、价格、采集和数据设置。通用页的选择器按最长本地化选项等宽布局。
 // [POS]: 设置窗口入口；价格目录交给 PriceCatalogView 展示。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -144,14 +144,18 @@ struct SettingsView: View {
             }
     }
     private var generalSettings: some View {
-        WorkspacePanel {
+        let updateTitle = L("update.check")
+        let pickerTitles = AppLanguage.allCases.map(\.title) + UpdateChecker.intervalHours.map { L("update.interval_\($0)") }
+        let checkWidth = WorkspaceDropdownTrigger.fittingWidth(for: [updateTitle], includesChevron: false)
+        let pickerWidth = max(checkWidth, WorkspaceDropdownTrigger.fittingWidth(for: pickerTitles))
+        return WorkspacePanel {
             VStack(spacing: 16) {
                 HStack {
                     Text(L("language.title"))
                     Spacer()
                     WorkspaceDropdown(
                         label: L("language.title"), selection: $language,
-                        options: AppLanguage.allCases.map(\.rawValue), width: 156,
+                        options: AppLanguage.allCases.map(\.rawValue), width: pickerWidth,
                         title: { (AppLanguage(rawValue: $0) ?? .system).title }
                     )
                 }
@@ -172,8 +176,11 @@ struct SettingsView: View {
                 HStack {
                     Text(LF("update.current", updates.currentVersion)).foregroundStyle(.secondary)
                     Spacer()
-                    Button(L("update.check")) { updates.check() }
-                        .disabled(!updates.canCheckForUpdates)
+                    Button { updates.check() } label: {
+                        Text(updateTitle).frame(width: pickerWidth == checkWidth ? checkWidth : nil)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!updates.canCheckForUpdates)
                 }
                 HStack {
                     Text(L("update.automatic"))
@@ -190,7 +197,7 @@ struct SettingsView: View {
                         WorkspaceDropdown(
                             label: L("update.frequency"),
                             selection: Binding(get: { updates.checkIntervalHours }, set: { updates.setIntervalHours($0) }),
-                            options: UpdateChecker.intervalHours, width: 156, title: { L("update.interval_\($0)") }
+                            options: UpdateChecker.intervalHours, width: pickerWidth, title: { L("update.interval_\($0)") }
                         )
                     }
                 }
