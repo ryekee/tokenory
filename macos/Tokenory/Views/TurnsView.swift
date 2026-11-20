@@ -1,5 +1,5 @@
 // [INPUT]: Lazy multi-agent turn report, shared date range and local client/model selection.
-// [OUTPUT]: Turn analytics and details with rolling metrics, hourly speed boxes, and hour-scoped drill-down.
+// [OUTPUT]: Turn analytics and details with rolling metrics, calendar-based speed boxes, and bucket drill-down.
 // [POS]: Native speed-analysis page; list pagination never limits summaries or chart data.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -141,19 +141,23 @@ private struct TurnsContent: View {
     @Binding var selectedID: String?
     @Binding var order: TurnSort
     @Binding var page: Int
-    @State private var selectedHour: Date?
+    @State private var selectedBucketStart: Date?
     private let pageSize = 50
 
+    private var selectedBucket: TurnSpeedBucket? {
+        selectedBucketStart.flatMap { data.speedTimeline?.bucket(at: $0) }
+    }
+
     var body: some View {
-        let sorted = visibleTurns(in: selectedHour)
-        let selected = data.points.first { $0.id == selectedID } ?? sorted.first
+        let sorted = data.sorted(by: order, in: selectedBucket)
+        let selected = sorted.first { $0.id == selectedID } ?? sorted.first
         return GeometryReader { geometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     WorkspacePanel { summary }
                     WorkspacePanel {
                         TurnSpeedChart(data: data, range: range, animateRangeChanges: isActive,
-                                       selected: selected, selectedHour: selectedHour, onSelect: select)
+                                       selected: selected, selectedBucketStart: selectedBucket?.start, onSelect: select)
                     }
                     if data.points.isEmpty {
                         ContentUnavailableView(L("turns.empty"), systemImage: "stopwatch")
@@ -173,15 +177,16 @@ private struct TurnsContent: View {
             showPage(containing: selectedID, in: sorted)
         }
         .onChange(of: range) { _, _ in
-            selectedHour = nil
-            showPage(containing: selectedID, in: visibleTurns(in: nil))
+            selectedBucketStart = nil
+            showPage(containing: selectedID, in: data.sorted(by: order))
         }
         .onChange(of: data.points, initial: true) { _, _ in
+            if selectedBucket == nil { selectedBucketStart = nil }
+            let sorted = data.sorted(by: order, in: selectedBucket)
             if let index = sorted.firstIndex(where: { $0.id == selectedID }) {
                 page = index / pageSize
             } else {
                 selectedID = nil
-                if sorted.isEmpty { selectedHour = nil }
                 page = min(page, max(0, (sorted.count - 1) / pageSize))
             }
         }
@@ -269,12 +274,12 @@ private struct TurnsContent: View {
     }
     @ViewBuilder
     private func listTitle(count: Int) -> some View {
-        if let selectedHour {
+        if let selectedBucket, let granularity = data.speedTimeline?.granularity {
             HStack(spacing: 8) {
-                Text("\(TurnFormat.timestamp(selectedHour)) · \(LF("turns.count", count))").font(.headline)
+                Text("\(TurnFormat.speedBucket(selectedBucket, granularity: granularity)) · \(LF("turns.count", count))").font(.headline)
                 Button(L("turns.show_all")) {
-                    self.selectedHour = nil
-                    showPage(containing: selectedID, in: visibleTurns(in: nil))
+                    selectedBucketStart = nil
+                    showPage(containing: selectedID, in: data.sorted(by: order))
                 }.controlSize(.small)
             }
         } else {
@@ -297,25 +302,18 @@ private struct TurnsContent: View {
             }
         }.lineLimit(1).minimumScaleFactor(0.85)
     }
-    private func visibleTurns(in hourStart: Date?) -> [AgentTurn] {
-        let sorted = data.sorted(by: order)
-        guard let hourStart, let hour = data.speedHours[hourStart] else { return sorted }
-        return sorted.filter { $0.start >= hour.start && $0.start < hour.end }
-    }
-
     private func showPage(containing id: String?, in turns: [AgentTurn]) {
         page = turns.firstIndex(where: { $0.id == id }).map { $0 / pageSize } ?? 0
     }
 
-    private func select(_ turn: AgentTurn, hourStart: Date?) {
-        if let hourStart {
-            selectedHour = hourStart
-        } else if let selectedHour, let hour = data.speedHours[selectedHour],
-                  turn.start < hour.start || turn.start >= hour.end {
-            self.selectedHour = nil
+    private func select(_ turn: AgentTurn, bucketStart: Date?) {
+        if let bucketStart {
+            selectedBucketStart = bucketStart
+        } else if let selectedBucket, !selectedBucket.interval.contains(turn.start) {
+            selectedBucketStart = nil
         }
         selectedID = turn.id
-        showPage(containing: turn.id, in: visibleTurns(in: selectedHour))
+        showPage(containing: turn.id, in: data.sorted(by: order, in: selectedBucket))
     }
 }
 

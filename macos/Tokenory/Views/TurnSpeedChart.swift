@@ -1,5 +1,5 @@
-// [INPUT]: Committed range, hourly turn distributions, and selected turn identity.
-// [OUTPUT]: Hourly speed boxes and sparse/outlier points with hover readouts and list selection.
+// [INPUT]: Committed range, calendar-based turn distributions, and selected turn identity.
+// [OUTPUT]: Speed boxes and sparse/outlier points with hover readouts and bucket selection.
 // [POS]: Keeps pointer state local and uses the reporting calendar's time axis.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -7,12 +7,12 @@ import Charts
 
 struct TurnSpeedChart: View {
     private enum Target: Equatable {
-        case hour(Date)
+        case bucket(start: Date, center: Date)
         case turn(AgentTurn)
 
         var time: Date {
             switch self {
-            case .hour(let start): start.addingTimeInterval(1800)
+            case .bucket(_, let center): center
             case .turn(let turn): turn.start
             }
         }
@@ -22,7 +22,7 @@ struct TurnSpeedChart: View {
     let range: DashboardDateSpan
     let animateRangeChanges: Bool
     let selected: AgentTurn?
-    let selectedHour: Date?
+    let selectedBucketStart: Date?
     let onSelect: (AgentTurn, Date?) -> Void
     @State private var hovered: Target?
     @State private var previousPresence: DashboardPlotPresence?
@@ -30,21 +30,16 @@ struct TurnSpeedChart: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var calendar: Calendar { Localization.reportingCalendar }
-    private var clockFormat: Date.FormatStyle {
-        Date.FormatStyle(locale: Localization.locale, calendar: calendar, timeZone: calendar.timeZone).hour().minute()
-    }
-
     var body: some View {
-        let presence = DashboardPlotPresence(range: range, hasData: !data.points.isEmpty)
+        let presence = DashboardPlotPresence(range: range, hasData: data.speedTimeline?.buckets.isEmpty == false)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(L("turns.trend")).font(.headline)
                 Spacer()
                 Text("tokens/s").font(.caption).foregroundStyle(.secondary)
             }
-            if let first = data.orderedSpeedHours.first, let last = data.orderedSpeedHours.last {
-                plot(domain: first.start...last.end, singleDay: calendar.isDate(first.start, inSameDayAs: last.start))
+            if let timeline = data.speedTimeline, let domain = timeline.domain, !timeline.buckets.isEmpty {
+                plot(timeline, domain: domain)
                     .frame(height: 190)
             } else {
                 ContentUnavailableView(L("turns.empty"), systemImage: "chart.xyaxis.line").frame(height: 190)
@@ -62,21 +57,34 @@ struct TurnSpeedChart: View {
         .onChange(of: data.points) { _, _ in hovered = nil }
     }
 
-    private func plot(domain: ClosedRange<Date>, singleDay: Bool) -> some View {
-        let maxSpeed = data.points.map(\.speed).max() ?? 0
+    private func plot(_ timeline: TurnSpeedTimeline, domain: ClosedRange<Date>) -> some View {
+        let calendar = timeline.calendar
+        let hourly = timeline.granularity == .hour
+        let axisFormat = Date.FormatStyle(locale: Localization.locale, calendar: calendar, timeZone: calendar.timeZone)
+        let spansYears = !calendar.isDate(domain.lowerBound, equalTo: domain.upperBound - 1, toGranularity: .year)
+        let labelFormat: Date.FormatStyle
+        if hourly {
+            labelFormat = axisFormat.hour().minute()
+        } else if spansYears {
+            labelFormat = axisFormat.year(.twoDigits).month(.abbreviated).day()
+        } else {
+            labelFormat = axisFormat.month(.twoDigits).day(.twoDigits)
+        }
+        let axisValues: AxisMarkValues = timeline.granularity == .day
+            ? .stride(by: .day, calendar: calendar) : .automatic(desiredCount: 4)
         return Chart {
             RuleMark(y: .value("tokens/s", 0.0)).foregroundStyle(.clear).accessibilityHidden(true)
         }
         .chartXScale(domain: domain, range: .plotDimension(startPadding: 5, endPadding: 5))
-        .chartYScale(domain: 0...max(10, ceil(maxSpeed / 10) * 10),
+        .chartYScale(domain: 0...max(10, ceil(timeline.maxSpeed / 10) * 10),
                      range: .plotDimension(startPadding: 6, endPadding: 5))
         .chartXAxis {
-            AxisMarks(preset: .aligned, values: .automatic(desiredCount: 4)) { value in
-                if let date = value.as(Date.self) {
+            AxisMarks(preset: .aligned, values: axisValues) { value in
+                if let date = value.as(Date.self), hourly || date < domain.upperBound {
                     let nearEnd = domain.upperBound.timeIntervalSince(date)
                         < domain.upperBound.timeIntervalSince(domain.lowerBound) * 0.06
                     AxisValueLabel(anchor: nearEnd ? .topTrailing : nil, collisionResolution: .greedy) {
-                        Text(singleDay ? date.formatted(clockFormat) : TurnFormat.timestamp(date))
+                        Text(date.formatted(labelFormat))
                             .font(.system(size: 10)).monospacedDigit()
                     }
                 }
@@ -93,7 +101,7 @@ struct TurnSpeedChart: View {
                 }
             }
         }
-        .chartOverlay { proxy in overlay(proxy) }
+        .chartOverlay { proxy in overlay(proxy, timeline: timeline) }
         .focusable()
         .onKeyPress(.leftArrow) { move(-1); return .handled }
         .onKeyPress(.rightArrow) { move(1); return .handled }
@@ -112,12 +120,12 @@ struct TurnSpeedChart: View {
         }
     }
 
-    private func overlay(_ proxy: ChartProxy) -> some View {
+    private func overlay(_ proxy: ChartProxy, timeline: TurnSpeedTimeline) -> some View {
         GeometryReader { geometry in
             if let plot = proxy.plotFrame {
                 let frame = geometry[plot]
                 ZStack(alignment: .topLeading) {
-                    Canvas { context, _ in draw(context, proxy: proxy) }
+                    Canvas { context, _ in draw(context, proxy: proxy, timeline: timeline) }
                         .frame(width: frame.width, height: frame.height)
                         .mask(alignment: .leading) { Rectangle().frame(width: frame.width * reveal) }
                         .offset(x: frame.minX, y: frame.minY)
@@ -126,12 +134,12 @@ struct TurnSpeedChart: View {
                     Rectangle().fill(.clear).contentShape(Rectangle())
                         .onContinuousHover { phase in
                             switch phase {
-                            case .active(let location): hovered = target(at: location, frame: frame, proxy: proxy)
+                            case .active(let location): hovered = target(at: location, frame: frame, proxy: proxy, timeline: timeline)
                             case .ended: hovered = nil
                             }
                         }
                         .onTapGesture { location in
-                            let target = target(at: location, frame: frame, proxy: proxy)
+                            let target = target(at: location, frame: frame, proxy: proxy, timeline: timeline)
                             hovered = target
                             if let target { select(target) }
                         }
@@ -153,11 +161,11 @@ struct TurnSpeedChart: View {
         }
     }
 
-    private func draw(_ context: GraphicsContext, proxy: ChartProxy) {
+    private func draw(_ context: GraphicsContext, proxy: ChartProxy, timeline: TurnSpeedTimeline) {
         let accent = Color.accentColor
         let surface = WorkspaceStyle.surface(scheme)
-        let highlightHour: Date?
-        if case .hour(let start) = hovered { highlightHour = start } else { highlightHour = selectedHour }
+        let highlightedBucket: Date?
+        if case .bucket(let start, _) = hovered { highlightedBucket = start } else { highlightedBucket = selectedBucketStart }
         func line(_ x1: CGFloat, _ y1: CGFloat, _ x2: CGFloat, _ y2: CGFloat, color: Color, width: CGFloat) {
             var path = Path()
             path.move(to: CGPoint(x: x1, y: y1))
@@ -170,10 +178,10 @@ struct TurnSpeedChart: View {
             context.fill(path, with: .color(hollow ? surface : accent))
             if hollow { context.stroke(path, with: .color(accent), lineWidth: 1.25) }
         }
-        for hour in data.orderedSpeedHours {
-            if let stats = hour.distribution,
-               let start = proxy.position(forX: hour.start), let end = proxy.position(forX: hour.end),
-               let center = proxy.position(forX: hour.center),
+        for bucket in timeline.buckets {
+            if let stats = bucket.distribution,
+               let start = proxy.position(forX: bucket.start), let end = proxy.position(forX: bucket.end),
+               let center = proxy.position(forX: bucket.center),
                let lower = proxy.position(forY: stats.middle.lowerBound), let upper = proxy.position(forY: stats.middle.upperBound),
                let median = proxy.position(forY: stats.median),
                let low = proxy.position(forY: stats.whiskers.lowerBound), let high = proxy.position(forY: stats.whiskers.upperBound) {
@@ -184,10 +192,10 @@ struct TurnSpeedChart: View {
                 line(center, low, center, lower, color: accent.opacity(0.55), width: 0.8)
                 line(center, upper, center, high, color: accent.opacity(0.55), width: 0.8)
                 let box = Path(roundedRect: rect, cornerRadius: min(4, width / 2))
-                context.fill(box, with: .color(accent.opacity(hour.start == highlightHour ? 0.68 : 0.38)))
+                context.fill(box, with: .color(accent.opacity(bucket.start == highlightedBucket ? 0.68 : 0.38)))
                 line(rect.minX + inset, median, rect.maxX - inset, median, color: .primary.opacity(0.85), width: 1.5)
             }
-            for turn in hour.visiblePoints { dot(turn, radius: 2.5, hollow: hour.distribution != nil) }
+            for turn in bucket.visiblePoints { dot(turn, radius: 2.5, hollow: bucket.distribution != nil) }
         }
         if let selected { dot(selected, radius: 5, hollow: true); dot(selected, radius: 2, hollow: false) }
         if case .turn(let turn) = hovered, turn.id != selected?.id {
@@ -196,15 +204,16 @@ struct TurnSpeedChart: View {
         }
     }
 
-    private func target(at location: CGPoint, frame: CGRect, proxy: ChartProxy) -> Target? {
+    private func target(at location: CGPoint, frame: CGRect, proxy: ChartProxy, timeline: TurnSpeedTimeline) -> Target? {
         guard frame.contains(location) else { return nil }
         let point = CGPoint(x: location.x - frame.minX, y: location.y - frame.minY)
         guard let date: Date = proxy.value(atX: point.x) else { return nil }
-        let start = TurnSpeedHour.start(containing: date, calendar: calendar)
-        let nearby = [-3600.0, 0, 3600].flatMap { data.speedHours[start.addingTimeInterval($0)]?.visiblePoints ?? [] }
+        let radius: CGFloat = 8
+        let first: Date = proxy.value(atX: max(0, point.x - radius)) ?? date
+        let last: Date = proxy.value(atX: min(frame.width, point.x + radius)) ?? date
         var closest: AgentTurn?
-        var distance = 8.0
-        for turn in nearby {
+        var distance = radius
+        for turn in timeline.points(in: first..<last) {
             guard let x = proxy.position(forX: turn.start), let y = proxy.position(forY: turn.speed) else { continue }
             let next = hypot(x - point.x, y - point.y)
             if next < distance {
@@ -213,13 +222,15 @@ struct TurnSpeedChart: View {
             }
         }
         if let closest { return .turn(closest) }
-        return data.speedHours[start]?.distribution == nil ? nil : .hour(start)
+        guard let bucket = timeline.bucket(at: date), bucket.distribution != nil else { return nil }
+        return .bucket(start: bucket.start, center: bucket.center)
     }
 
     private var targets: [Target] {
-        data.orderedSpeedHours.flatMap { hour in
-            let points = hour.visiblePoints.map(Target.turn)
-            return (hour.distribution == nil ? points : [.hour(hour.start)] + points).sorted { $0.time < $1.time }
+        (data.speedTimeline?.buckets ?? []).flatMap { bucket in
+            let points = bucket.visiblePoints.map(Target.turn)
+            let targets = bucket.distribution == nil ? points : [.bucket(start: bucket.start, center: bucket.center)] + points
+            return targets.sorted { $0.time < $1.time }
         }
     }
 
@@ -232,8 +243,8 @@ struct TurnSpeedChart: View {
 
     private func select(_ target: Target) {
         switch target {
-        case .hour(let start):
-            if let representative = data.speedHours[start]?.distribution?.representative {
+        case .bucket(let start, _):
+            if let representative = data.speedTimeline?.bucket(at: start)?.distribution?.representative {
                 onSelect(representative, start)
             }
         case .turn(let turn): onSelect(turn, nil)
@@ -243,11 +254,11 @@ struct TurnSpeedChart: View {
     private func readout(_ target: Target) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             switch target {
-            case .hour(let start):
-                if let hour = data.speedHours[start], let stats = hour.distribution {
-                    let prefix = hour.containsEstimates ? "≈ " : ""
-                    Text("\(TurnFormat.timestamp(start))–\(hour.end.formatted(clockFormat))").fontWeight(.semibold)
-                    Text(LF("turns.count", hour.turns.count)).foregroundStyle(.secondary)
+            case .bucket(let start, _):
+                if let timeline = data.speedTimeline, let bucket = timeline.bucket(at: start), let stats = bucket.distribution {
+                    let prefix = bucket.containsEstimates ? "≈ " : ""
+                    Text(TurnFormat.speedBucket(bucket, granularity: timeline.granularity)).fontWeight(.semibold)
+                    Text(LF("turns.count", bucket.turns.count)).foregroundStyle(.secondary)
                     Text(LF("turns.chart_middle", prefix + TurnFormat.number(stats.middle.lowerBound),
                             TurnFormat.number(stats.middle.upperBound)))
                     Text(LF("turns.chart_typical", prefix + TurnFormat.number(stats.median)))

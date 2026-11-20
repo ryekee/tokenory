@@ -309,7 +309,7 @@ final class UsageStore {
         do {
             let response = try await engine.request("turnAnalytics", payload: .encode(query), as: TurnReport.self)
             guard generation == turnsGeneration else { return }
-            turnAnalytics = TurnPresentation(report: response)
+            turnAnalytics = TurnPresentation(report: response, query: query)
             turnsQuery = query
         } catch {
             if generation == turnsGeneration { turnsError = error.localizedDescription }

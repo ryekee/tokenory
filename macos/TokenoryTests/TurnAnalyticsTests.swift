@@ -1,5 +1,5 @@
 // [INPUT]: Typed turn fixtures and IPC-shaped JSON.
-// [OUTPUT]: Verifies summary definitions, missing values and chronological selection.
+// [OUTPUT]: Verifies summary definitions, missing values and calendar-based speed distributions.
 // [POS]: Native turn analytics contract; no synthetic observations in gaps.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import XCTest
@@ -53,10 +53,14 @@ final class TurnAnalyticsTests: XCTestCase {
             turn("first", start: midnight, duration: 1000, tokens: 0, reasoning: nil, ttft: nil),
             turn("last", start: midnight + 3_599_999, duration: 1000, tokens: 10, reasoning: nil, ttft: nil)
         ]
-        let data = TurnPresentation(report: TurnReport(revision: 1, models: [], turns: rows))
-        XCTAssertEqual(data.orderedSpeedHours.map(\.start), [start, start.addingTimeInterval(7200)])
-        XCTAssertNil(data.speedHours[start.addingTimeInterval(3600)])
-        let first = try XCTUnwrap(data.speedHours[start])
+        let data = TurnPresentation(report: TurnReport(revision: 1, models: [], turns: rows),
+                                    query: TurnQuery(from: "2026-11-18", to: "2026-11-18"))
+        let timeline = try XCTUnwrap(data.speedTimeline)
+        XCTAssertEqual(timeline.granularity, .hour)
+        XCTAssertEqual(timeline.domain, start...start.addingTimeInterval(86_400))
+        XCTAssertEqual(timeline.buckets.map(\.start), [start, start.addingTimeInterval(7200)])
+        XCTAssertNil(timeline.bucket(at: start.addingTimeInterval(3600)))
+        let first = try XCTUnwrap(timeline.bucket(at: start))
         XCTAssertNil(first.distribution)
         XCTAssertEqual(first.visiblePoints.map(\.id), ["first", "last"])
         XCTAssertEqual(first.visiblePoints.map(\.speed), [0, 10])
@@ -67,14 +71,66 @@ final class TurnAnalyticsTests: XCTestCase {
             turn(String(index), start: Int64(1000 + index), duration: 1000, tokens: Int64(speed),
                  reasoning: nil, ttft: nil)
         }
-        let data = TurnPresentation(report: TurnReport(revision: 1, models: [], turns: rows.reversed()))
-        let hour = try XCTUnwrap(data.orderedSpeedHours.first)
+        let data = TurnPresentation(report: TurnReport(revision: 1, models: [], turns: rows.reversed()),
+                                    query: TurnQuery(from: "1970-01-01", to: "1970-01-01"))
+        let hour = try XCTUnwrap(data.speedTimeline?.buckets.first)
         let stats = try XCTUnwrap(hour.distribution)
         XCTAssertEqual(stats.middle, 21.5...26.5)
         XCTAssertEqual(stats.median, 24.5)
         XCTAssertEqual(stats.whiskers, 20...28)
         XCTAssertEqual(hour.visiblePoints.map(\.speed), [0, 100])
         XCTAssertEqual(stats.representative.id, "3")
+    }
+
+    func testSevenSelectedDaysUseDailyBucketsEvenWhenOnlyTwoDaysHaveData() throws {
+        let saturday = try XCTUnwrap(Localization.date("2026-11-14"))
+        let monday = try XCTUnwrap(Localization.date("2026-11-16"))
+        let tuesday = try XCTUnwrap(Localization.date("2026-11-17"))
+        let end = try XCTUnwrap(Localization.date("2026-11-21"))
+        let midnight = Int64(monday.timeIntervalSince1970 * 1000)
+        let rows = [turn("first", start: midnight, duration: 1000, tokens: 20),
+                    turn("median", start: midnight + 10_800_000, duration: 1000, tokens: 30),
+                    turn("last", start: midnight + 86_399_999, duration: 1000, tokens: 40),
+                    turn("next-day", start: midnight + 86_400_000, duration: 1000, tokens: 60)]
+        let data = TurnPresentation(report: TurnReport(revision: 1, models: [], turns: rows),
+                                    query: TurnQuery(from: "2026-11-14", to: "2026-11-20"))
+        let timeline = try XCTUnwrap(data.speedTimeline)
+        XCTAssertEqual(timeline.granularity, .day)
+        XCTAssertEqual(timeline.domain, saturday...end)
+        XCTAssertEqual(timeline.buckets.map(\.start), [monday, tuesday])
+        XCTAssertNil(timeline.bucket(at: saturday))
+        let bucket = try XCTUnwrap(timeline.bucket(at: monday))
+        XCTAssertEqual(bucket.end, tuesday)
+        XCTAssertEqual(bucket.turns.map(\.id), ["first", "median", "last"])
+        XCTAssertEqual(data.sorted(by: .newest, in: bucket).map(\.id), ["last", "median", "first"])
+        XCTAssertEqual(bucket.distribution?.representative.id, "median")
+        XCTAssertEqual(timeline.bucket(at: tuesday)?.visiblePoints.map(\.id), ["next-day"])
+        XCTAssertEqual(timeline.points(in: monday..<end).map(\.id), ["next-day"])
+    }
+
+    func testLongAndUnboundedRangesUseBeijingMondayWeeks() throws {
+        let firstMonday = try XCTUnwrap(Localization.date("2026-11-09"))
+        let sunday = try XCTUnwrap(Localization.date("2026-11-15"))
+        let monday = try XCTUnwrap(Localization.date("2026-11-16"))
+        let lastMonday = try XCTUnwrap(Localization.date("2026-12-07"))
+        let lastDay = try XCTUnwrap(Localization.date("2026-12-12"))
+        let lastEnd = try XCTUnwrap(Localization.date("2026-12-13"))
+        let rows = [turn("sunday", start: Int64(monday.timeIntervalSince1970 * 1000) - 1, duration: 1000, tokens: 20),
+                    turn("monday", start: Int64(monday.timeIntervalSince1970 * 1000), duration: 1000, tokens: 30),
+                    turn("last", start: Int64(lastDay.timeIntervalSince1970 * 1000), duration: 1000, tokens: 40)]
+        let report = TurnReport(revision: 1, models: [], turns: rows)
+        let month = try XCTUnwrap(TurnPresentation(report: report, query: TurnQuery(from: "2026-11-15", to: "2026-12-14")).speedTimeline)
+        let custom = try XCTUnwrap(TurnPresentation(report: report, query: TurnQuery(from: "2026-11-15", to: "2026-12-12")).speedTimeline)
+        let all = try XCTUnwrap(TurnPresentation(report: report, query: TurnQuery(from: nil, to: nil)).speedTimeline)
+        let eightDays = try XCTUnwrap(TurnPresentation(report: report, query: TurnQuery(from: "2026-11-15", to: "2026-11-22")).speedTimeline)
+        XCTAssertEqual([month.granularity, custom.granularity, all.granularity, eightDays.granularity], [.week, .week, .week, .week])
+        XCTAssertEqual(custom.domain, sunday...lastEnd)
+        XCTAssertEqual(custom.buckets.map(\.start), [sunday, monday, lastMonday])
+        XCTAssertEqual(custom.bucket(at: sunday)?.end, monday)
+        XCTAssertEqual(custom.bucket(at: monday)?.turns.map(\.id), ["monday"])
+        XCTAssertEqual(custom.bucket(at: lastDay)?.end, lastEnd)
+        XCTAssertNil(custom.bucket(at: lastEnd))
+        XCTAssertEqual(all.buckets.map(\.start), [firstMonday, monday, lastMonday])
     }
     func testMixedAgentsPreserveEstimateAndUnknownMetrics() throws {
         let estimated = AgentTurn(id: "claude-1", sessionId: "s", turnId: "t", project: "p", model: "m",

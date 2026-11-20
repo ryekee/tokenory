@@ -55,8 +55,8 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 
 ## Turn speed
 
-- Use reporting hours on the time axis. Show a quartile box with a median tick for hours with at least three turns. Plot sparse turns and outliers individually and leave empty hours blank.
-- Explain the box through its hover readout, using real values and a turn count. Keep the plot free of a persistent legend. Selecting a box filters the turn list to that hour and selects the observed turn closest to the median.
+- Group by Beijing reporting time. Use hours for one day, days for 2–7 days, and Monday-start weeks for longer ranges and All Time. Clip edge weeks to the selected dates.
+- Show a quartile box and median tick for each group with at least three turns. Plot sparse turns and outliers individually and leave empty periods blank. Hover shows the period, measured values and turn count. Selecting a box filters the list to that period and selects the observed turn closest to the median.
 
 ## Annual calendar
 
@@ -107,7 +107,7 @@ The Watermelon documents linked above are historical reference records; this doc
 ## Agent turns
 
 - Use one summary panel for duration-weighted generation speed, mean recorded first-token wait and mean reasoning tokens per turn. Missing values remain unavailable; definitions and measurement coverage live in help.
-- Place a monotone speed curve below the summary. Use real timestamps and join observed points across gaps without inserting zero values. Pointer and keyboard inspection select a turn.
+- Place the speed distribution below the summary on a continuous time axis. Pointer and keyboard inspection select a time group or a turn.
 - Keep the chronological chart independent of list sorting (duration, newest, oldest, speed, reasoning). Use native date/model controls, 50-row list pages and a detail panel; stack list/detail below 720 pt content width.
 - Speed includes the entire turn duration. Never label time remaining after tool waits as model generation time or expose an adjusted generation speed.
 
