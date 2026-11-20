@@ -248,6 +248,7 @@ def build():
     dist = SITE / "dist"
     assets = dist / "assets"
     assets.mkdir(parents=True, exist_ok=True)
+    (dist / ".assetsignore").write_text(".DS_Store\n", encoding="utf-8")
     asset_urls = {}
     for name in ("style.css", "demo.js"):
         contents = (SITE / name).read_bytes()
