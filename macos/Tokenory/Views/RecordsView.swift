@@ -7,6 +7,8 @@ import SwiftUI
 struct RecordsView: View {
     let report: UsageReport
     let isActive: Bool
+    let selectedID: UsageDetail.ID?
+    let compactColumns: Bool
     let openDetail: (UsageDetail) -> Void
     let openDatePicker: () -> Void
     @Environment(UsageStore.self) private var store
@@ -76,10 +78,12 @@ struct RecordsView: View {
                                                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
                                                 }
                                                 .font(.callout).frame(height: 38).contentShape(Rectangle())
+                                                .background(selectedID == detail.id ? Color.accentColor.opacity(0.12) : .clear)
                                             }
                                             .buttonStyle(WorkspaceHoverStyle())
                                             .accessibilityElement(children: .combine)
                                             .accessibilityHint(L("action.record_details"))
+                                            .accessibilityAddTraits(selectedID == detail.id ? .isSelected : [])
                                             Divider().opacity(0.55).padding(.horizontal, 16)
                                         }
                                     }
@@ -87,7 +91,7 @@ struct RecordsView: View {
                                 .onChange(of: displayedFilter) { _, _ in scroll.scrollTo("top", anchor: .top) }
                             }
                         }
-                    }.frame(width: max(650, geometry.size.width), height: geometry.size.height)
+                    }.frame(width: max(compactColumns ? 600 : 650, geometry.size.width), height: geometry.size.height)
                 }
             }
             if report.summary.recordCount > 0 {
@@ -103,7 +107,6 @@ struct RecordsView: View {
         }
         .background(WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: 12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 22).padding(.bottom, 22)
     }
 
     private var emptyRecords: some View {

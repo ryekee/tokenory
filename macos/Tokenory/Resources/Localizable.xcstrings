@@ -5954,6 +5954,40 @@
           }
         }
       }
+    },
+    "record.close_details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close Record Details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭记录详情"
+          }
+        }
+      }
+    },
+    "record.snapshot_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t load the price snapshot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取价格快照"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
