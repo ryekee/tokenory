@@ -116,6 +116,20 @@ fn codex_titles(home: &Path) -> HashMap<String, String> {
         .collect()
 }
 
+fn codex_title<'a>(titles: &'a HashMap<String, String>, session_id: &str) -> Option<&'a String> {
+    titles.get(session_id).or_else(|| {
+        let thread = thread_id_from_rollout_path(Path::new(session_id))?;
+        titles.get(&thread)
+    })
+}
+
+pub(crate) fn conversation_title(home: &Path, id: &ConversationId) -> Option<String> {
+    if id.client != "codex" {
+        return None;
+    }
+    codex_title(&codex_titles(home), &id.session_id).cloned()
+}
+
 pub fn conversations(
     db: &Database,
     home: &Path,
@@ -153,10 +167,7 @@ pub fn conversations(
             session_id: row.get(1)?,
         };
         let title = if id.client == "codex" {
-            titles.get(&id.session_id).or_else(|| {
-                let thread = thread_id_from_rollout_path(Path::new(&id.session_id))?;
-                titles.get(&thread)
-            })
+            codex_title(&titles, &id.session_id)
         } else {
             None
         };

@@ -9,6 +9,14 @@ use std::{
 fn worker_queries_errors_writer_lock_and_eof_are_real_process_behaviors() {
     let data = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
+    let codex = home.path().join(".codex");
+    let thread = "01912345-1234-7abc-8abc-abcdef123456";
+    std::fs::create_dir(&codex).unwrap();
+    std::fs::write(
+        codex.join("session_index.jsonl"),
+        json!({"id": thread, "thread_name": "Review usage filters"}).to_string(),
+    )
+    .unwrap();
     let config = tokenory::config::Config {
         home_dir: home.path().into(),
         ..Default::default()
@@ -71,6 +79,16 @@ fn worker_queries_errors_writer_lock_and_eof_are_real_process_behaviors() {
     let turns = response("turnAnalytics");
     assert_eq!(turns["result"]["clients"], json!([]));
     assert!(turns["result"]["capabilities"].is_array());
+    let rollout = format!("rollout-2026-11-14T08-00-00-{thread}");
+    for (client, session, title) in [
+        ("codex", thread, Some("Review usage filters")),
+        ("codex", rollout.as_str(), Some("Review usage filters")),
+        ("claude", thread, None),
+        ("codex", "untitled", None),
+    ] {
+        request(&mut input, "title", "conversationTitle", json!({"client": client, "sessionId": session}));
+        assert_eq!(response("title")["result"], json!({"title": title}));
+    }
     request(&mut input, "unknown", "invented", json!({}));
     assert_eq!(response("unknown")["error"]["code"], "invalidRequest");
     request(&mut input, "status", "status", json!({}));

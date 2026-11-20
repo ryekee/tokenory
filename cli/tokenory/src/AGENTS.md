@@ -9,7 +9,7 @@ codex_turns.rs: 校验完成主回合、缓存未变化日志、保存无正文�
 config.rs: 保存采集配置。
 db.rs: 维护 SQLite schema、记录和备份；迁移/恢复包含独立回合表；一次升级仅备份一次，自动备份保留 3 份，预览保留 24 小时内最近 3 份。
 import.rs: 预览、提交和撤销历史导入。
-ipc.rs: 向原生应用提供 worker JSON 协议、有效账本的已用模型、对话目录及 codexTurns / turnAnalytics 查询。
+ipc.rs: 向原生应用提供 worker JSON 协议、有效账本的已用模型、对话目录、按会话查标题及 codexTurns / turnAnalytics 查询。
 lib.rs: 导出账本引擎模块。
 main.rs: 提供 CLI 命令和单写者锁；compact 回收空闲页。
 remote_pricing.rs: 拉取并校验官方远程费率表，保留最近一次有效修订。

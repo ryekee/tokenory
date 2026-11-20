@@ -23,7 +23,7 @@ UsageViews.swift: 提供用量格式、跨页 Fast 闪电标记和菜单栏三�
 WorkspaceControls.swift: 提供前缘对齐、展开间距统一的工作区控件。下拉共用触发按钮、搜索框、选项行和带勾选的弹窗。说明按钮点击展开原生浮层。
 WorkspaceStyle.swift: 定义统计窗口颜色、共享输出/推理色和独立工具等待/其余耗时色及布局样式。
 
-TurnsView.swift: 多 agent 回合摘要、工具与模型筛选、能力弹窗、时间分组筛选、分页排序和详情。无回合时显示一处页级空态，请求失败提供重试。窄窗口上下排列。
+TurnsView.swift: 多 agent 回合摘要、工具与模型筛选、能力弹窗、时间分组筛选、分页排序和详情。详情显示选中回合的本地会话名称。无回合时显示一处页级空态，请求失败提供重试。窄窗口上下排列。
 TurnSpeedChart.swift: 按北京时间绘制小时、日或周速度箱体及稀疏与离群回合；悬停或用键盘查看区间和典型速度。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md

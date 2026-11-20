@@ -1,5 +1,5 @@
 // [INPUT]: 接收原生应用的 JSON 请求，读取采集和价格数据。
-// [OUTPUT]: 输出协议响应、带本地标题的对话目录、多客户端回合查询、扫描状态和账本更新事件。
+// [OUTPUT]: 输出协议响应、对话目录和本地标题、多客户端回合查询、扫描状态和账本更新事件。
 // [POS]: 单写者 worker 合并日志事件与活跃文件检查，协调全量/增量采集、计价和查询。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -214,6 +214,9 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
             &config.home_dir,
             payload(v)?,
         )?)?),
+        "conversationTitle" => Ok(json!({
+            "title": queries::conversation_title(&config.home_dir, &payload(v)?)
+        })),
         "turnAnalytics" => Ok(serde_json::to_value(crate::turn_analytics::query(
             db,
             &payload(v)?,

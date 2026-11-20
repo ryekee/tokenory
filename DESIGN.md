@@ -124,4 +124,4 @@ The Watermelon documents linked above are historical reference records; this doc
 
 - The agent-support popover contains only Supported / Not supported sections and tool-logo grids. Show agent names only in a pointer-following hover label that stays close to the pointer, uses the hovered icon’s actual bounds for clearance, and prefers placement above it. The label does not intercept input. Do not show persistent descriptions, delegated mappings or expandable explanations; preserve accessible names. Detailed evidence stays in project documentation.
 
-- Turn-detail agent, model and reasoning effort share one compact horizontal row below the project title; long model names truncate in the middle.
+- Show a saved conversation title below the selected turn’s project when available. Use the same local title index as the Records picker. The agent, model and reasoning effort share a compact row below the title area. Long model names truncate in the middle.
