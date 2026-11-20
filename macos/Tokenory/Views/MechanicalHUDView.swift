@@ -1,5 +1,5 @@
 // [INPUT]: Today's real ledger summary, persisted HUD preferences, accessibility settings, and whether the panel is on the active Space.
-// [OUTPUT]: Half-size orange mechanical counter with snapshot-consistent rolling and sound.
+// [OUTPUT]: Half-size orange mechanical counter with snapshot-consistent rolling, sound, and a double-click shortcut to the dashboard.
 // [POS]: Floating panel content; no dashboard filters or simulated increments.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -11,6 +11,7 @@ struct MechanicalHUDView: View {
     @Environment(UsageStore.self) private var store
     @Environment(HUDPreferences.self) private var preferences
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
     @State private var dayClock = 0
     @State private var animator = HUDAnimator()
@@ -46,7 +47,10 @@ struct MechanicalHUDView: View {
                 Spacer(minLength: 8)
                 HStack(spacing: 3) {
                     ForEach(0..<13) { _ in Capsule().fill(Color(red: 0.62, green: 0.30, blue: 0.10).opacity(0.5)).frame(width: 2, height: 7) }
-                }.shadow(color: .white.opacity(0.25), radius: 0, y: 1).accessibilityHidden(true)
+                }
+                .shadow(color: .white.opacity(0.25), radius: 0, y: 1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
                 Button { preferences.soundEnabled.toggle(); HUDSound.shared.update(preferences: preferences) } label: {
                     Image(systemName: preferences.soundEnabled ? "speaker.wave.2" : "speaker.slash").font(.system(size: 13))
                 }
@@ -58,9 +62,13 @@ struct MechanicalHUDView: View {
         }
         .padding(.horizontal, 18).padding(.top, 17).padding(.bottom, 12)
         .frame(width: 420, height: 164)
-        .background(LinearGradient(colors: [Color(red: 1, green: 0.71, blue: 0.35), Color(red: 0.97, green: 0.57, blue: 0.20), Color(red: 0.82, green: 0.36, blue: 0.08)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 28))
-        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color(red: 0.66, green: 0.33, blue: 0.12), lineWidth: 1))
-        .overlay(RoundedRectangle(cornerRadius: 27).inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.65), .clear, .black.opacity(0.20)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2))
+        .background {
+            RoundedRectangle(cornerRadius: 28)
+                .fill(LinearGradient(colors: [Color(red: 1, green: 0.71, blue: 0.35), Color(red: 0.97, green: 0.57, blue: 0.20), Color(red: 0.82, green: 0.36, blue: 0.08)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .onTapGesture(count: 2) { revealDashboard() }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color(red: 0.66, green: 0.33, blue: 0.12), lineWidth: 1).allowsHitTesting(false))
+        .overlay(RoundedRectangle(cornerRadius: 27).inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.65), .clear, .black.opacity(0.20)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2).allowsHitTesting(false))
         .padding(10)
         .scaleEffect(0.5)
         .frame(width: Self.windowSize.width, height: Self.windowSize.height)
@@ -100,6 +108,10 @@ struct MechanicalHUDView: View {
         .onDisappear { animator.settle(); HUDSound.shared.stop() }
     }
 
+    private func revealDashboard() {
+        openDashboard(using: openWindow)
+    }
+
     private var readout: some View {
         // SwiftUI can evaluate an old child after the animator clears or resizes its array.
         let positions = animator.positions
@@ -129,12 +141,15 @@ struct MechanicalHUDView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .padding(5)
         .background(LinearGradient(colors: [Color(red: 0.38, green: 0.18, blue: 0.07), Color(red: 0.70, green: 0.36, blue: 0.14)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 15))
-        .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.28), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.28), lineWidth: 1).allowsHitTesting(false))
+        .contentShape(RoundedRectangle(cornerRadius: 15))
+        .onTapGesture(count: 2) { revealDashboard() }
         .help(help)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L(preferences.metric == .tokens ? "hud.today_tokens" : "hud.today_cost"))
         .accessibilityValue((reading.partial ? "≈ " : "") + (animator.reading?.formatted ?? "—"))
         .accessibilityHint(help)
+        .accessibilityAction(named: Text(L("action.open_stats"))) { revealDashboard() }
     }
 }
 

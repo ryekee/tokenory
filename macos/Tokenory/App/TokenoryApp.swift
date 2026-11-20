@@ -2,6 +2,12 @@ import AppKit
 import SwiftUI
 
 @MainActor
+func openDashboard(using openWindow: OpenWindowAction) {
+    openWindow(id: "dashboard")
+    NSApp.activate(ignoringOtherApps: true)
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard ProcessInfo.processInfo.environment["TOKENORY_TESTING"] != "1" else { return }
@@ -70,7 +76,7 @@ private struct DashboardCommands: Commands {
                 .disabled(!updates.canCheckForUpdates)
         }
         CommandGroup(after: .newItem) {
-            Button(L("action.open_stats")) { openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }.keyboardShortcut("o")
+            Button(L("action.open_stats")) { openDashboard(using: openWindow) }.keyboardShortcut("o")
         }
     }
 }

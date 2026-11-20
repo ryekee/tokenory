@@ -10,6 +10,8 @@ The text-fragment button selects exact integer Tokens with digit grouping and no
 
 The speaker button directly toggles roller sound, with its icon and pressed state reflecting the setting. Muting stops active sound immediately. Volume is adjusted in Settings; the independent sound switch and 0–100% volume both persist. Hide the HUD through the menu bar or Settings. First use defaults to HUD off, sound off, 35% volume.
 
+Double-click the readout or case to open the dashboard. If the dashboard is already open, the same window comes to the front. The readout exposes an Open Statistics action to assistive technologies.
+
 The rolling curve allocates 16% of its duration to acceleration, 18% to cruising and 66% to deceleration. When the entire increment fits in the visible units travel (up to 30 steps), a higher drum eases into its next digit over the last fifth of the lower cycle and arrives at the carry boundary. For example, the tens drum begins moving at 128 and settles at 130 on a 123-to-135 roll. Larger increments use the original bounded visual rotations. Clicks follow visible digit crossings. Incoming increments retarget from the current position and velocity on the same animation clock. Initial display, day/metric changes, downward corrections and Reduce Motion settle without rolling or sound. Hiding destroys the hosted view and stops audio.
 
 Native owners: `HUDReading`, `HUDAnimator`, `HUDPreferences`, `HUDController`, `HUDSound`, `MechanicalHUDView`, `HUDSettingsView`. Saira Extra Condensed SemiBold and its SIL license are bundled under Resources/Fonts. XcodeGen discovers these resources through the existing source declaration.
