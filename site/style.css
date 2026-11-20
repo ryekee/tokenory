@@ -407,19 +407,28 @@ details a { display: inline-block; margin-top: .65rem; }
   :root { --nav-height: 68px; }
   .masthead-inner, .main-nav, .nav-actions { gap: 4px; }
   .masthead .wordmark img { width: 36px; height: 36px; }
-  .main-nav a, .language-switch, .nav-download { padding: 8px 10px; }
-  .main-nav span, .nav-download span {
+  .main-nav a, .language-switch, .nav-download { padding: 8px; }
+  .main-nav a { min-width: 44px; justify-content: center; font-size: .875rem; }
+  .main-nav .ui-icon { display: none; }
+  .nav-download { min-width: 44px; }
+  .nav-download span {
     position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; white-space: nowrap;
   }
   .language-switch { font-size: .81rem; }
   .language-switch .ui-icon { width: 18px; height: 18px; }
   .showcases { grid-template-columns: 1fr; }
 }
-@media (max-width: 444px) {
+@media (max-width: 480px) {
   .masthead .wordmark span { display: none; }
+}
+@media (max-width: 444px) {
   .stage { padding-inline: 16px; }
   .hud-flight { gap: .35em; padding-inline: 7px; }
   .example-costs li { grid-template-columns: minmax(0, 1fr) minmax(16px, 26%) auto; }
+}
+@media (max-width: 360px) {
+  .masthead-inner { width: calc(100% - 16px); }
+  .language-switch .ui-icon { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .is-settled .readout { animation: none; }
