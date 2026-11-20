@@ -14,6 +14,7 @@ struct DashboardView: View {
     @State private var section: DashboardSection = .overview
     @Environment(\.colorScheme) private var scheme
     @State private var selectedDetail: UsageDetail?
+    @State private var datePickerDraft: DateRangeDraft?
     @State private var visited: Set<DashboardSection> = [.overview]
     private var dashboardSelection: UsageFilter? {
         section == .overview || section == .details ? store.filter : nil
@@ -71,7 +72,9 @@ struct DashboardView: View {
                             UsageFiltersView(showsSource: true)
                                 .padding(.horizontal, 22).padding(.vertical, 14)
                             usageReport { report in
-                                RecordsView(report: report, isActive: section == .details) { selectedDetail = $0 }
+                                RecordsView(report: report, isActive: section == .details) { selectedDetail = $0 } openDatePicker: {
+                                    datePickerDraft = DateRangeDraft(filter: store.filter, selectedRange: store.dateRange)
+                                }
                             }
                         }
                         .opacity(section == .details ? 1 : 0)
@@ -83,7 +86,9 @@ struct DashboardView: View {
             }.background(WorkspaceStyle.canvas(scheme)).navigationTitle(section.title)
                 .toolbar {
                     ToolbarItemGroup {
-                        if section == .overview || section == .details || section == .turns { UsageDatePicker() }
+                        if section == .overview || section == .details || section == .turns {
+                            UsageDatePicker(presentation: $datePickerDraft)
+                        }
                         Button { store.scan() } label: {
                             Label {
                                 Text(L("action.scan"))

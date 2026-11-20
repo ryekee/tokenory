@@ -1,12 +1,12 @@
 // [INPUT]: 当前用量筛选范围与日历交互。
-// [OUTPUT]: 直接切换到相邻日期范围，或在日历中提交预设与自定义范围。
+// [OUTPUT]: 在工具栏及无记录状态打开共用日期浮层，并支持移动日期范围。
 // [POS]: 统计窗口的日期工具栏控件与原生弹窗。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 struct UsageDatePicker: View {
     @Environment(UsageStore.self) private var store
-    @State private var presentation: DateRangeDraft?
+    @Binding var presentation: DateRangeDraft?
 
     private var title: String {
         if store.dateRange == .custom, let from = store.filter.from, let to = store.filter.to { return Localization.dateRange(from, to) }
@@ -158,15 +158,15 @@ private struct DateRangePopover: View {
     }
 }
 
-private struct DateRangeDraft: Identifiable {
+struct DateRangeDraft: Identifiable {
     let id = UUID()
     let selectedRange: UsageDateRange
     let calendar: Calendar
     let weekdays: [String]
     private(set) var start: Date
     private(set) var end: Date?
-    private(set) var firstMonth: CalendarMonth
-    private(set) var secondMonth: CalendarMonth
+    fileprivate var firstMonth: CalendarMonth
+    fileprivate var secondMonth: CalendarMonth
     private let dayFormatter: DateFormatter
     private let monthFormatter: DateFormatter
     private let rangeFormatter: DateIntervalFormatter
@@ -234,7 +234,7 @@ private struct DateRangeDraft: Identifiable {
     }
 }
 
-private struct CalendarMonth {
+fileprivate struct CalendarMonth {
     struct Day {
         let date: Date
         let number: Int
