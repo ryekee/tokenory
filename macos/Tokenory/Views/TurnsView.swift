@@ -1,5 +1,5 @@
 // [INPUT]: Lazy multi-agent turn report, shared date range and local client/model selection.
-// [OUTPUT]: Turn analytics, one page-level empty state, and a distinct retry state for failed requests.
+// [OUTPUT]: Turn analytics, selected-turn conversation titles, and distinct empty and retry states.
 // [POS]: Native speed-analysis page; list pagination never limits summaries or chart data.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -346,11 +346,25 @@ private struct TurnsContent: View {
 
 private struct TurnDetail: View {
     let turn: AgentTurn
+    @Environment(UsageStore.self) private var store
+    @State private var conversationTitle: (id: UsageConversation.ID, text: String)?
+
+    private var conversationID: UsageConversation.ID {
+        .init(client: turn.client, sessionId: turn.sessionId)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(TurnFormat.timestamp(turn.start)).font(.caption).foregroundStyle(.secondary)
                 Text(turn.project).font(.title3.weight(.semibold)).textSelection(.enabled)
+                if let conversationTitle, conversationTitle.id == conversationID {
+                    Text(conversationTitle.text)
+                        .font(.callout).foregroundStyle(.secondary).lineLimit(2)
+                        .textSelection(.enabled).help(conversationTitle.text)
+                        .accessibilityLabel(L("record.conversation"))
+                        .accessibilityValue(conversationTitle.text)
+                }
                 HStack(spacing: 12) {
                     BrandLabel(name: turn.client, kind: .tool, title: clientName(turn.client))
                         .fixedSize()
@@ -417,6 +431,11 @@ private struct TurnDetail: View {
                     LabeledContent(L("turns.turn"), value: turn.turnId)
                 }.font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }.disclosureGroupStyle(WorkspaceDisclosureStyle()).font(.caption)
+        }
+        .task(id: conversationID) { [id = conversationID] in
+            let title = try? await store.conversationTitle(id)
+            guard !Task.isCancelled else { return }
+            conversationTitle = title.map { (id, $0) }
         }
     }
     private func detailMetric(_ key: String, value: String, unit: String = "") -> some View {

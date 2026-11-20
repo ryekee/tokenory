@@ -148,6 +148,10 @@ final class UsageStore {
     func findConversations(_ lookup: ConversationLookup) async throws -> [UsageConversation] {
         try await engine.request("conversations", payload: .encode(lookup), as: [UsageConversation].self)
     }
+
+    func conversationTitle(_ id: UsageConversation.ID) async throws -> String? {
+        try await engine.request("conversationTitle", payload: .encode(id))["title"].string
+    }
     func selectDateRange(_ range: UsageDateRange, now: Date = .now) {
         dateRange = range
         updateDateRange(now: now, resetOffset: true)
