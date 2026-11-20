@@ -1,5 +1,5 @@
 // [INPUT]: 接收用量存储、更新服务及系统登录项状态。
-// [OUTPUT]: 提供通用、HUD、价格、采集和数据设置界面；恢复账本前显示确认。
+// [OUTPUT]: 提供通用、HUD、价格、采集和数据设置；确认账本恢复，在操作旁显示采集和备份结果。
 // [POS]: 设置窗口入口；价格目录交给 PriceCatalogView 展示。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -21,6 +21,43 @@ private enum SettingsSection: String, CaseIterable {
 
 }
 
+private enum SettingsOperation {
+    case saveCollection, backup, restore
+
+    var section: SettingsSection { self == .saveCollection ? .collection : .data }
+
+    var messageKeys: (pending: String, succeeded: String, failed: String) {
+        switch self {
+        case .saveCollection: ("settings.saving", "settings.saved", "settings.save_failed")
+        case .backup: ("data.backing_up", "data.backed_up", "data.backup_failed")
+        case .restore: ("data.restoring", "data.restored", "data.restore_failed")
+        }
+    }
+}
+
+private struct SettingsOperationStatus {
+    enum Phase {
+        case pending, succeeded, failed(String)
+    }
+
+    let operation: SettingsOperation
+    let phase: Phase
+
+    var isPending: Bool {
+        if case .pending = phase { return true }
+        return false
+    }
+
+    var message: String {
+        let keys = operation.messageKeys
+        switch phase {
+        case .pending: return L(keys.pending)
+        case .succeeded: return L(keys.succeeded)
+        case .failed: return L(keys.failed)
+        }
+    }
+}
+
 struct SettingsView: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.colorScheme) private var scheme
@@ -32,10 +69,17 @@ struct SettingsView: View {
     @State private var interval = 60
     @State private var scanPaths: [String: String] = [:]
     @State private var selectedClient = "claude"
-    @State private var busy = false
-    @State private var notice: String?
+    @State private var pricingBusy = false
+    @State private var priceNotice: String?
+    @State private var collectionStatus: SettingsOperationStatus?
+    @State private var ledgerStatus: SettingsOperationStatus?
     @State private var preview: RepricePreview?
     @State private var pendingRestore: URL?
+
+    private var busy: Bool {
+        pricingBusy || collectionStatus?.isPending == true || ledgerStatus?.isPending == true
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
@@ -56,8 +100,8 @@ struct SettingsView: View {
                         case .collection: collectionSettings
                         case .data: dataSettings
                         }
-                        if let notice {
-                            Label(notice, systemImage: "checkmark.circle")
+                        if tab == .prices, let priceNotice {
+                            Label(priceNotice, systemImage: "checkmark.circle")
                                 .font(.callout).foregroundStyle(.secondary)
                         }
                     }.padding(.horizontal, 24).padding(.bottom, 24)
@@ -70,7 +114,9 @@ struct SettingsView: View {
         .frame(width: 880, height: 610).navigationTitle(L("settings.window"))
             .toolbar(removing: .title)
             .disclosureGroupStyle(WorkspaceDisclosureStyle())
-            .onChange(of: tab) { _, _ in notice = nil }
+            .onChange(of: tab) { _, _ in priceNotice = nil }
+            .onChange(of: interval) { _, _ in clearSavedCollectionStatus() }
+            .onChange(of: scanPaths) { _, _ in clearSavedCollectionStatus() }
             .task {
                 await store.loadManagement(); login.refresh()
                 if let s = store.settings { interval = s.intervalSeconds; scanPaths = s.extraScanPaths.mapValues { $0.joined(separator: "\n") } }
@@ -167,7 +213,7 @@ struct SettingsView: View {
                     HStack {
                         Button(L("price.refresh")) { refreshPrices() }.disabled(busy)
                         Button(L("price.reestimate")) { reprice() }.disabled(busy || store.prices["current"]["id"].string == nil)
-                        if busy { ProgressView().controlSize(.small) }
+                        if pricingBusy { ProgressView().controlSize(.small) }
                     }.padding(.top, 2)
                 }
             }
@@ -212,6 +258,7 @@ struct SettingsView: View {
                     Text(L("settings.timezone_note")).font(.caption).foregroundStyle(.secondary)
                 }
             }
+            .disabled(collectionStatus?.isPending == true)
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 12) {
                     Picker(L("field.tool"), selection: $selectedClient) {
@@ -226,10 +273,14 @@ struct SettingsView: View {
                     Text(L("settings.paths_note")).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            HStack {
-                Spacer()
-                Button(L("settings.save")) { saveSettings() }.buttonStyle(.borderedProminent)
+            .disabled(collectionStatus?.isPending == true)
+            VStack(alignment: .trailing, spacing: 8) {
+                Button(L("settings.save"), action: saveSettings)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(busy || store.settings == nil)
+                if let collectionStatus { operationFeedback(collectionStatus) }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
     private func pathEditor(_ title: String, tool: String, text: Binding<String>) -> some View {
@@ -258,24 +309,83 @@ struct SettingsView: View {
                     Text(L("data.backups")).font(.headline)
                     Text(L("data.backup_note")).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     HStack {
-                        Button(L("data.backup")) { backup() }.disabled(busy)
-                        Button(L("data.restore")) { pendingRestore = FilePanels.open(types: [.data]) }.disabled(busy)
+                        Button(L("data.backup"), action: backup)
+                        Button(L("data.restore"), action: chooseRestore)
                     }
+                    .disabled(busy)
+                    if let ledgerStatus { operationFeedback(ledgerStatus) }
                 }
             }
         }
     }
+    private func operationFeedback(_ status: SettingsOperationStatus) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            switch status.phase {
+            case .pending:
+                ProgressView(status.message)
+                    .controlSize(.small)
+            case .succeeded:
+                Label(status.message, systemImage: "checkmark.circle")
+                    .foregroundStyle(.secondary)
+            case .failed(let detail):
+                HStack(spacing: 8) {
+                    Label(status.message, systemImage: "exclamationmark.circle")
+                    Button(L("action.retry")) { retry(status.operation) }
+                        .disabled(busy)
+                }
+                DisclosureGroup(L("error.details")) {
+                    Text(detail).font(.caption).textSelection(.enabled)
+                }
+            }
+        }
+        .font(.callout)
+    }
+
+    private func retry(_ operation: SettingsOperation) {
+        switch operation {
+        case .saveCollection: saveSettings()
+        case .backup: backup()
+        case .restore: chooseRestore()
+        }
+    }
+
+    private func clearSavedCollectionStatus() {
+        if case .succeeded? = collectionStatus?.phase { collectionStatus = nil }
+    }
+
+    private func setOperationStatus(_ phase: SettingsOperationStatus.Phase, for operation: SettingsOperation) {
+        let status = SettingsOperationStatus(operation: operation, phase: phase)
+        if operation == .saveCollection { collectionStatus = status }
+        else { ledgerStatus = status }
+        if !status.isPending, tab == operation.section, NSApp.isActive {
+            AccessibilityNotification.Announcement(status.message).post()
+        }
+    }
+
+    private func runOperation(_ operation: SettingsOperation, action: @escaping @MainActor () async throws -> Void) {
+        guard !busy else { return }
+        setOperationStatus(.pending, for: operation)
+        Task {
+            do {
+                try await action()
+                setOperationStatus(.succeeded, for: operation)
+            } catch {
+                setOperationStatus(.failed(error.localizedDescription), for: operation)
+            }
+        }
+    }
+
     private func refreshPrices() {
-        busy = true
-        Task { defer { busy = false }; do { _ = try await store.perform("refreshPrices"); notice = L("price.refreshed"); await store.loadManagement() } catch { store.fail(error) } }
+        pricingBusy = true
+        Task { defer { pricingBusy = false }; do { _ = try await store.perform("refreshPrices"); priceNotice = L("price.refreshed"); await store.loadManagement() } catch { store.fail(error) } }
     }
     private func reprice() {
-        guard let id = store.prices["current"]["id"].string else { return }; busy = true
-        Task { defer { busy = false }; do { preview = try await store.perform("repricePreview", payload: .object(["snapshotId": .string(id), "filter": .object([:])])).decode(RepricePreview.self) } catch { store.fail(error) } }
+        guard let id = store.prices["current"]["id"].string else { return }; pricingBusy = true
+        Task { defer { pricingBusy = false }; do { preview = try await store.perform("repricePreview", payload: .object(["snapshotId": .string(id), "filter": .object([:])])).decode(RepricePreview.self) } catch { store.fail(error) } }
     }
     private func applyReprice(_ p: RepricePreview) {
-        busy = true
-        Task { defer { busy = false }; do { _ = try await store.perform("repriceApply", payload: .object(["id": .string(p.id)])); preview = nil; notice = L("price.applied"); await store.refresh(); await store.loadManagement() } catch { store.fail(error) } }
+        pricingBusy = true
+        Task { defer { pricingBusy = false }; do { _ = try await store.perform("repriceApply", payload: .object(["id": .string(p.id)])); preview = nil; priceNotice = L("price.applied"); await store.refresh(); await store.loadManagement() } catch { store.fail(error) } }
     }
     private func saveSettings() {
         guard var settings = store.settings else { return }
@@ -283,14 +393,22 @@ struct SettingsView: View {
         settings.extraScanPaths = scanPaths.mapValues { text in
             text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         }.filter { !$0.value.isEmpty }
-        Task { do { _ = try await store.perform("updateSettings", payload: try .encode(settings)); notice = L("settings.saved"); await store.loadManagement() } catch { store.fail(error) } }
+        runOperation(.saveCollection) {
+            _ = try await store.perform("updateSettings", payload: try .encode(settings))
+            await store.loadManagement()
+        }
     }
     private func backup() {
-        guard let file = FilePanels.save(name: "Tokenory-\(UsageStore.day(Date())).sqlite3") else { return }
-        Task { do { _ = try await store.perform("backup", payload: .object(["path": .string(file.path)])); notice = L("data.backed_up") } catch { store.fail(error) } }
+        guard !busy, let file = FilePanels.save(name: "Tokenory-\(UsageStore.day(Date())).sqlite3") else { return }
+        runOperation(.backup) {
+            _ = try await store.perform("backup", payload: .object(["path": .string(file.path)]))
+        }
+    }
+    private func chooseRestore() {
+        guard !busy else { return }
+        pendingRestore = FilePanels.open(types: [.data])
     }
     private func restore(from file: URL) {
-        busy = true
-        Task { defer { busy = false }; do { try await store.restore(from: file); notice = L("data.restored") } catch { store.fail(error) } }
+        runOperation(.restore) { try await store.restore(from: file) }
     }
 }
