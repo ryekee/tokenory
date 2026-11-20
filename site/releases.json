@@ -1,5 +1,23 @@
 [
   {
+    "tag": "v0.1.10",
+    "date": "2026-11-19",
+    "notes": {
+      "en": {
+        "features": [],
+        "fixes": [
+          "The HUD now hides and its roller sounds pause when you watch a video in macOS full screen. The HUD returns when you exit full screen."
+        ]
+      },
+      "zh-Hans": {
+        "features": [],
+        "fixes": [
+          "在 macOS 全屏播放视频时，HUD 会自动隐藏并暂停滚轮音效。退出全屏后，HUD 会自动恢复。"
+        ]
+      }
+    }
+  },
+  {
     "tag": "v0.1.9",
     "date": "2026-11-19",
     "notes": {
