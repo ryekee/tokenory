@@ -1,5 +1,5 @@
-// [INPUT]: Ledger records, completed Codex turns and SQLite backups.
-// [OUTPUT]: Migrated schema, consistent restore and bounded transient storage.
+// [INPUT]: Ledger records, turn and Codex activity evidence, and SQLite backups.
+// [OUTPUT]: Migrated analytics schema, consistent restore and bounded transient storage.
 // [POS]: SQLite persistence and backup boundary.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::usage::UsageRecord;
@@ -22,7 +22,7 @@ impl Database {
         connection.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;")?;
         let version: i64 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(
-            version <= 5,
+            version <= 6,
             "database was created by a newer Tokenory version"
         );
         if version == 0 {
@@ -35,8 +35,8 @@ impl Database {
             connection,
             directory: directory.to_owned(),
         };
-        if (1..5).contains(&version) {
-            db.backup_before("schema-5")?;
+        if (1..6).contains(&version) {
+            db.backup_before("schema-6")?;
         }
         if version < 3 {
             db.migrate_local_keys()?;
@@ -48,6 +48,10 @@ impl Database {
         if version < 5 {
             db.connection
                 .execute_batch(include_str!("../migrations/005_turn_clients.sql"))?;
+        }
+        if version < 6 {
+            db.connection
+                .execute_batch(include_str!("../migrations/006_codex_subagents.sql"))?;
         }
         next_preview_id(&db.connection)?;
         prune_previews(&db.connection)?;
@@ -113,7 +117,7 @@ impl Database {
         ensure!(integrity == "ok", "backup integrity check failed");
         let version: i64 = source.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(
-            (1..=5).contains(&version),
+            (1..=6).contains(&version),
             "unsupported backup schema version"
         );
         {
@@ -143,6 +147,9 @@ impl Database {
                 turn.validate()?;
             }
         }
+        if version >= 6 {
+            crate::codex_subagents::validate_backup(&source)?;
+        }
         self.backup_before("restore")?;
         // Keep the validated source read transaction open while copying it.
         // SQLite applies the replacement as one destination transaction.
@@ -165,6 +172,10 @@ impl Database {
         if version < 5 {
             self.connection
                 .execute_batch(include_str!("../migrations/005_turn_clients.sql"))?;
+        }
+        if version < 6 {
+            self.connection
+                .execute_batch(include_str!("../migrations/006_codex_subagents.sql"))?;
         }
         next_preview_id(&self.connection)?;
         prune_previews(&self.connection)?;
@@ -217,6 +228,7 @@ impl Database {
                     | "schema-3"
                     | "schema-4"
                     | "schema-5"
+                    | "schema-6"
             ) {
                 continue;
             }

@@ -1,5 +1,5 @@
 // [INPUT]: 读取各客户端日志和当前价格快照。
-// [OUTPUT]: 全量或变更 Codex/Antigravity 文件增量采集，生成规范化用量、完成回合与诊断。
+// [OUTPUT]: 全量或变更 Codex/Antigravity 文件增量采集，生成规范化用量、完成回合、Codex 代理活动与诊断。
 // [POS]: 采集与账本边界；按请求迁移 Antigravity / Devin 旧行，保留历史计价依据。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -24,6 +24,7 @@ pub struct DiagnosticCache {
     files: HashMap<PathBuf, (u64, SystemTime, Vec<String>)>,
     persistent: bool,
     turns: crate::codex_turns::Cache,
+    codex_activity: crate::codex_subagents::Cache,
     other_turns: crate::turn_analytics::Cache,
 }
 impl DiagnosticCache {
@@ -73,6 +74,7 @@ pub struct ScanBatch {
     pub records: Vec<UsageRecord>,
     prior_keys: HashMap<String, String>,
     pub codex_turns: Vec<crate::codex_turns::CodexTurn>,
+    codex_activity: Vec<crate::codex_subagents::ThreadActivity>,
     pub invalidated_turn_ids: Vec<String>,
     pub timezone: String,
     pub result: ScanResult,
@@ -352,9 +354,18 @@ async fn collect(
         .map(|c| diagnose(config, *c, &source_paths(&scan, *c), cache))
         .collect();
     let mut codex_turns = Vec::new();
+    let mut codex_activity = Vec::new();
     let mut invalidated_turn_ids = Vec::new();
     let mut analytics_errors = Vec::new();
     for path in source_paths(&scan, tokens_core::ClientId::Codex) {
+        match cache.codex_activity.read(&path) {
+            Ok(Some(activity)) => codex_activity.push(activity),
+            Ok(None) => {}
+            Err(e) => analytics_errors.push((
+                "codex",
+                format!("{}: subagent activity: {e}", path.display()),
+            )),
+        }
         match cache.turns.read(&path) {
             Ok(turns) => codex_turns.extend(turns),
             Err(e) => {
@@ -608,6 +619,7 @@ async fn collect(
         records,
         prior_keys,
         codex_turns,
+        codex_activity,
         invalidated_turn_ids,
         timezone: config.timezone.clone(),
         result: ScanResult {
@@ -794,7 +806,8 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
         batch.result.changed += tx.execute("DELETE FROM codex_turns WHERE id=?1", [id])?;
     }
     batch.result.changed += crate::codex_turns::persist(&tx, &batch.codex_turns, &batch.timezone)?;
-    batch.result.revision = if batch.result.changed > 0 {
+    let activity_changed = crate::codex_subagents::persist(&tx, &batch.codex_activity, &batch.timezone)?;
+    batch.result.revision = if batch.result.changed > 0 || activity_changed {
         advance_revision(&tx)?
     } else {
         crate::db::revision(&tx)?

@@ -208,7 +208,9 @@ pub fn export(
 }
 fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result<Value> {
     match op {
-        "overview" => Ok(serde_json::to_value(queries::report(db, &payload(v)?)?)?),
+        "overview" => Ok(serde_json::to_value(queries::overview(
+            db, &payload(v)?, &config.home_dir,
+        )?)?),
         "conversations" => Ok(serde_json::to_value(queries::conversations(
             db,
             &config.home_dir,
@@ -343,6 +345,7 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
     let mut live_rescan = false;
     let mut live_due: Option<Instant> = None;
     let mut scan_is_live = false;
+    let mut overview_refresh_pending = false;
     let mut cache = None;
     let mut scan = Some(start_scan(
         config.clone(),
@@ -400,10 +403,12 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
           scan_is_live = false;
           if !was_live { next_scan=Instant::now()+Duration::from_secs(config.interval_seconds); }
 
+          let before_collection = revision(&db.connection)?;
           let result=match result {Ok((c,b))=>{active_files.track(c.recent_files());cache=Some(c);b.and_then(|b|collector::persist(db,b))},Err(e)=>Err(e.into())};
           if was_live {
               match result {
                   Ok(r) => {
+                      overview_refresh_pending |= r.revision != before_collection;
                       if r.changed > 0 { send(json!({"version":1,"event":"todayUsageChanged","revision":r.revision,"durationMs":r.duration_ms}))?; }
                   }
                   Err(error) => { eprintln!("Live collection failed; periodic scan will retry: {error}"); }
@@ -411,7 +416,6 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
               continue;
           }
           match result {Ok(mut r)=>{
-            let before_prices = revision(&db.connection)?;
             {
                 match crate::price_coverage::extend_from_service(db, &cached_prices) {
                     Ok(true) => send(json!({"version":1,"event":"pricesUpdated"}))?,
@@ -420,8 +424,13 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
                 }
             }
             r.revision = revision(&db.connection)?;
-            if r.revision != before_prices { send(json!({"version":1,"event":"usageChanged","revision":r.revision}))?; }
-            last_scan=Some(serde_json::to_value(&r)?);send(json!({"version":1,"event":"scanFinished","payload":r}))?;if r.changed>0 {send(json!({"version":1,"event":"usageChanged","revision":r.revision}))?;}},Err(e)=>send(json!({"version":1,"event":"scanFailed","message":format!("{e:#}")}))?}
+            last_scan=Some(serde_json::to_value(&r)?);
+            send(json!({"version":1,"event":"scanFinished","payload":r}))?;
+            if r.revision != before_collection || overview_refresh_pending {
+                send(json!({"version":1,"event":"usageChanged","revision":r.revision}))?;
+                overview_refresh_pending = false;
+            }
+          },Err(e)=>send(json!({"version":1,"event":"scanFailed","message":format!("{e:#}")}))?}
          },
          _=active_poll.tick()=>{
              let changed = active_files.changed();

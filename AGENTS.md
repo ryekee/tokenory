@@ -4,7 +4,7 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 ## 模块地图
 - `macos/Tokenory/`：原生菜单栏和统计窗口。通过 IPC 调用 Rust worker。
 - `macos/TokenoryTests/`：原生状态、展示和协议测试。
-- `cli/tokenory/`：本地账本、采集、导入、计价和 IPC；data 保存离线全量目录。
+- `cli/tokenory/`：本地账本、采集、导入、计价和 IPC；Codex 子代理活动与用量查询在 `src/codex_subagents`；data 保存离线全量目录。
 - `cli/tokens-core/`：上游日志解析及价格数据适配。Codex 补计上下文压缩用量，Devin CLI 按会话内请求去重，Antigravity App 与 CLI 直读本地 SQLite 并与旧缓存去重。
 - `cli/tokens-cli/`：上游 CLI。
 - `assets/brand/`：品牌设计及供应商图标源文件；providers 为生成的全量品牌源。
