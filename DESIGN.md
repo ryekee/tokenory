@@ -83,7 +83,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 - Cover every supported Agent and its associated provider/model catalog, not only those already used. Show rates supported by evidence; keep missing rates unavailable. Use the supplier's brand display name and authentic logo; display xiaomi as Xiaomi MiMo with its M logo.
 - The rate table has a one-click All / Used switch and clickable, collapsible provider groups.
 - Show both DeepSeek peak and off-peak rates. Place their explanation under DeepSeek, without repeating a peak-rate label at the top of the table or presenting the explanation as a rate.
-- Identify compactor cost as an estimate using GPT-6 Luna as its reference. See [compactor pricing](docs/local/devin-compactor.md).
+- Identify compactor cost as an estimate using GPT-6 Luna as its reference.
 
 ## Copy and controls
 
