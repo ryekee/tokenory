@@ -215,7 +215,7 @@ def home(copy, tag, models):
 def faqs(copy):
     entries = []
     for index, (question, answer) in enumerate(copy["questions"]):
-        source = (f'<a href="{REPO}/blob/main/docs/local/sources.md">{escape(copy["sources"])}</a>'
+        source = (f'<a href="{REPO}#支持的客户端">{escape(copy["sources"])}</a>'
                   if index == 1 else "")
         entries.append(f"<details><summary>{escape(question)}</summary><p>{escape(answer)}</p>{source}</details>")
     return f'<section class="reading"><h1>{escape(copy["faq"])}</h1>{"".join(entries)}</section>'

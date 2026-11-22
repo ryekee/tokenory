@@ -20,7 +20,7 @@
   <a href="https://github.com/ryekee/tokenory/releases/latest"><strong>下载最新版本</strong></a> ·
   <a href="#功能">功能介绍</a> ·
   <a href="#支持的客户端">支持的客户端</a> ·
-  <a href="docs/local/operations.md">使用指南</a>
+  <a href="#使用指南">使用指南</a>
 </p>
 
 ## 功能
@@ -41,9 +41,9 @@
 
 ### 费用口径，清楚区分
 
-区分来源提供的成本、按 API 参考价格计算的估算，以及尚未计价的用量。参考估算用于了解使用规模，不代表实际订阅账单。
+Tokenory 按 API 参考费率估算美元费用，单独保留来源报告的成本。缺少适用费率的记录标为待计价。实际订阅费用以服务商账单为准。
 
-价格更新自动补齐待计价记录，并在回填前备份；已有金额不会自动改写。需要按新价格重算时，可先预览变化，再决定是否应用。详细规则见 [估算口径](docs/local/pricing.md)。
+价格更新会先备份，再补齐待计价记录。已有金额沿用当时的费率。按新费率重算前，可以先预览差额。
 
 ### 历史记录，留在本机
 
@@ -86,19 +86,30 @@
 | ZCode | Zed Agent | | |
 
 - **本地日志 / SQLite**：直接复用上游解析器。来源页显示发现的文件、记录和读取问题。设置中可为支持额外目录的客户端添加路径。
-- **Cursor、Trae、Warp、Antigravity IDE**：读取已有的上游格式缓存。Tokenory App 不包含它们的账号登录与缓存同步界面，也不会自动请求这些账号接口。
+- **Cursor、Trae、Warp**：先用上游 `tokens` CLI 同步本机缓存。Antigravity 优先读取本机 SQLite，旧版 IDE 会话也支持读取已有缓存。
 - **Paseo**：发现其配置指定的 Claude / Codex 日志，归入底层工具。**Orca**：发现其 MiMo Code 沙箱数据库，归入 MiMo Code。两者不作为第二份用量累加。
 - **统计精度**：保留源记录提供的粒度。只有会话总量、请求数或费用的来源不会被伪造成逐条 token 数据。新增适配器的源记录暂不参与小时分配。
 
-接入范围、路径、缓存生成方式和验证边界见 [来源说明](docs/local/sources.md)。仅安装客户端不保证存在可读的用量记录；支持解析格式不代表已在 42 个真实客户端上逐一验收。
+<details>
+<summary>如何生成本机缓存</summary>
 
-## 文档
+安装上游 [`tokens` CLI](https://github.com/missuo/tokens)，按需运行对应命令。
 
-- [使用、备份、恢复及卸载](docs/local/operations.md)
-- [客户端支持与本地格式](docs/local/sources.md)
-- [估算口径](docs/local/pricing.md)
-- [macOS 发布说明](docs/local/releases.md)
-- [官网构建与预览](site/README.md)
+| 工具 | 同步命令 |
+| --- | --- |
+| Cursor | `tokens cursor login`，再运行 `tokens cursor sync --json` |
+| Trae | `tokens trae login`，再运行 `tokens trae sync` |
+| Warp | `tokens warp login`，再运行 `tokens warp sync` |
+| Antigravity 旧版 IDE | 客户端运行时执行 `tokens antigravity sync` |
+
+</details>
+
+## 使用指南
+
+- **查看统计**：从菜单栏选「查看统计」，按日期、工具或模型筛选。
+- **导入历史**：在统计窗口的「导入」页预览 CC Switch 或 tokens.ci 的 JSON，核对日期和重叠来源后保存。
+- **备份与恢复**：在「设置 → 数据」备份或恢复本地 SQLite 账本。恢复前会先备份当前账本。
+- **卸载**：关闭登录时启动，退出后删除 App。账本和设置默认留在本机。
 
 ## 开发
 
@@ -135,8 +146,7 @@ xcodebuild -project macos/Tokenory.xcodeproj -scheme Tokenory \
 
 测试使用独立数据目录，不写个人用量。`macos/project.yml` 是工程源文件，`.xcodeproj` 由 XcodeGen 生成。
 
-- [客户端兼容性验证](docs/local/client-compatibility.md)
-- [上游解析器同步和本地开发目录](docs/local/upstream.md)
+- [官网构建与预览](site/README.md)
 
 </details>
 
@@ -158,6 +168,6 @@ Tokenory 基于 [missuo/tokens](https://github.com/missuo/tokens) 的日志发�
 
 基于上游版本 `c2f3857c328478e2599a3ba871151ec255e00831`。`macos/` 是 SwiftUI App，`cli/tokenory/` 提供本地采集、账本和进程协议，`cli/tokens-core/` 保留并按需更新上游解析核心，`site/` 提供双语官网。上游 CLI、Web 和自托管部署入口见 [missuo/tokens](https://github.com/missuo/tokens)。
 
-上游来源、构建约定和同步原则见 [上游说明](docs/local/upstream.md)。保留上游版权，遵循 [MIT License](LICENSE)。图标归属见 [品牌资源说明](assets/brand/NOTICE.md)。
+保留上游版权，遵循 [MIT License](LICENSE)。图标归属见 [品牌资源说明](assets/brand/NOTICE.md)。
 
 </details>

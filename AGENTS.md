@@ -10,11 +10,10 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 - `script/`：构建、资源生成、签名和发布入口。
 - `DESIGN.md`：UI/UX 设计规范与验收清单。
 - `site/`：双语官网、交互式 HUD 演示和正式发布记录。
-- `docs/local/`：计价口径、数据来源和维护说明。
 - `local-data/design-assets/`：本地设计原型、草图和审阅记录。
-- `local-data/dev-assets/`：本地开发笔记、验收证据和工具配置副本。编译结果存放在忽略的 `.build/` 和 Cargo `target/`。
-- `codex/upstream-sync`：本地分支，跟踪 `upstream/main`。解析器同步步骤见 `docs/local/upstream.md`。
-- 原生 HUD：`Views/MechanicalHUDView.swift`、`Services/HUDController.swift`；全屏避让、数据口径与音效见 `docs/local/mechanical-hud.md`。
+- `local-data/dev-assets/`：本地开发笔记、决策、验收记录和工具配置副本。编译结果存放在忽略的 `.build/` 和 Cargo `target/`。
+- `codex/upstream-sync`：本地分支，跟踪 `upstream/main`。审阅 `cli/tokens-core/` 的增量，测试通过后合入。
+- 原生 HUD：`Views/MechanicalHUDView.swift`、`Services/HUDController.swift`；界面和交互约定见 `DESIGN.md`。
 
 ## 入口和约束
 - `macos/project.yml`：XcodeGen 项目源。不要手改生成的 Xcode 项目。

@@ -47,7 +47,7 @@ COPY = {
             ),
             (
                 "Which coding tools are supported?",
-                "Tokenory reads local data from tools including Codex, Claude Code, and OpenCode. Some tools need a locally synced cache. Speed data is available when the log format provides it.",
+                "Tokenory reads local logs and databases from tools like Codex, Claude Code, and OpenCode. Cursor, Trae, and Warp need a locally synced cache. Speed statistics depend on what each tool records.",
             ),
             (
                 "What does the estimated cost mean?",
@@ -55,7 +55,7 @@ COPY = {
             ),
             (
                 "Where is my usage data stored?",
-                "On your Mac, in Tokenory's local database. Tokenory connects to GitHub to check for app updates and refresh model rates.",
+                "Your ledger stays on your Mac. Back it up or restore it in Settings → Data. Tokenory connects to GitHub for app updates and model rates.",
             ),
             (
                 "How do I show the floating counter?",
@@ -116,7 +116,7 @@ COPY = {
             ),
             (
                 "支持哪些编程工具？",
-                "Tokenory 可以读取 Codex、Claude Code、OpenCode 等工具的本机数据。部分工具需要先将缓存同步到本机。速度数据是否可用取决于日志格式。",
+                "Tokenory 读取 Codex、Claude Code、OpenCode 等工具的本机日志和数据库。Cursor、Trae 和 Warp 需要先同步本机缓存。速度统计取决于工具日志记录的内容。",
             ),
             (
                 "估算费用是什么意思？",
@@ -124,7 +124,7 @@ COPY = {
             ),
             (
                 "用量数据存在哪里？",
-                "保存在 Mac 上的 Tokenory 本地数据库中。检查应用更新和刷新模型费率时，Tokenory 会连接 GitHub。",
+                "账本保存在你的 Mac 上，可在「设置 → 数据」中备份或恢复。检查应用更新和刷新模型费率时，Tokenory 会连接 GitHub。",
             ),
             (
                 "怎么打开悬浮计数器？",
