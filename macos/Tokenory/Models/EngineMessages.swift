@@ -1,5 +1,5 @@
 // [INPUT]: 接收 worker 的 JSON 数据流和协议字段。
-// [OUTPUT]: 类型化报告、对话身份与标题、用量模式证据和增量分行器。
+// [OUTPUT]: 类型化报告及 Fast 用量和费用、对话身份与标题、用量模式证据和增量分行器。
 // [POS]: 原生 IPC 的解析边界；已扫描的数据不重复遍历。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -88,6 +88,7 @@ struct UsageSummary: Decodable, Sendable {
     let tokens: Int64; let tokenBreakdown: TokenBreakdown; let knownEstimatedCostUsd: Double?; let unpricedTokens: Int64
     let costStatus: String; let recordCount: Int64; let activeDays: Int64; let partialDays: Int64?; let requests: Int64?
     var fastTokens: Int64? = nil
+    var fastEstimatedCostUsd: Double? = nil
 }
 struct UsageGroup: Decodable, Identifiable, Sendable { let key: String; let summary: UsageSummary; var id: String { key } }
 struct UsageDetail: Decodable, Identifiable, Sendable {

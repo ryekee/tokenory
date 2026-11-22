@@ -2,6 +2,7 @@
 // [OUTPUT]: Completed turns with timestamp-estimated duration, reported Claude inference speed and explicit source capabilities.
 // [POS]: Additional-client parsing boundary; never retain message or tool content.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
+mod antigravity;
 mod cline;
 mod gemini;
 mod kimi;
@@ -1011,6 +1012,7 @@ impl Cache {
             }
         }
         let turns = match client {
+            "antigravity" | "antigravity-cli" => antigravity::parse(path, client)?,
             "claude" => parse_claude_outcome(std::io::BufReader::new(std::fs::File::open(path)?))?,
             "devin-cli" => parse_devin_outcome(path)?,
             "kilo" | "micode" | "opencode" => parse_opencode_outcome(path, client)?,
@@ -1033,6 +1035,8 @@ impl Cache {
     }
 }
 pub const COLLECTED_CLIENTS: &[tokens_core::ClientId] = &[
+    tokens_core::ClientId::Antigravity,
+    tokens_core::ClientId::AntigravityCli,
     tokens_core::ClientId::Claude,
     tokens_core::ClientId::Cline,
     tokens_core::ClientId::DevinCli,

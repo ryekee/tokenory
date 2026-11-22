@@ -104,21 +104,22 @@ fn conversation_title_search_uses_latest_indexed_name_before_the_result_limit() 
 }
 
 #[test]
-fn fast_tokens_are_a_filtered_subset_of_effective_usage() {
+fn fast_usage_is_a_filtered_subset_of_effective_usage_and_known_cost() {
     let root = tempfile::tempdir().unwrap();
     let mut db = Database::open(root.path()).unwrap();
-    for (key, source, model, tokens, speed) in [
-        ("a", "local", "codex-model", 100, json!({"speed":"fast","source":"selected"})),
-        ("b", "local", "codex-model", 20, json!({"speed":"fast","source":"reported"})),
-        ("c", "local", "codex-model", 50, json!({"speed":"ultrafast","source":"selected"})),
-        ("d", "local", "codex-model", 10, json!({"speed":"fast"})),
-        ("e", "local", "legacy-model", 5, json!(null)),
-        ("duplicate", "old", "codex-model", 9999, json!({"speed":"fast","source":"selected"})),
+    for (key, source, model, tokens, cost, speed) in [
+        ("a", "local", "codex-model", 100, Some(0.125), json!({"speed":"fast","source":"selected"})),
+        ("b", "local", "codex-model", 20, Some(0.625), json!({"speed":"fast","source":"reported"})),
+        ("c", "local", "codex-model", 50, Some(0.25), json!({"speed":"ultrafast","source":"selected"})),
+        ("d", "local", "codex-model", 10, Some(0.125), json!({"speed":"fast"})),
+        ("e", "local", "legacy-model", 5, Some(0.125), json!(null)),
+        ("f", "local", "unpriced-model", 4, None, json!({"speed":"fast","source":"selected"})),
+        ("duplicate", "old", "codex-model", 9999, Some(99.0), json!({"speed":"fast","source":"selected"})),
     ] {
         let row: UsageRecord = serde_json::from_value(json!({
             "key": key, "date": "2026-11-01", "client": "codex", "provider": "test", "model": model,
             "tokens": {"input": tokens, "output": 0, "cacheRead": 0, "cacheWrite": 0, "reasoning": 0},
-            "metadata": {"inferenceSpeed": speed}, "estimatedCostUsd": 0.25,
+            "metadata": {"inferenceSpeed": speed}, "estimatedCostUsd": cost,
         })).unwrap();
         put_record(&db.connection, source, "", &row).unwrap();
     }
@@ -128,15 +129,23 @@ fn fast_tokens_are_a_filtered_subset_of_effective_usage() {
     let filter = Filter { limit: Some(1), offset: 500, ..Default::default() };
     let result = report(&mut db, &filter).unwrap();
     assert!(result.details.is_empty());
-    assert_eq!(result.summary.tokens, 185);
+    assert_eq!(result.summary.tokens, 189);
     assert_eq!(result.summary.known_estimated_cost_usd, Some(1.25));
     let report_payload = serde_json::to_value(&result).unwrap();
-    assert_eq!(report_payload["summary"]["fastTokens"], 120);
+    assert_eq!(report_payload["summary"]["fastTokens"], 124);
+    assert_eq!(report_payload["summary"]["fastEstimatedCostUsd"], 0.75);
+    assert_eq!(report_payload["clients"][0]["summary"]["fastTokens"], 124);
+    assert_eq!(report_payload["clients"][0]["summary"]["fastEstimatedCostUsd"], 0.75);
     assert_eq!(report_payload["models"][0]["summary"]["fastTokens"], 120);
+    assert_eq!(report_payload["models"][0]["summary"]["fastEstimatedCostUsd"], 0.75);
     assert!(report_payload["models"][1]["summary"].get("fastTokens").is_none());
+    assert!(report_payload["models"][1]["summary"].get("fastEstimatedCostUsd").is_none());
+    assert_eq!(report_payload["models"][2]["summary"]["fastTokens"], 4);
+    assert!(report_payload["models"][2]["summary"].get("fastEstimatedCostUsd").is_none());
     let filter = Filter { model: Some("legacy-model".into()), ..filter };
     let filtered_payload = serde_json::to_value(report(&mut db, &filter).unwrap()).unwrap();
     assert!(filtered_payload["summary"].get("fastTokens").is_none());
+    assert!(filtered_payload["summary"].get("fastEstimatedCostUsd").is_none());
 }
 
 #[test]

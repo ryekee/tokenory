@@ -97,6 +97,7 @@ pub fn catalog() -> Vec<ClientInfo> {
 pub fn source_paths(scan: &ScanResult, client: ClientId) -> Vec<PathBuf> {
     let mut paths = scan.get(client).clone();
     match client {
+        ClientId::Antigravity => paths.extend(scan.antigravity_dbs.iter().cloned()),
         ClientId::OpenCode => paths.extend(scan.opencode_dbs.iter().cloned()),
         ClientId::Copilot => {
             paths.extend(scan.copilot_desktop_db.iter().cloned());

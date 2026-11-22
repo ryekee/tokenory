@@ -9,9 +9,9 @@
 | Claude 及兼容日志 | Claude Code、Command Code、CodeBuddy、WorkBuddy、OpenCodeReview、ZCode | JSONL；WorkBuddy / ZCode 还支持数据库 |
 | 其他会话日志 | Amp、Codex CLI、Gemini CLI、Droid、OpenClaw、Pi、Kimi、Qwen、Jcode、Junie、Grok Build、Reasonix、Codebuff、Fx、Mux | 上游规定的 JSON / JSONL 文件；OpenClaw 还支持 SQLite |
 | 编辑器记录 | Cline、Roo Code、Kilo、Kiro、Copilot | 编辑器任务、CLI 日志或对应数据库；Roo/Kilo 已补 macOS 原生 VS Code 路径 |
-| SQLite | OpenCode、Kilo CLI、MiMo Code、Goose、Hermes Agent、Crush、Zed Agent、Devin CLI、Antigravity CLI | 只读数据库；OpenCode / Hermes 也保留上游文件格式支持 |
+| SQLite | OpenCode、Kilo CLI、MiMo Code、Goose、Hermes Agent、Crush、Zed Agent、Devin CLI、Antigravity、Antigravity CLI | 只读数据库；OpenCode / Hermes / Antigravity 也保留上游文件或缓存格式支持 |
 | 桌面事件 | Devin Desktop | ACP NDJSON，沿用上游与 Devin CLI 的重叠处理 |
-| 已有缓存 | Cursor、Trae、Warp、Antigravity IDE | 上游同步产生的本地 JSON / JSONL / CSV |
+| 已有缓存 | Cursor、Trae、Warp、Antigravity（旧版 IDE 缓存回退） | 上游同步产生的本地 JSON / JSONL / CSV |
 | 启动器 | Paseo、Orca | Paseo 配置指定的 Claude/Codex 目录；Orca 的 MiMo Code 沙箱数据库 |
 
 默认路径及格式继承固定上游基线的 `cli/tokens-core/src/clients.rs` 和 `scanner.rs`，包含归档、编辑器及已知备用目录。App 不依赖从终端继承的环境变量。非标准位置在「设置 → 采集」中配置绝对路径，每行一个目录。已有额外目录在切换工具后仍保留。
@@ -27,19 +27,21 @@ Kilo CLI、Crush、Goose、MiMo Code 使用上游的数据库发现入口，目�
 | Cursor | `~/.config/tokens/cursor-cache/usage*.json`，兼容 CSV | `tokens cursor login`，`tokens cursor sync --json` |
 | Trae | `~/.config/tokens/trae-cache/sessions/*.json` | `tokens trae login`，`tokens trae sync` |
 | Warp | `~/.config/tokens/warp-cache/usage*.json` | `tokens warp login`，`tokens warp sync` |
-| Antigravity IDE | `~/.config/tokens/antigravity-cache/sessions/*.jsonl` | 客户端运行时执行 `tokens antigravity sync` |
+| Antigravity（旧版 IDE RPC 缓存） | `~/.config/tokens/antigravity-cache/sessions/*.jsonl` | 旧会话没有可读 SQLite 记录时，在客户端运行期间执行 `tokens antigravity sync` |
 
-Tokenory App 自动读取缓存，但不自动运行这些命令。同步频率决定缓存的新鲜度。自定义缓存路径可以在对应工具的额外目录中添加。Antigravity CLI 直接读取其本地会话数据库，不依赖 IDE 缓存。
+Tokenory 直接读取 Antigravity App 的 `~/.gemini/antigravity/conversations/*.db`、`~/.gemini/antigravity-ide/conversations/*.db` 和 CLI 的 `~/.gemini/antigravity-cli/conversations/*.db`，并监听 SQLite WAL 的更新。Cursor、Trae、Warp 仍需外部同步产生缓存。
 
 ## 持久化口径
 
 - Claude / Codex 保留原有稳定事件键、流式更新和累计值转增量规则。已存日期不随显示设置变化。
 - Codex 上下文压缩用量缺失在累计快照中时，从同一线程的响应记录补计一次。后续普通用量沿用原时间锚点。
+- Antigravity App 优先读取 SQLite。同一请求在旧 RPC 缓存和新库中的会话名可以不同，按 `responseId` 合并。计价输入相同的旧行沿用原金额、依据和费率快照。
+- Antigravity 旧缓存单独更新时，也会检查 SQLite。同名会话的数据库一起读取。生成记录读取失败时保留已入账的用量。
 - Devin CLI 在会话内按请求 ID 去重，缺失请求 ID 时沿用行 ID。重扫更新仍可读取的会话，清除旧重复行，并为相同用量保留原估算金额、依据和价格快照。
 - 新启用的解析器可能没有事件 ID，或只返回会话累计值。按客户端与会话保存最新可读快照，原子替换该会话的旧模型/记录。重复扫描不累加，旧的同会话累计值不与新值相加。
 - 完整会话不再出现在源文件中时，保留已存历史。仍可读取的会话采用当前源快照，因此有效文件中的修正、记录删除和模型归属变化会反映到本地账本。
 - token 字段沿用上游解析口径，部分旧格式（例如旧版 Command Code）可能由上游估算，不能视为服务商实测账单。
-- 不把累计会话或账单时间当成真实请求时间。新增解析器统一标记为 `sourceRecord`，按上游时间归日，暂不分配小时。Warp / Crush 可能只有请求数或费用，没有 token 明细。
+- Antigravity RPC 的请求时间、SQLite 的生成时间或关联步骤时间参与小时分布。只有会话时间或文件修改时间的记录计入当日未分配。其他标记为 `sourceRecord` 的记录按上游时间归日。Warp / Crush 可能只提供请求数或费用。
 - JSON / JSONL 部分写入或读取失败、数据库无法打开时，受影响客户端保留上一轮数据。上游解析器仍可能跳过结构不支持的行；来源页的“未发现用量记录”不代表源文件全部有效。
 - 未安装或没有文件的工具不显示为空卡片，完整支持列表可在来源页展开。没有可靠费率时保留未计价状态。
 - 已有历史导入的来源选择继续有效。新采集的同日工具数据不会自动叠加到已选择的历史快照。

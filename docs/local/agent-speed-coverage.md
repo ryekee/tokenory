@@ -2,15 +2,15 @@
 
 速度按**完成的用户回合**计算。计入该回合内完整、可归属到同一实际模型的生成用量。请求 latency、会话跨度、文件修改时间和文本长度估算都不能替代相应测量。非 Codex 原生转录使用事件时间差，标记为估算；未记录的推理 token、请求数、工具数、首 token 延迟和工具等待保持未知。实现只写入 ID、时间、工作区名称、模型和计数。
 
-当前 12 个客户端有至少一种可用格式，另有 2 个委托入口；28 个入口待补采或继续核验。
+当前 14 个客户端有至少一种可用格式，另有 2 个委托入口；26 个入口待补采或继续核验。
 
 以下文件路径相对于 `cli/tokens-core/src/sessions/`。字段描述的是已核验的输入范围；「证据不足」表示当前解析路径及样例未建立必要契约。
 
 | 入口 | 状态 | 字段证据及下一步 |
 | --- | --- | --- |
 | Amp | 未接入 | `amp.rs`：线程消息 `usage` 或 `usageLedger` 有模型、请求 token 和单时间点。需要每个用户回合的结束标志，以及 ledger 到回合的稳定关联。 |
-| Antigravity | 未接入 | `antigravity.rs`：IDE 缓存的 `usage` 有 `sessionId`、`timestamp`、`responseId` 和 token 分类。需要把请求关联到用户回合，补齐起止。 |
-| Antigravity CLI | 未接入 | `antigravity_cli.rs`：`gen_metadata` protobuf 和 step 索引提供生成时间、模型和响应计数。须核验用户起点与最终成功步骤的边界编码，再关联全部生成记录。 |
+| Antigravity | 已接入部分格式 | `antigravity_cli.rs` + `turn_analytics/antigravity.rs`：直读 `~/.gemini/antigravity/conversations/*.db`（及 `antigravity-ide`），以 `steps` 表 `USER_INPUT`（`step_type=14, source=4`）为起点、同回合 UUID（`metadata.#12`）内无工具调用且带正文响应的终态 `PLANNER_RESPONSE`（`step_type=15, status=3`）为终点，关联 `gen_metadata` 实测输出/推理并合并同步工具步骤（`status=3/7`）阻塞时间；排除 `parent_references` 子代理库及报错/未完成回合。旧版 RPC JSONL 缓存缺回合边界仍只计用量。 |
+| Antigravity CLI | 已接入 | `antigravity_cli.rs` + `turn_analytics/antigravity.rs`：直读 `~/.gemini/antigravity-cli/conversations/*.db`，沿用与 Antigravity App 相同的 `steps` + `gen_metadata` 回合契约、子代理排除与工具阻塞时间合并逻辑。 |
 | Claude Code | 已接入 | `claudecode.rs`：主链 `sessionId`、用户 `uuid`、事件 `timestamp`、`message.id/usage.output_tokens/stop_reason`。工具结果和 agent 子链不构成用户起点；同 ID 响应块累计去重。 |
 | Cline | 已接入部分格式 | 扩展 `ui_messages.json` 的 `say:task/user_feedback` 至最终 `ask:completion_result`；汇总有 `modelInfo.modelId` 和实测 `api_req_started.tokensOut` 的请求，排除取消/重试。CLI `messages[].metrics` 未核验相同终态。 |
 | CodeBuddy | 未接入 | `codebuddy.rs`、`tencent_buddy.rs`：`status=completed` 是 assistant 消息状态；函数调用另记，同一请求可共享 `providerData.messageId`。需要明确用户回合结束及请求关联，不能把消息完成当回合完成。 |

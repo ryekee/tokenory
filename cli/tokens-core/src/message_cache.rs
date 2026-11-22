@@ -1717,6 +1717,7 @@ impl From<ForkUnifiedMessageV5> for UnifiedMessage {
             model_attribution_conflicted: false,
             cache_write_1h: 0,
             inference_speed: None,
+            antigravity_sqlite_time: None,
         }
     }
 }
@@ -1769,6 +1770,7 @@ impl From<LegacyUnifiedMessageV7> for UnifiedMessage {
             // These layouts never recorded the 1-hour split.
             cache_write_1h: 0,
             inference_speed: None,
+            antigravity_sqlite_time: None,
         }
     }
 }
@@ -1850,6 +1852,7 @@ impl From<LegacyUnifiedMessageV8> for UnifiedMessage {
             model_attribution_conflicted: message.model_attribution_conflicted,
             cache_write_1h: message.cache_write_1h,
             inference_speed: None,
+            antigravity_sqlite_time: None,
         }
     }
 }

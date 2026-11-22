@@ -118,6 +118,10 @@ pub struct UnifiedMessage {
     /// Explicit evidence only; None means unknown, not Standard.
     #[serde(default)]
     pub inference_speed: Option<crate::speed::InferenceSpeed>,
+    /// Antigravity SQLite is parsed directly on every scan. Keep its local timestamp
+    /// evidence out of the shared on-disk message-cache format.
+    #[serde(skip)]
+    pub antigravity_sqlite_time: Option<antigravity_cli::SqliteTime>,
 }
 
 const fn default_message_count() -> i32 {
@@ -398,6 +402,7 @@ impl UnifiedMessage {
             model_attribution_conflicted: false,
             cache_write_1h: 0,
             inference_speed: None,
+            antigravity_sqlite_time: None,
         }
     }
 
