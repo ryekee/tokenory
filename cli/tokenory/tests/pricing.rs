@@ -643,7 +643,7 @@ fn missing_price_fill_preserves_tokens_source_cost_known_amounts_and_unknown_mod
 #[test]
 fn namespaced_official_models_use_bundled_rates_without_crossing_provider_boundary() {
     let dir = tempfile::tempdir().unwrap();
-    let mut db = Database::open(dir.path()).unwrap();
+    let db = Database::open(dir.path()).unwrap();
     let mut r = record();
     r.provider = "openai".into();
     r.model = "openai/gpt-6.1-sol".into();
@@ -660,7 +660,7 @@ fn namespaced_official_models_use_bundled_rates_without_crossing_provider_bounda
 #[test]
 fn unknown_providers_use_labeled_first_party_references_without_changing_identity() {
     let dir = tempfile::tempdir().unwrap();
-    let mut db = Database::open(dir.path()).unwrap();
+    let db = Database::open(dir.path()).unwrap();
     let service = tokens_core::pricing::PricingService::new(
         [(
             "moonshot/kimi-k2.5".into(),
@@ -740,7 +740,7 @@ fn archived_mimo_reference_uses_full_request_tier_but_not_daily_total() {
 #[test]
 fn missing_category_rate_does_not_block_other_records_of_the_same_model() {
     let dir = tempfile::tempdir().unwrap();
-    let mut db = Database::open(dir.path()).unwrap();
+    let db = Database::open(dir.path()).unwrap();
     let mut r = record();
     r.provider = "test".into();
     r.model = "model-a".into();

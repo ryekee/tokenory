@@ -980,13 +980,16 @@ fn parse_openclaw_turns(path: &Path) -> Result<ParseOutcome> {
     }
 }
 
+type FileSignature = Vec<(u64, SystemTime)>;
+type CachedOutcome = (FileSignature, ParseOutcome);
+
 #[derive(Default)]
 pub struct Cache {
-    files: HashMap<(String, PathBuf), (Vec<(u64, SystemTime)>, ParseOutcome)>,
+    files: HashMap<(String, PathBuf), CachedOutcome>,
 }
 impl Cache {
     pub fn read(&mut self, client: &str, path: &Path) -> Result<ParseOutcome> {
-        let signature = || -> Result<Vec<(u64, SystemTime)>> {
+        let signature = || -> Result<FileSignature> {
             let mut paths = vec![path.to_owned()];
             if matches!(
                 path.extension().and_then(|s| s.to_str()),
