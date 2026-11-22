@@ -3,36 +3,20 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.12</title>
-            <pubDate>Sun, 22 Nov 2026 18:47:32 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.12</link>
-            <sparkle:version>16</sparkle:version>
-            <sparkle:shortVersionString>0.1.12</sparkle:shortVersionString>
+            <title>0.1.13</title>
+            <pubDate>Sun, 22 Nov 2026 21:44:02 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.13</link>
+            <sparkle:version>17</sparkle:version>
+            <sparkle:shortVersionString>0.1.13</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.12/Tokenory-0.1.12-macOS-arm64.zip" length="10786201" type="application/octet-stream" sparkle:edSignature="8tHRLnfeCi41LkgP4e2rPUOZ+rs0ovENO04RAqMsxltfP8Rtw2qzFey2td6i9LIxiePcz93cIv0HlMduiOvRDA==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.13/Tokenory-0.1.13-macOS-arm64.zip" length="10897364" type="application/octet-stream" sparkle:edSignature="/WQgfFbJmw0W/CMaA2TK1WyyItlmGqHhJNau5yJ70H8HYLDXV3Sh7c0DYp45P1dzPd+TLCmm660+/jaD6O+ADA==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- See the Fast portion of tool and model usage bars in both Tokens and Cost.
-- Read Antigravity desktop usage live from local conversations, including titles, and see completed turns from Antigravity desktop and CLI in Speed.
-
-## Fixes
-
-- Prevent duplicate or missing Antigravity usage when upgrading from the old cache to the local conversation database.
-- Correct overcounted input tokens in Antigravity CLI conversations.
-- Keep existing estimates when only hourly placement changes, and leave Antigravity usage without a request timestamp out of the hourly bars.
-- Fixed Gemini and other brand icons that appeared clipped.
+- When Codex subagent activity is available, Overview shows launches, Tokens, estimated cost, and usage and cost shares. Expand a conversation to see usage by subagent and model, plus recorded main-agent turns.
 </description><description xml:lang="zh-Hans" sparkle:format="markdown">## 新功能
 
-- 总览的工具和模型横条用琥珀色标出 Fast 部分，切换 Tokens 或费用时都会显示。
-- 实时读取 Antigravity 桌面版的本地用量和对话标题，速度页支持桌面版和 CLI 的已完成回合。
-
-## 修复
-
-- 修复 Antigravity 从旧缓存迁移到本地对话数据库时可能出现的重复计入或漏计。
-- 修复 Antigravity CLI 对话的输入 Tokens 统计偏高的问题。
-- 仅变更小时归属时保留原有估算费用，缺少请求时间的 Antigravity 用量归入未分配项。
-- 修复 Gemini 等品牌图标显示不完整的问题。
+- 有 Codex 子代理活动时，总览会显示启动次数、Tokens 和估算费用，并标出用量和费用占比。按对话展开可查看各子代理的模型用量，以及有记录的主代理回合数。
 </description></item>
     </channel>
 </rss>

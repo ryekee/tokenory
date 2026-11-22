@@ -3,25 +3,17 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.12</title>
-            <pubDate>Sun, 22 Nov 2026 18:47:32 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.12</link>
-            <sparkle:version>16</sparkle:version>
-            <sparkle:shortVersionString>0.1.12</sparkle:shortVersionString>
+            <title>0.1.13</title>
+            <pubDate>Sun, 22 Nov 2026 21:44:02 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.13</link>
+            <sparkle:version>17</sparkle:version>
+            <sparkle:shortVersionString>0.1.13</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.12/Tokenory-0.1.12-macOS-arm64.zip" length="10786201" type="application/octet-stream" sparkle:edSignature="8tHRLnfeCi41LkgP4e2rPUOZ+rs0ovENO04RAqMsxltfP8Rtw2qzFey2td6i9LIxiePcz93cIv0HlMduiOvRDA==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.13/Tokenory-0.1.13-macOS-arm64.zip" length="10897364" type="application/octet-stream" sparkle:edSignature="/WQgfFbJmw0W/CMaA2TK1WyyItlmGqHhJNau5yJ70H8HYLDXV3Sh7c0DYp45P1dzPd+TLCmm660+/jaD6O+ADA==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- See the Fast portion of tool and model usage bars in both Tokens and Cost.
-- Read Antigravity desktop usage live from local conversations, including titles, and see completed turns from Antigravity desktop and CLI in Speed.
-
-## Fixes
-
-- Prevent duplicate or missing Antigravity usage when upgrading from the old cache to the local conversation database.
-- Correct overcounted input tokens in Antigravity CLI conversations.
-- Keep existing estimates when only hourly placement changes, and leave Antigravity usage without a request timestamp out of the hourly bars.
-- Fixed Gemini and other brand icons that appeared clipped.
+- When Codex subagent activity is available, Overview shows launches, Tokens, estimated cost, and usage and cost shares. Expand a conversation to see usage by subagent and model, plus recorded main-agent turns.
 </description></item>
     </channel>
 </rss>
