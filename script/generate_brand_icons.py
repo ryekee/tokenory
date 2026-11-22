@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate native assets from the checked-in brand sources.
 [INPUT]: Web 字形和 vendor 品牌素材。
-[OUTPUT]: 原生 Assets.xcassets 图标和许可证副本。
+[OUTPUT]: CoreSVG 兼容的原生 Assets.xcassets 图标和许可证副本。
 [POS]: 品牌源文件到原生资源的唯一生成入口。
 [PROTOCOL]: Update this header on change, then check AGENTS.md
 """
@@ -11,6 +11,47 @@ import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
+SVG_NUMBER = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
+SVG_SEPARATOR = re.compile(r"[\s,]*")
+ARC_COMMAND = re.compile(r"[Aa]")
+ARC_FLAG = re.compile(r"[01]")
+
+
+def separate_arc_flags(path_data: str) -> str:
+    """Space out SVG arc flags that CoreSVG would read as a single number."""
+    insertions = []
+    for command in ARC_COMMAND.finditer(path_data):
+        cursor = command.end()
+        while True:
+            start = SVG_SEPARATOR.match(path_data, cursor).end()
+            if start == len(path_data) or path_data[start].isalpha():
+                break
+            for field in range(7):
+                start = SVG_SEPARATOR.match(path_data, cursor).end()
+                pattern = ARC_FLAG if field in (3, 4) else SVG_NUMBER
+                operand = pattern.match(path_data, start)
+                if operand is None:
+                    return path_data
+                # The sweep flag and an unsigned x coordinate need a separator.
+                if start == cursor and (field == 4 or (field == 5 and path_data[start] not in "+-")):
+                    insertions.append(start)
+                cursor = operand.end()
+
+    parts = []
+    start = 0
+    for insertion in insertions:
+        parts.append(path_data[start:insertion])
+        start = insertion
+    parts.append(path_data[start:])
+    return " ".join(parts)
+
+
+def normalize_svg_for_coresvg(svg: str) -> str:
+    return re.sub(
+        r'(?<=\s)d="([^"]+)"', lambda match: f'd="{separate_arc_flags(match[1])}"', svg
+    )
+
+
 source = (ROOT / "web/src/lib/brandIcons.generated.ts").read_text()
 payload = source.split("=", 1)[1].strip().removesuffix(";")
 glyphs = json.loads(re.sub(r",\s*}", "}", payload))
@@ -37,7 +78,7 @@ original_provider_icons = {v["icon"] for v in provider_brands.values() if v["ori
 for slug, svg in icons.items():
     folder = ROOT / f"macos/Tokenory/Resources/Assets.xcassets/Brand-{slug}.imageset"
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / "icon.svg").write_text(svg.replace("currentColor", "black"))
+    (folder / "icon.svg").write_text(normalize_svg_for_coresvg(svg.replace("currentColor", "black")))
     (folder / "Contents.json").write_text(json.dumps({
         "images": [{"filename": "icon.svg", "idiom": "universal"}],
         "info": {"author": "xcode", "version": 1},

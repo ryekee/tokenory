@@ -1,6 +1,6 @@
 // [INPUT]: 使用 Tokenory 品牌映射、格式化函数和打包资源。
-// [OUTPUT]: 验证展示文本和原生品牌资源。
-// [POS]: 防止模型映射存在但资源缺失的展示回归。
+// [OUTPUT]: 验证展示文本、品牌资源加载和 Gemini 图标绘制。
+// [POS]: 防止品牌映射、资源缺失和原生 SVG 渲染回归。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
 import XCTest
@@ -56,6 +56,31 @@ final class BrandPresentationTests: XCTestCase {
             XCTAssertNotNil(image, name)
             XCTAssertEqual(image?.size, NSSize(width: 14, height: 14), "Native picker image: " + name)
         }
+    }
+    @MainActor func testGeminiModelAssetRendersWholeMark() throws {
+        let slug = try XCTUnwrap(Brand.slug("gemini-4-neon", kind: .model))
+        let image = try XCTUnwrap(NSImage(named: "Brand-" + slug))
+        let side = 48
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        let drawing = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: bitmap))
+        let bounds = NSRect(x: 0, y: 0, width: side, height: side)
+        drawing.cgContext.clear(bounds)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = drawing
+        image.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1)
+        NSGraphicsContext.restoreGraphicsState()
+
+        var filledPixels = 0
+        for y in 0..<side {
+            for x in 0..<side where (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.5 {
+                filledPixels += 1
+            }
+        }
+        XCTAssertGreaterThan(filledPixels, side * side / 5, "Gemini must render more than a small fragment")
     }
     @MainActor func testFullProviderCatalogHasNamesAndBundledIcons() {
         XCTAssertGreaterThan(ProviderBrand.all.count, 200)
