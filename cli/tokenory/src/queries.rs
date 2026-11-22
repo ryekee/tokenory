@@ -1,5 +1,5 @@
 // [INPUT]: Validated filters, the effective ledger view, and local Codex/Antigravity title indexes.
-// [OUTPUT]: Effective usage reports with Fast token and estimated cost subsets, searchable conversations, and activity by day or hour.
+// [OUTPUT]: Effective usage reports with Fast and Codex subagent subsets, searchable conversations, and activity by day or hour.
 // [POS]: Read-only aggregation boundary; never aggregate paginated details.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -57,7 +57,7 @@ impl Filter {
         Ok(())
     }
 
-    fn sql_parameters(&self) -> [&dyn ToSql; 10] {
+    pub(crate) fn sql_parameters(&self) -> [&dyn ToSql; 10] {
         let (client, session): (&dyn ToSql, &dyn ToSql) = match &self.conversation {
             Some(id) => (&id.client, &id.session_id),
             None => (&Null, &Null),
@@ -100,7 +100,7 @@ struct IndexedCodexTitle {
     thread_name: String,
 }
 
-fn codex_titles(home: &Path) -> HashMap<String, String> {
+pub(crate) fn codex_titles(home: &Path) -> HashMap<String, String> {
     let Ok(index) = File::open(home.join(".codex/session_index.jsonl")) else {
         return HashMap::new();
     };
@@ -283,6 +283,8 @@ pub struct Report {
     pub providers: Vec<Group>,
     pub models: Vec<Group>,
     pub details: Vec<Detail>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_subagents: Option<crate::codex_subagents::Report>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -327,8 +329,8 @@ pub fn activity(db: &mut Database, f: &Filter) -> Result<ActivityReport> {
     tx.commit()?;
     Ok(result)
 }
-const SESSION_SQL: &str = "json_extract(body, '$.sessionId')";
-const WHERE_SQL:&str=" WHERE (CASE WHEN ?7 IS NOT NULL AND json_extract(body,'$.timestampMs') IS NOT NULL AND coalesce(json_extract(body,'$.metadata.granularity')!='day',1) THEN json_extract(body,'$.timestampMs')>=?7 AND json_extract(body,'$.timestampMs')<?8 ELSE (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) END) AND (?3 IS NULL OR client=?3) AND (?4 IS NULL OR provider=?4) AND (?5 IS NULL OR model=?5) AND (?6 IS NULL OR source=?6) AND (?9 IS NULL OR client=?9 AND json_extract(body, '$.sessionId')=?10)";
+pub(crate) const SESSION_SQL: &str = "json_extract(body, '$.sessionId')";
+pub(crate) const WHERE_SQL:&str=" WHERE (CASE WHEN ?7 IS NOT NULL AND json_extract(body,'$.timestampMs') IS NOT NULL AND coalesce(json_extract(body,'$.metadata.granularity')!='day',1) THEN json_extract(body,'$.timestampMs')>=?7 AND json_extract(body,'$.timestampMs')<?8 ELSE (?1 IS NULL OR date>=?1) AND (?2 IS NULL OR date<=?2) END) AND (?3 IS NULL OR client=?3) AND (?4 IS NULL OR provider=?4) AND (?5 IS NULL OR model=?5) AND (?6 IS NULL OR source=?6) AND (?9 IS NULL OR client=?9 AND json_extract(body, '$.sessionId')=?10)";
 const SUMMARY_SQL:&str="coalesce(sum(tokens),0),coalesce(sum(input),0),coalesce(sum(output),0),coalesce(sum(cache_read),0),coalesce(sum(cache_write),0),coalesce(sum(reasoning),0),sum(estimated_cost),coalesce(sum(CASE WHEN estimated_cost IS NULL THEN tokens ELSE 0 END),0),count(*),count(DISTINCT CASE WHEN tokens>0 THEN date END),sum(requests),count(DISTINCT CASE WHEN json_extract(body, '$.metadata.partialDay')=1 THEN date END),
     sum(CASE WHEN json_extract(body, '$.metadata.inferenceSpeed.speed')='fast'
         AND json_extract(body, '$.metadata.inferenceSpeed.source') IN ('selected', 'reported')
@@ -409,6 +411,18 @@ fn hourly_aggregate(c: &Connection, f: &Filter, format: &str) -> Result<HourlyRe
     Ok(HourlyReport { buckets, unallocated })
 }
 pub fn report(db: &mut Database, f: &Filter) -> Result<Report> {
+    usage_report(db, f, false)
+}
+
+pub fn overview(db: &mut Database, f: &Filter, home: &Path) -> Result<Report> {
+    let mut report = usage_report(db, f, true)?;
+    if let Some(subagents) = &mut report.codex_subagents {
+        crate::codex_subagents::add_titles(subagents, home);
+    }
+    Ok(report)
+}
+
+fn usage_report(db: &mut Database, f: &Filter, include_subagents: bool) -> Result<Report> {
     f.validate()?;
     let tx = db.connection.transaction()?;
     let summary = tx.query_row(
@@ -453,6 +467,11 @@ pub fn report(db: &mut Database, f: &Filter) -> Result<Report> {
         providers: grouped(&tx, f, "provider")?,
         models: grouped(&tx, f, "model")?,
         details,
+        codex_subagents: if include_subagents {
+            crate::codex_subagents::query(&tx, f)?
+        } else {
+            None
+        },
     };
     tx.commit()?;
     Ok(result)

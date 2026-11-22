@@ -1,8 +1,274 @@
 // [INPUT]: Selected-range report and independently loaded annual activity.
-// [OUTPUT]: Rolling totals, tool and model rankings with Fast segments, range charts, and annual activity.
+// [OUTPUT]: Rolling totals, independent Codex subagent card, rankings, range charts, and annual activity.
 // [POS]: Native overview composition; disclosure keeps detailed caveats off the canvas.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
+
+private struct CodexSubagentsView: View {
+    let report: CodexSubagentReport
+    let codexSummary: UsageSummary?
+    @Environment(\.colorScheme) private var colorScheme
+    private let metricFont = Font.title3.weight(.medium).monospacedDigit()
+
+    private var tokensShare: Double? {
+        subagentShare(Double(report.tokens), of: codexSummary.map { Double($0.tokens) })
+    }
+    private var costShare: Double? {
+        subagentShare(report.cost?.knownEstimatedCostUsd, of: codexSummary?.knownEstimatedCostUsd)
+    }
+    private var partialCost: Bool {
+        (report.cost?.unpricedTokens ?? 0) > 0 || (codexSummary?.unpricedTokens ?? 0) > 0
+    }
+
+    var body: some View {
+        WorkspacePanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text(L("subagents.title")).font(.headline)
+                    Spacer()
+                    WorkspaceInfoPopover(title: L("subagents.basis")) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(L("subagents.count_help"))
+                            Text(L("subagents.tokens_help"))
+                            Text(L("subagents.cost_help"))
+                            Text(L("subagents.conversations_help"))
+                        }
+                        .padding(16)
+                        .frame(width: 290, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 28) {
+                        startedMetric
+                        summaryMetrics
+                    }
+                    VStack(alignment: .leading, spacing: 14) {
+                        startedMetric
+                        summaryMetrics
+                    }
+                }
+                if !report.conversations.isEmpty {
+                    Divider()
+                    DisclosureGroup(L("subagents.conversations")) {
+                        VStack(spacing: 0) {
+                            ForEach(report.conversations) { conversation in
+                                CodexSubagentConversationView(
+                                    conversation: conversation,
+                                    totalTokens: report.tokens,
+                                    totalCost: report.cost
+                                )
+                            }
+                        }
+                    }
+                    .disclosureGroupStyle(WorkspaceDisclosureStyle())
+                }
+            }
+        }
+    }
+
+    private var startedMetric: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(L("subagents.started")).font(.caption).foregroundStyle(.secondary)
+            Text(report.starts.formatted(.number.locale(Localization.locale)))
+                .font(metricFont)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var summaryMetrics: some View {
+        HStack(alignment: .top, spacing: 24) {
+            shareMetric(
+                title: L("usage.tokens"),
+                value: report.tokens.formatted(.number.locale(Localization.locale)),
+                share: tokensShare,
+                partial: false,
+                color: .accentColor
+            )
+            shareMetric(
+                title: L("cost.estimate"),
+                value: subagentCostText(report.cost),
+                share: costShare,
+                partial: partialCost,
+                color: WorkspaceStyle.costColor(colorScheme)
+            )
+        }
+    }
+
+    private func shareMetric(title: String, value: String, share: Double?, partial: Bool, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(value)
+                    .font(metricFont)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 2)
+                Text(subagentShareText(share, partial: partial))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            SubagentShareBar(share: share, color: color)
+        }
+        .frame(minWidth: 165, maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private func subagentShare(_ amount: Double?, of total: Double?) -> Double? {
+    guard let amount, let total, amount.isFinite, total.isFinite, total > 0 else { return nil }
+    return amount / total
+}
+
+private func subagentShareText(_ share: Double?, partial: Bool = false) -> String {
+    guard let share else { return "—" }
+    let value = share.formatted(.percent.precision(.fractionLength(0...1)).locale(Localization.locale))
+    return partial ? "≈" + value : value
+}
+
+private func subagentCostText(_ cost: CodexSubagentCost?) -> String {
+    guard let cost, let value = cost.knownEstimatedCostUsd else { return "—" }
+    return (cost.unpricedTokens > 0 ? "≈" : "") + usd(value)
+}
+
+private struct SubagentShareBar: View {
+    let share: Double?
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(color.opacity(0.08))
+                if let share {
+                    Capsule().fill(color.opacity(0.7))
+                        .frame(width: geometry.size.width * min(max(share, 0), 1))
+                }
+            }
+        }
+        .frame(height: 4)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct CodexSubagentConversationView: View {
+    let conversation: CodexSubagentConversation
+    let totalTokens: Int64
+    let totalCost: CodexSubagentCost?
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var title: String {
+        if let title = conversation.title, !title.isEmpty { return title }
+        return LF("subagents.untitled", String(conversation.id.prefix(8)))
+    }
+
+    private var tokensShare: Double? {
+        subagentShare(Double(conversation.tokens), of: Double(totalTokens))
+    }
+
+    private var costShare: Double? {
+        subagentShare(conversation.cost?.knownEstimatedCostUsd, of: totalCost?.knownEstimatedCostUsd)
+    }
+
+    private var partialCost: Bool {
+        (conversation.cost?.unpricedTokens ?? 0) > 0 || (totalCost?.unpricedTokens ?? 0) > 0
+    }
+
+    var body: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 9) {
+                ForEach(conversation.agents) { agent in
+                    agentRows(agent)
+                }
+                if conversation.mainTurns != nil || conversation.mainTokens != nil {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(L("subagents.main")).fontWeight(.medium)
+                        if let turns = conversation.mainTurns {
+                            Text(LF("subagents.main_turns", turns.formatted(.number.locale(Localization.locale))))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        if let tokens = conversation.mainTokens {
+                            Text(tokens.formatted(.number.locale(Localization.locale)))
+                                .monospacedDigit()
+                        }
+                    }
+                    .font(.caption)
+                }
+            }
+            .padding(.vertical, 5)
+        } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 10) {
+                    Text(title).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    Text(LF("subagents.started_value", conversation.starts.formatted(.number.locale(Localization.locale))))
+                        .foregroundStyle(.secondary)
+                }
+                HStack(alignment: .top, spacing: 20) {
+                    conversationMetric(
+                        title: L("usage.tokens"),
+                        value: conversation.tokens.formatted(.number.locale(Localization.locale)),
+                        share: tokensShare,
+                        partial: false,
+                        color: .accentColor
+                    )
+                    conversationMetric(
+                        title: L("cost.estimate"),
+                        value: subagentCostText(conversation.cost),
+                        share: costShare,
+                        partial: partialCost,
+                        color: WorkspaceStyle.costColor(colorScheme)
+                    )
+                }
+            }
+            .font(.callout)
+            .padding(.vertical, 4)
+        }
+        .disclosureGroupStyle(WorkspaceDisclosureStyle())
+    }
+
+    private func conversationMetric(title: String, value: String, share: Double?, partial: Bool, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(title).foregroundStyle(.secondary)
+                Text(value).monospacedDigit()
+                Spacer(minLength: 2)
+                Text(subagentShareText(share, partial: partial))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .font(.caption)
+            SubagentShareBar(share: share, color: color)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func agentRows(_ agent: CodexSubagent) -> some View {
+        let name = agent.name.flatMap { $0.isEmpty ? nil : $0 } ?? LF("subagents.unnamed", String(agent.id.prefix(8)))
+        if agent.models.isEmpty {
+            HStack {
+                Text(name).fontWeight(.medium)
+                Spacer()
+                Text("—").foregroundStyle(.secondary)
+            }
+            .font(.caption)
+        } else {
+            ForEach(agent.models) { model in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(name).fontWeight(.medium)
+                    Text(model.model).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    Text(model.tokens.formatted(.number.locale(Localization.locale))).monospacedDigit()
+                    Text(subagentCostText(model.cost)).monospacedDigit().foregroundStyle(.secondary)
+                }
+                .font(.caption)
+            }
+        }
+    }
+}
 
 struct OverviewView: View {
     let report: UsageReport
@@ -67,6 +333,9 @@ struct OverviewView: View {
                                         }
                                     }
                                 }
+                            }
+                            if let subagents = report.codexSubagents, subagents.hasActivity {
+                                CodexSubagentsView(report: subagents, codexSummary: report.clients.first { $0.key == "codex" }?.summary)
                             }
                             if let activity = store.activity, !activity.daily.isEmpty, let calendar = store.activityCalendar {
                                 UsageActivityView(report: activity, activity: calendar) { day in

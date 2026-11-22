@@ -1,5 +1,5 @@
 // [INPUT]: 接收 worker 的 JSON 数据流和协议字段。
-// [OUTPUT]: 类型化报告及 Fast 用量和费用、对话身份与标题、用量模式证据和增量分行器。
+// [OUTPUT]: 类型化报告、Codex 子代理统计、Fast 用量和费用、对话身份与标题及增量分行器。
 // [POS]: 原生 IPC 的解析边界；已扫描的数据不重复遍历。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -106,6 +106,43 @@ struct UsageDetail: Decodable, Identifiable, Sendable {
 struct UsageReport: Decodable, Sendable {
     let revision: Int64; let summary: UsageSummary; let daily: [UsageGroup]; let clients: [UsageGroup]; let providers: [UsageGroup]; let models: [UsageGroup]; let details: [UsageDetail]
     let hourly: HourlyUsage?
+    var codexSubagents: CodexSubagentReport? = nil
+}
+struct CodexSubagentReport: Decodable, Sendable {
+    let starts: Int64
+    let tokens: Int64
+    let conversations: [CodexSubagentConversation]
+    var cost: CodexSubagentCost? = nil
+
+    var hasActivity: Bool {
+        starts > 0 || tokens > 0 || (cost?.knownEstimatedCostUsd ?? 0) > 0
+    }
+}
+struct CodexSubagentCost: Decodable, Sendable {
+    let knownEstimatedCostUsd: Double?
+    let unpricedTokens: Int64
+}
+struct CodexSubagentConversation: Decodable, Sendable, Identifiable {
+    let id: String
+    let title: String?
+    let starts: Int64
+    let tokens: Int64
+    let mainTurns: Int64?
+    let mainTokens: Int64?
+    let agents: [CodexSubagent]
+    var cost: CodexSubagentCost? = nil
+}
+struct CodexSubagent: Decodable, Sendable, Identifiable {
+    let id: String
+    let name: String?
+    let starts: Int64
+    let models: [CodexSubagentModel]
+}
+struct CodexSubagentModel: Decodable, Sendable, Identifiable {
+    let model: String
+    let tokens: Int64
+    var cost: CodexSubagentCost? = nil
+    var id: String { model }
 }
 struct HourlyUsage: Decodable, Sendable { let buckets: [UsageGroup]; let unallocated: UsageSummary }
 struct ActivityReport: Decodable, Sendable {

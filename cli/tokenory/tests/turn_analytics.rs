@@ -211,7 +211,7 @@ fn schema_four_turns_restore_with_codex_defaults() {
     let mut body = serde_json::to_value(parsed(&claude()).remove(0)).unwrap();
     body.as_object_mut().unwrap().remove("client");
     body.as_object_mut().unwrap().remove("durationEstimated");
-    db.connection.execute_batch("DROP TABLE codex_turns; CREATE TABLE codex_turns(id TEXT PRIMARY KEY,date TEXT NOT NULL,model TEXT NOT NULL,body TEXT NOT NULL); PRAGMA user_version=4;").unwrap();
+    db.connection.execute_batch("DROP TABLE codex_main_turn_starts; DROP TABLE codex_activity_aliases; DROP TABLE codex_activity_threads; DROP TABLE codex_turns; CREATE TABLE codex_turns(id TEXT PRIMARY KEY,date TEXT NOT NULL,model TEXT NOT NULL,body TEXT NOT NULL); PRAGMA user_version=4;").unwrap();
     db.connection
         .execute(
             "INSERT INTO codex_turns VALUES('legacy','2026-11-14','claude',?1)",

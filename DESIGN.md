@@ -51,6 +51,9 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 
 ## Overview and trends
 
+- Place the Codex subagent panel after the tool and model rankings and before annual activity when the selected filters have confirmed Codex subagent activity. Show starts, Tokens and estimated cost together. Use horizontal bars and percentage labels for Tokens and cost. The summary compares with the filtered Codex total. Keep the per-conversation section collapsed. Its rows compare with the subagent total and reveal models and main-agent context on expansion.
+- The existing total includes confirmed subagent usage as part of its ledger total. Match the Coding patterns metrics with medium-weight title3 numbers. The subagent panel counts newly started threads on their start dates and shows tokens from effective usage records in the selected range. A verified start can display the card before any usage is recorded.
+
 - Use tokens.ci as the reference for content, visual style and bilingual vocabulary. When a design proposal is requested for review, present a prototype first and preserve confirmed interactions when connecting it to real app data.
 - Default to the last 7 days. Align trend labels with the visible edges of the heading, body and chart. Keep chronological order fixed; do not offer a newest-first control.
 - Hide the active-day count when the selected range covers a single date.

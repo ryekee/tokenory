@@ -119,7 +119,7 @@ fn contiguous_migrations_create_one_backup() {
     let root = tempfile::tempdir().unwrap();
     let db = Database::open(root.path()).unwrap();
     db.connection
-        .execute_batch("DROP TABLE codex_turns; PRAGMA user_version=3;")
+        .execute_batch("DROP TABLE codex_main_turn_starts; DROP TABLE codex_activity_aliases; DROP TABLE codex_activity_threads; DROP TABLE codex_turns; PRAGMA user_version=3;")
         .unwrap();
     drop(db);
     let _db = Database::open(root.path()).unwrap();

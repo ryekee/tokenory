@@ -6158,6 +6158,108 @@
         }
       }
     },
+    "subagents.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Codex subagents" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "Codex 子代理" } }
+      }
+    },
+    "subagents.basis": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "How it’s counted" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "统计口径" } }
+      }
+    },
+    "subagents.count_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Each new subagent thread counts once on its start date. With a model filter, the count includes threads with matching usage in the selected range." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "每个子代理线程按启动日期计一次。筛选模型时，计入所选范围内有该模型用量的线程。" } }
+      }
+    },
+    "subagents.tokens_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Tokens include confirmed subagent usage in the selected range and are also included in the overview total." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "Tokens 为所选范围内确认属于子代理的用量，已计入总览合计。" } }
+      }
+    },
+    "subagents.cost_help": {
+      "comment": "Tokenory UI: subagents.cost_help. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Card percentages compare with Codex totals. Conversation percentages compare with all subagent usage. When prices are incomplete, cost percentages compare known estimates."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片百分比以 Codex 总量为基准，对话百分比以子代理总量为基准。部分用量未计价时，费用占比按已知估算金额计算。"
+          }
+        }
+      }
+    },
+    "subagents.conversations_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Conversation details include threads with a verified parent relationship. Other confirmed subagent usage remains in the totals." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "对话明细包含父会话关系可确认的线程。其他已确认的子代理用量仍计入合计。" } }
+      }
+    },
+    "subagents.started": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Started" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "启动数" } }
+      }
+    },
+    "subagents.conversations": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "View by conversation" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "按对话查看" } }
+      }
+    },
+    "subagents.untitled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Conversation %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "对话 %@" } }
+      }
+    },
+    "subagents.unnamed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Subagent %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "子代理 %@" } }
+      }
+    },
+    "subagents.main": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Main agent" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "主代理" } }
+      }
+    },
+    "subagents.main_turns": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%@ turns" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "%@ 回合" } }
+      }
+    },
+    "subagents.started_value": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%@ started" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "启动 %@" } }
+      }
+    },
     "record.conversations_empty": {
       "extractionState": "manual",
       "localizations": {
