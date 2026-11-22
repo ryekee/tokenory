@@ -28,8 +28,22 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 
 ## Git 提交
 
-- 提交标题使用 `[标签] 简短摘要`，标签后留一个空格。
-- `[feat]` 用于新增或扩展功能，`[fix]` 用于修复缺陷，`[chore]` 用于维护、文档和发布准备。
+- 提交标题使用 `[标签] 简短摘要`，标签用小写，方括号后留一个空格。例如 `[docs] Clarify backup instructions`。
+- 按提交的主要目的选择标签。标签类型参考 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) 和基于 Angular 约定的 [commitlint 类型列表](https://commitlint.js.org/reference/rules.html#type-enum)。
+
+| 标签 | 用途 |
+| --- | --- |
+| `[build]` | 构建配置、依赖或打包流程 |
+| `[chore]` | 其他日常维护，如更新版本号 |
+| `[ci]` | 持续集成和自动部署工作流 |
+| `[docs]` | 文档和说明 |
+| `[feat]` | 新增或扩展功能 |
+| `[fix]` | 修复缺陷 |
+| `[perf]` | 提升性能或降低资源占用 |
+| `[refactor]` | 调整内部实现并保持现有行为 |
+| `[revert]` | 撤回已有提交 |
+| `[style]` | 代码格式、缩进或空白调整 |
+| `[test]` | 新增或调整测试 |
 
 ## UI/UX
 - 以 `DESIGN.md` 为具体设计规范，保留已确认的设计。
