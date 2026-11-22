@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::mpsc,
     time::{Duration, Instant},
@@ -15,6 +15,13 @@ use tokenory::{
     queries::{conversations, report, ConversationQuery, Filter},
     turn_analytics,
 };
+
+fn legacy_cache_directory(home: &Path) -> PathBuf {
+    tokens_core::ClientId::Antigravity
+        .data()
+        .resolve_path_with_env_strategy(&home.to_string_lossy(), false)
+        .into()
+}
 
 fn encode_varint(mut value: u64) -> Vec<u8> {
     let mut out = Vec::new();
@@ -243,9 +250,7 @@ async fn discovers_antigravity_app_and_cli_dbs_dedupes_legacy_cache_and_tracks_h
     }
 
     // Legacy RPC cache containing a duplicate of `sess-app` AND a unique older session `sess-legacy`
-    let legacy_dir = home
-        .path()
-        .join(".config/tokens/antigravity-cache/sessions");
+    let legacy_dir = legacy_cache_directory(home.path());
     fs::create_dir_all(&legacy_dir).unwrap();
     fs::write(
         legacy_dir.join("sess-app.jsonl"),
@@ -607,12 +612,8 @@ impl LedgerFixture {
         }
     }
 
-    fn legacy(&self, session: &str, rows: &[(&str, i64)]) -> std::path::PathBuf {
-        let path = self
-            .config
-            .home_dir
-            .join(".config/tokens/antigravity-cache/sessions")
-            .join(format!("{session}.jsonl"));
+    fn legacy(&self, session: &str, rows: &[(&str, i64)]) -> PathBuf {
+        let path = legacy_cache_directory(&self.config.home_dir).join(format!("{session}.jsonl"));
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         let lines = rows
             .iter()

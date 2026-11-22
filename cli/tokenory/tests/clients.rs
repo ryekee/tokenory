@@ -1,6 +1,9 @@
 use rusqlite::Connection;
 use serde_json::{json, Value};
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use tokenory::{
     clients::CLIENTS,
     collector::{collect_once, persist, DiagnosticCache},
@@ -293,6 +296,10 @@ async fn sqlite_orca_and_paseo_paths_are_discovered_and_not_double_counted() {
 async fn trae_and_warp_cumulative_cache_updates_do_not_add_a_second_snapshot() {
     let home = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
+    let cache_dir = PathBuf::from(tokens_core::clients::PathRoot::Config.resolve_with_env_strategy(
+        &home.path().to_string_lossy(),
+        false,
+    ));
     let config = Config {
         home_dir: home.path().into(),
         ..Default::default()
@@ -301,13 +308,13 @@ async fn trae_and_warp_cumulative_cache_updates_do_not_add_a_second_snapshot() {
     let mut cache = DiagnosticCache::default();
     for (time, input, cents) in [(1793926800_i64, 100, 20), (1794013200, 200, 30)] {
         write(
-            home.path(),
-            ".config/tokens/trae-cache/sessions/usage.json",
+            &cache_dir,
+            "trae-cache/sessions/usage.json",
             json!([{"session_id":"trae-session","model_name":"GPT-5.4","usage_time":time,"dollar_float":0.1,"extra_info":{"input_token":input,"output_token":20}}]),
         );
         write(
-            home.path(),
-            ".config/tokens/warp-cache/usage.json",
+            &cache_dir,
+            "warp-cache/usage.json",
             json!({"syncedAt":if input == 100 {"2026-11-06T01:00:00Z"} else {"2026-11-07T01:00:00Z"},"usage":{"requestsUsed":5,"spendCents":cents}}),
         );
         let batch = collect_once(&config, &mut cache).await.unwrap();
