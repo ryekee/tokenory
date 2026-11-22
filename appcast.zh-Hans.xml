@@ -3,29 +3,24 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.11</title>
-            <pubDate>Sat, 21 Nov 2026 00:40:52 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.11</link>
-            <sparkle:version>14</sparkle:version>
-            <sparkle:shortVersionString>0.1.11</sparkle:shortVersionString>
+            <title>0.1.12</title>
+            <pubDate>Sun, 22 Nov 2026 16:15:29 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.12</link>
+            <sparkle:version>15</sparkle:version>
+            <sparkle:shortVersionString>0.1.12</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.11/Tokenory-0.1.11-macOS-arm64.zip" length="10748554" type="application/octet-stream" sparkle:edSignature="5mjt/IgE6h49spjLeuNbK99o7hajr7ocXYeCmeHHiJVZ46wt7KV3RD3QB0wW9m72eWtwXcqNilJSB5W47vvHDA==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.12/Tokenory-0.1.12-macOS-arm64.zip" length="10785831" type="application/octet-stream" sparkle:edSignature="XMot3RlnxsJBjdby2z5ovM9Re9Z/qkchnZjeswj3AJattciBP7ImYxOERsEg9ijLWVAbDnKv7ZByn1/QLCYpDw==" />
         <description xml:lang="zh-Hans" sparkle:format="markdown">## 新功能
 
-- 明细支持按对话筛选，Tokens 和费用列上方显示全部匹配记录的合计。
-- 在明细筛选和速度页的回合详情中查看 Codex 保存的会话标题。
-- 总览、明细和速度页用闪电图标标记日志中记录的 Fast 模式。
-- 双击悬浮 HUD 打开主窗口。
-- 速度图在最近 7 天按日分组，范围更长时按周分组。
+- 总览的工具和模型横条用琥珀色标出 Fast 部分，切换 Tokens 或费用时都会显示。
+- 实时读取 Antigravity 桌面版的本地用量和对话标题，速度页支持桌面版和 CLI 的已完成回合。
 
 ## 修复
 
-- 窄窗口中筛选器保持单行，简体中文明细使用短日期。
-- 速度和总览没有结果时，只显示一处提示，并提供调整日期或筛选的入口。
-- 费用和 Agent 支持说明可以点击展开，应用内的下拉选择器统一样式。
-- 沿用固定参考价补齐 Codex 自动审批费用估算，涵盖标记为 Fast 或 Ultrafast 的记录。
-- 恢复账本前确认所选备份，保存和备份的结果显示在对应按钮旁。
+- 修复 Antigravity 从旧缓存迁移到本地对话数据库时可能出现的重复计入或漏计。
+- 修复 Antigravity CLI 对话的输入 Tokens 统计偏高的问题。
+- 仅变更小时归属时保留原有估算费用，缺少请求时间的 Antigravity 用量归入未分配项。
 </description></item>
     </channel>
 </rss>

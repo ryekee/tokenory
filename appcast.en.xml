@@ -3,29 +3,24 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.11</title>
-            <pubDate>Sat, 21 Nov 2026 00:40:52 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.11</link>
-            <sparkle:version>14</sparkle:version>
-            <sparkle:shortVersionString>0.1.11</sparkle:shortVersionString>
+            <title>0.1.12</title>
+            <pubDate>Sun, 22 Nov 2026 16:15:29 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.12</link>
+            <sparkle:version>15</sparkle:version>
+            <sparkle:shortVersionString>0.1.12</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.11/Tokenory-0.1.11-macOS-arm64.zip" length="10748554" type="application/octet-stream" sparkle:edSignature="5mjt/IgE6h49spjLeuNbK99o7hajr7ocXYeCmeHHiJVZ46wt7KV3RD3QB0wW9m72eWtwXcqNilJSB5W47vvHDA==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.12/Tokenory-0.1.12-macOS-arm64.zip" length="10785831" type="application/octet-stream" sparkle:edSignature="XMot3RlnxsJBjdby2z5ovM9Re9Z/qkchnZjeswj3AJattciBP7ImYxOERsEg9ijLWVAbDnKv7ZByn1/QLCYpDw==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- Filter Records by conversation. The Tokens and cost columns show totals for all matching records.
-- See saved Codex conversation titles in the Records filter and in the details for a selected turn on Speed.
-- Spot logged Fast mode with a lightning icon in Overview, Records, and Speed.
-- Double-click the floating HUD to open the main window.
-- Speed charts group the last seven days by day and longer ranges by week.
+- See the Fast portion of tool and model usage bars in both Tokens and Cost.
+- Read Antigravity desktop usage live from local conversations, including titles, and see completed turns from Antigravity desktop and CLI in Speed.
 
 ## Fixes
 
-- Keep filters on one row in narrow windows and show a short date format in Simplified Chinese Records.
-- Show one message when Speed or Overview has no results, with a way to adjust the range or filters.
-- Open cost and agent-support explanations on click, and use the same dropdown style throughout the app.
-- Fill missing Codex auto-review estimates using its existing fixed reference rate, including records marked Fast or Ultrafast.
-- Confirm the selected backup before restoring it and show save and backup results next to their controls.
+- Prevent duplicate or missing Antigravity usage when upgrading from the old cache to the local conversation database.
+- Correct overcounted input tokens in Antigravity CLI conversations.
+- Keep existing estimates when only hourly placement changes, and leave Antigravity usage without a request timestamp out of the hourly bars.
 </description></item>
     </channel>
 </rss>
