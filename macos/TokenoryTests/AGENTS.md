@@ -1,7 +1,7 @@
 # macos/TokenoryTests/
 > L2 | Parent: ../../AGENTS.md
 
-BrandPresentationTests.swift: 验证品牌映射、模板资源及金额格式。
+BrandPresentationTests.swift: 验证品牌映射、模板资源、Gemini 图标的原生绘制面积及金额格式。
 EngineClientTests.swift: 验证引擎协议客户端和分块大目录解析。
 HUDTests.swift: 验证跨时区与 23/25 小时夏令日；验证整数与金额读数、未知/部分价格、进位和渐停、跨日/切换/减少动态效果、滚动中连续追加与密集更新、设置持久化、字体/双语资源及浮动面板的全屏空间配置。
 LocalizationTests.swift: 验证本地化资源。
