@@ -20,7 +20,7 @@ Kilo CLI、Crush、Goose、MiMo Code 使用上游的数据库发现入口，目�
 
 ## 需要先生成缓存的客户端
 
-这四种入口不能仅靠安装客户端完成采集。下列命令属于保留的上游 **`tokens` CLI**，不是本地 **`tokenory` helper**。如需要同步，可从本仓库构建上游 CLI：`cargo build --manifest-path cli/Cargo.toml -p tokens-cli`，然后使用 `cli/target/debug/tokens`。只执行需要的登录 / 同步命令即可，无需执行 `submit`。
+这四种入口可使用上游 **`tokens` CLI** 生成本地缓存。按 [上游安装说明](https://github.com/missuo/tokens) 安装 CLI，再运行表中对应的登录和同步命令。
 
 | 客户端 | 默认缓存 | 上游缓存生成命令 |
 | --- | --- | --- |
@@ -50,6 +50,6 @@ Tokenory 直接读取 Antigravity App 的 `~/.gemini/antigravity/conversations/*
 
 CC Switch 的原始 Claude 日汇总 JSON，以及 tokens.ci profile JSON 的实际日/工具/模型单元均可导入。未知时区保留源日期，顶层总表用于校验，不作为第二份用量添加。
 
-本机 DeepSeek 数据来自 Claude Code 的 Anthropic 兼容日志，工具仍归 Claude Code，提供方归 DeepSeek。没有新增代理或余额差分推断。未保存 usage 的请求无法从现有日志恢复，缺少的推理细分不生成模拟数据。原有迁移与真实记录对账见 [历史迁移](migration.md) 和 [历史来源审计](source-audit.md)。
+来自 Claude Code 的 Anthropic 兼容日志按 Claude Code 归类工具，按 DeepSeek 归类提供方。Tokenory 保留日志中实际记录的用量字段及其粒度。
 
 多客户端接入的自动化验证见 [兼容性验证](client-compatibility.md)。本机真实 Claude/Codex 验收与其余客户端的格式测试分别记录。

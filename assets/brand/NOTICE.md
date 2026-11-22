@@ -1,8 +1,8 @@
 # Native brand glyphs
 
-The native app follows tokens.ci's `web/src/components/profile/ModelIcon.tsx`: monochrome glyphs inherit the surrounding foreground color. The app does not use the original colored logo artwork.
+Native template glyphs inherit the surrounding foreground color, following the tokens.ci model icons.
 
-- Main input: `web/src/lib/brandIcons.generated.ts`, generated upstream from `@lobehub/icons-static-svg`.
+- Main input: `glyphs.json`, extracted from `web/src/lib/brandIcons.generated.ts` in missuo/tokens commit `26c3e8442998d78e892ea4b2a9360cc2fdae9c58`. The upstream file was generated from `@lobehub/icons-static-svg`.
 - Additional tool inputs: `vendor/cline.svg` and `vendor/githubcopilot.svg`, copied from `@lobehub/icons-static-svg` 1.94.0 on the npm registry.
 - Upstream: https://github.com/lobehub/lobe-icons
 - License: MIT, Copyright (c) 2023 LobeHub. The full notice is in `vendor/LICENSE` and bundled with the native app.

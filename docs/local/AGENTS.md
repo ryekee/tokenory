@@ -1,27 +1,18 @@
 # docs/local/
 > L2 | Parent: ../../AGENTS.md
 
-acceptance.md: 实施与验收状态。
 agent-coverage.md: Agent 图标与计价覆盖。
 client-compatibility.md: 多客户端接入验证。
 devin-compactor.md: 记录压缩调用的 Luna 标签、目录证据和用户选择的参考计价。
-history-verification.md: CC Switch 历史导入验证。
-implementation-decisions.md: 实施决策与审查。
-migration.md: 历史迁移对账。
 operations.md: 使用与维护。
-mechanical-hud.md: HUD 启用、当日累计口径、滚轮音效、窗口行为及官网原型保留位置。
+mechanical-hud.md: HUD 启用、当日累计口径、滚轮音效、窗口行为和官网演示。
 pricing.md: 估算口径、远程目录格式及独立更新流程。
 releases.md: macOS 打包、双语更新说明和 Sparkle 更新源。
-release-notes-review.md: v0.1.0 至 v0.1.8 的双语历史说明审阅稿。
-source-audit.md: 来源探查与基线。
 sources.md: 客户端与来源。
 storage-maintenance.md: 自动备份、预览留存和本地存储维护。
-ui-layout-audit.md: 记录布局根因、修复和视觉验证范围。
-upstream.md: 上游与本地构建。
+upstream.md: 上游同步、本地构建和过程文件归档。
 
 agent-speed-coverage.md: 逐一记录42个入口的速度格式证据、支持条件及补采方案。
-
-codex-realtime-usage.md: Codex 用量产生时机、日志与 hook/app-server 方案证据及尚未实施的实时采集建议。
 
 codex-turns.md: 多 Agent 回合采集、指标口径、支持边界和验收记录。
 
