@@ -3495,13 +3495,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Local logs, databases and existing usage exports are detected automatically. Cursor, Trae, Warp and Antigravity need upstream-format local caches."
+            "value": "Local logs, databases and existing usage exports are detected automatically. Cursor, Trae and Warp need upstream-format local caches."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "自动发现本地日志、数据库和已有用量导出。Cursor、Trae、Warp 和 Antigravity 需要上游格式的本地缓存。"
+            "value": "自动发现本地日志、数据库和已有用量导出。Cursor、Trae 和 Warp 需要上游格式的本地缓存。"
           }
         }
       }
@@ -6018,6 +6018,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fast · %@ tokens"
+          }
+        }
+      }
+    },
+    "fast.cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast · %@ estimated cost"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast · 估算费用 %@"
           }
         }
       }

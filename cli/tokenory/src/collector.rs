@@ -1,6 +1,6 @@
 // [INPUT]: 读取各客户端日志和当前价格快照。
-// [OUTPUT]: 全量或变更 Codex 文件增量采集，生成规范化用量、完成回合与诊断。
-// [POS]: 解析器与账本之间的边界；维护稳定记录身份，并继承 Devin 旧行的计价依据。
+// [OUTPUT]: 全量或变更 Codex/Antigravity 文件增量采集，生成规范化用量、完成回合与诊断。
+// [POS]: 采集与账本边界；按请求迁移 Antigravity / Devin 旧行，保留历史计价依据。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
     clients::{source_paths, CLIENTS},
@@ -71,7 +71,7 @@ pub struct ScanResult {
 }
 pub struct ScanBatch {
     pub records: Vec<UsageRecord>,
-    devin_legacy_keys: HashMap<String, String>,
+    prior_keys: HashMap<String, String>,
     pub codex_turns: Vec<crate::codex_turns::CodexTurn>,
     pub invalidated_turn_ids: Vec<String>,
     pub timezone: String,
@@ -125,6 +125,19 @@ fn diagnose_file(path: &Path, cache: &mut DiagnosticCache) -> Result<Vec<String>
             rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
         )?;
         db.query_row("PRAGMA schema_version", [], |row| row.get::<_, i64>(0))?;
+        if let Ok(m) = std::fs::metadata(path) {
+            let mut size = m.len();
+            let mut modified = m.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+            if let Ok(wal) = std::fs::metadata(format!("{}-wal", path.display())) {
+                size = size.saturating_add(wal.len());
+                if let Ok(wal_mod) = wal.modified() {
+                    if wal_mod > modified {
+                        modified = wal_mod;
+                    }
+                }
+            }
+            cache.files.insert(path.into(), (size, modified, vec![]));
+        }
         return Ok(vec![]);
     }
     let m = std::fs::metadata(path)?;
@@ -165,34 +178,147 @@ pub async fn collect_once(config: &Config, cache: &mut DiagnosticCache) -> Resul
     collect(config, cache, CLIENTS, None).await
 }
 
+pub const LIVE_CLIENTS: &[tokens_core::ClientId] = &[
+    tokens_core::ClientId::Codex,
+    tokens_core::ClientId::Antigravity,
+    tokens_core::ClientId::AntigravityCli,
+];
+
 pub async fn collect_codex_changes(
     config: &Config,
     cache: &mut DiagnosticCache,
     paths: Option<Vec<PathBuf>>,
 ) -> Result<ScanBatch> {
+    match paths {
+        None => collect(config, cache, &[tokens_core::ClientId::Codex], None).await,
+        Some(paths) => collect_live_changes(config, cache, Some(paths)).await,
+    }
+}
+
+pub async fn collect_live_changes(
+    config: &Config,
+    cache: &mut DiagnosticCache,
+    paths: Option<Vec<PathBuf>>,
+) -> Result<ScanBatch> {
+    let Some(paths) = paths else {
+        return collect(config, cache, LIVE_CLIENTS, None).await;
+    };
     // Exec captures are superseded by matching rollouts in other files. Keep that
     // cross-file lookup when a capture changes, or it could be charged twice.
     let headless = tokens_core::scanner::headless_roots_with_env_strategy(
         &config.home_dir.to_string_lossy(),
         false,
     );
-    let capture_changed = paths.as_ref().is_some_and(|paths| {
-        paths.iter().any(|path| {
-            let path = path.canonicalize().unwrap_or_else(|_| path.clone());
-            headless
-                .iter()
-                .any(|root| path.starts_with(root.canonicalize().unwrap_or_else(|_| root.clone())))
-        })
+    let capture_changed = paths.iter().any(|path| {
+        let path = path.canonicalize().unwrap_or_else(|_| path.clone());
+        headless
+            .iter()
+            .any(|root| path.starts_with(root.canonicalize().unwrap_or_else(|_| root.clone())))
     });
-    let paths = if capture_changed { None } else { paths };
-    collect(config, cache, &[tokens_core::ClientId::Codex], paths).await
+    if capture_changed {
+        return collect(config, cache, LIVE_CLIENTS, None).await;
+    }
+    let watch = crate::codex_watch::WatchRoots::from_config(config);
+    let mut scan = tokens_core::scanner::ScanResult::default();
+    let mut selected = Vec::new();
+    let mut add_client = |client: tokens_core::ClientId| {
+        if !selected.contains(&client) {
+            selected.push(client);
+        }
+    };
+    for path in paths {
+        match watch.classify_file(&path) {
+            Some((tokens_core::ClientId::Codex, target)) => {
+                add_client(tokens_core::ClientId::Codex);
+                scan.get_mut(tokens_core::ClientId::Codex).push(target);
+            }
+            Some((tokens_core::ClientId::Antigravity, target)) => {
+                add_client(tokens_core::ClientId::Antigravity);
+                if target.extension().and_then(|s| s.to_str()) == Some("db") {
+                    scan.antigravity_dbs.push(target);
+                } else {
+                    scan.get_mut(tokens_core::ClientId::Antigravity)
+                        .push(target);
+                }
+            }
+            Some((tokens_core::ClientId::AntigravityCli, target)) => {
+                add_client(tokens_core::ClientId::AntigravityCli);
+                scan.get_mut(tokens_core::ClientId::AntigravityCli)
+                    .push(target);
+            }
+            _ => {
+                // Allow direct Codex paths passed by tests outside default watch roots.
+                if path.extension().and_then(|s| s.to_str()) == Some("jsonl") {
+                    add_client(tokens_core::ClientId::Codex);
+                    scan.get_mut(tokens_core::ClientId::Codex).push(path);
+                }
+            }
+        }
+    }
+    if selected.is_empty() {
+        return collect(config, cache, LIVE_CLIENTS, None).await;
+    }
+    // A legacy notification supplies only the JSONL path. Reconcile the complete
+    // selected sources so SQLite keeps its precedence for sessions and response IDs.
+    if !scan.get(tokens_core::ClientId::Antigravity).is_empty() {
+        return collect(config, cache, &selected, None).await;
+    }
+    let db_clients: Vec<_> = selected
+        .iter()
+        .filter(|c| {
+            matches!(
+                c,
+                tokens_core::ClientId::Antigravity | tokens_core::ClientId::AntigravityCli
+            )
+        })
+        .map(|c| c.as_str().to_owned())
+        .collect();
+    if !db_clients.is_empty() {
+        // App, IDE and configured roots may hold fragments of the same session.
+        // Discover filenames, then decode only the changed sessions' databases.
+        let peers = tokens_core::scanner::scan_all_clients_with_scanner_settings(
+            &config.home_dir.to_string_lossy(),
+            &db_clients,
+            false,
+            &tokens_core::scanner::ScannerSettings {
+                extra_scan_paths: config.extra_scan_paths.clone(),
+                ..Default::default()
+            },
+        );
+        add_session_peers(&mut scan.antigravity_dbs, &peers.antigravity_dbs);
+        add_session_peers(
+            scan.get_mut(tokens_core::ClientId::AntigravityCli),
+            peers.get(tokens_core::ClientId::AntigravityCli),
+        );
+    }
+    scan.antigravity_dbs.sort();
+    scan.antigravity_dbs.dedup();
+    for &client in &selected {
+        let bucket = scan.get_mut(client);
+        bucket.sort();
+        bucket.dedup();
+    }
+    collect(config, cache, &selected, Some(scan)).await
+}
+
+fn add_session_peers(changed: &mut Vec<PathBuf>, discovered: &[PathBuf]) {
+    let sessions: HashSet<_> = changed
+        .iter()
+        .filter_map(|p| p.file_stem().map(|s| s.to_owned()))
+        .collect();
+    changed.extend(
+        discovered
+            .iter()
+            .filter(|p| p.file_stem().is_some_and(|s| sessions.contains(s)))
+            .cloned(),
+    );
 }
 
 async fn collect(
     config: &Config,
     cache: &mut DiagnosticCache,
     selected: &[tokens_core::ClientId],
-    paths: Option<Vec<PathBuf>>,
+    live_scan: Option<tokens_core::scanner::ScanResult>,
 ) -> Result<ScanBatch> {
     config.validate()?;
     let start = Instant::now();
@@ -210,10 +336,8 @@ async fn collect(
         ..Default::default()
     };
     let discover = || {
-        if let Some(paths) = &paths {
-            let mut scan = tokens_core::scanner::ScanResult::default();
-            *scan.get_mut(tokens_core::ClientId::Codex) = paths.clone();
-            return scan;
+        if let Some(scan) = &live_scan {
+            return scan.clone();
         }
         tokens_core::scanner::scan_all_clients_with_scanner_settings(
             &config.home_dir.to_string_lossy(),
@@ -288,17 +412,22 @@ async fn collect(
         }
     }
     let mut records = Vec::new();
-    let mut devin_legacy_keys = HashMap::new();
+    let mut prior_keys = HashMap::new();
     {
-        let mut messages = if let Some(paths) = &paths {
-            tokens_core::parse_changed_codex_files(options.clone(), paths.clone(), cache.persistent)
-        } else if cache.persistent {
-            tokens_core::parse_local_unified_messages_with_pricing(options.clone(), None).await
-        } else {
-            tokens_core::parse_local_unified_messages_with_pricing_uncached(options.clone(), None)
-                .await
-        }
+        let parsed = tokens_core::parse_scanned_files(
+            options.clone(),
+            scan,
+            clients.clone(),
+            cache.persistent,
+        )
         .map_err(|e| anyhow!(e))?;
+        for (client, error) in parsed.source_errors {
+            if let Some(source) = sources.iter_mut().find(|s| s.client == client.as_str()) {
+                source.status = "partial".into();
+                source.errors.push(error);
+            }
+        }
+        let mut messages = parsed.messages;
         let tz = config.timezone.parse::<chrono_tz::Tz>()?;
         // New adapters also emit session totals or messages without an event ID.
         // Sort their rows to give a repeat scan stable snapshot positions. Their
@@ -345,14 +474,21 @@ async fn collect(
                         .as_ref()
                         .map(|(key, _)| key.as_str())
                         .or(m.dedup_key.as_deref());
-                    let identity = match event_key.filter(|key| !key.is_empty()) {
-                        Some(key) => json!(["event", key]),
-                        None => json!(["position", index]),
-                    };
-                    format!(
-                        "snapshot:{}",
-                        serde_json::to_string(&(&m.client, &m.session_id, identity))?
-                    )
+                    let event = event_key.filter(|key| !key.is_empty());
+                    match (m.client.as_str(), event) {
+                        // RPC and SQLite may name the same request's session differently.
+                        ("antigravity", Some(response)) => antigravity_response_key(response),
+                        _ => {
+                            let identity = match event {
+                                Some(key) => json!(["event", key]),
+                                None => json!(["position", index]),
+                            };
+                            format!(
+                                "snapshot:{}",
+                                serde_json::to_string(&(&m.client, &m.session_id, identity))?
+                            )
+                        }
+                    }
                 } else {
                     let identity = m
                         .dedup_key
@@ -367,6 +503,13 @@ async fn collect(
                     .with_timezone(&tz)
                     .format("%Y-%m-%d")
                     .to_string();
+                use tokens_core::sessions::antigravity_cli::SqliteTime;
+                let is_event = match m.antigravity_sqlite_time {
+                    Some(SqliteTime::Request) => true,
+                    Some(SqliteTime::SessionFallback) => false,
+                    // RPC usage rows require their own positive request timestamp.
+                    None => !snapshot || m.client == "antigravity",
+                };
                 let r = UsageRecord {
                     key,
                     client: m.client.clone(),
@@ -392,11 +535,14 @@ async fn collect(
                     estimated_cost_usd: None,
                     cost_basis: None,
                     price_snapshot_id: None,
-                    metadata: json!({"granularity":if snapshot { "sourceRecord" } else { "event" },"parserVersion":"c2f3857c","cacheWrite1h":m.cache_write_1h,"inferenceSpeed":m.inference_speed,"modelAttributionConflicted":m.model_attribution_conflicted}),
+                    metadata: json!({"granularity":if is_event { "event" } else { "sourceRecord" },"parserVersion":"c2f3857c","cacheWrite1h":m.cache_write_1h,"inferenceSpeed":m.inference_speed,"modelAttributionConflicted":m.model_attribution_conflicted}),
                 };
                 let mut r = r;
                 if snapshot {
                     r.metadata["collectionMode"] = "sessionSnapshot".into();
+                }
+                if m.client == "antigravity" && m.antigravity_sqlite_time.is_some() {
+                    r.metadata["antigravitySqlite"] = true.into();
                 }
                 r.validate()?;
                 if let Some((_, row_key)) = &devin_keys {
@@ -405,7 +551,7 @@ async fn collect(
                         &m.session_id,
                         ["event", row_key.as_str()],
                     ))?;
-                    devin_legacy_keys.insert(r.key.clone(), format!("snapshot:{legacy_key}"));
+                    prior_keys.insert(r.key.clone(), format!("snapshot:{legacy_key}"));
                 }
                 Ok(r)
             })();
@@ -460,7 +606,7 @@ async fn collect(
     }
     Ok(ScanBatch {
         records,
-        devin_legacy_keys,
+        prior_keys,
         codex_turns,
         invalidated_turn_ids,
         timezone: config.timezone.clone(),
@@ -482,6 +628,23 @@ async fn collect(
         },
     })
 }
+fn antigravity_response_key(response: &str) -> String {
+    format!("antigravity:response:{response}")
+}
+
+// v0.1.11 identified every RPC row by client, session and event/position.
+// Only named responses can be matched safely across different session IDs.
+fn migrated_antigravity_key(key: &str, session: Option<&str>) -> Option<String> {
+    let parts = key.strip_prefix("snapshot:")?;
+    let (client, saved_session, (kind, response)): (String, String, (String, String)) =
+        serde_json::from_str(parts).ok()?;
+    (client == "antigravity"
+        && Some(saved_session.as_str()) == session
+        && kind == "event"
+        && !response.is_empty())
+    .then(|| antigravity_response_key(&response))
+}
+
 pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
     let snapshot = crate::pricing::active_snapshot(&db.connection)?;
     let tx = db.connection.transaction()?;
@@ -491,26 +654,55 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
         .filter(|r| r.metadata["collectionMode"] == "sessionSnapshot")
         .map(|r| (r.client.clone(), r.session_id.clone()))
         .collect();
+    let sqlite_sessions: HashSet<_> = batch
+        .records
+        .iter()
+        .filter(|r| r.metadata["antigravitySqlite"] == true)
+        .filter_map(|r| r.session_id.as_deref())
+        .collect();
+    let has_antigravity = sessions.iter().any(|(client, _)| client == "antigravity");
     let incoming: HashSet<_> = batch.records.iter().map(|r| r.key.as_str()).collect();
     // Only replace sessions successfully read in this scan. Missing files and
     // failed sources keep their saved history, as do every imported batch.
     let obsolete = {
-        let mut stmt = tx.prepare("SELECT item_key,client,json_extract(body,'$.sessionId') FROM usage_records WHERE source='local' AND batch_id='' AND json_extract(body,'$.metadata.collectionMode')='sessionSnapshot'")?;
-        let saved = stmt.query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, Option<String>>(2)?,
-            ))
-        })?;
-        saved
-            .filter_map(|row| match row {
-                Ok((key, client, session)) => (sessions.contains(&(client, session))
-                    && !incoming.contains(key.as_str()))
-                .then_some(Ok(key)),
-                Err(e) => Some(Err(e)),
-            })
-            .collect::<rusqlite::Result<Vec<_>>>()?
+        let mut stmt = tx.prepare("SELECT item_key,client,json_extract(body,'$.sessionId'),coalesce(json_extract(body,'$.metadata.antigravitySqlite'),0) FROM usage_records WHERE source='local' AND batch_id='' AND json_extract(body,'$.metadata.collectionMode')='sessionSnapshot' ORDER BY rowid")?;
+        let mut saved = stmt.query([])?;
+        let mut obsolete = Vec::new();
+        while let Some(row) = saved.next()? {
+            let key: String = row.get(0)?;
+            if incoming.contains(key.as_str()) {
+                continue;
+            }
+            let client: String = row.get(1)?;
+            let session: Option<String> = row.get(2)?;
+            if client == "antigravity" {
+                if has_antigravity {
+                    if let Some(new_key) = migrated_antigravity_key(&key, session.as_deref())
+                        .filter(|key| incoming.contains(key.as_str()))
+                    {
+                        // Read the former row before deletion to inherit its price and timezone.
+                        batch
+                            .prior_keys
+                            .entry(new_key)
+                            .or_insert_with(|| key.clone());
+                        obsolete.push(key);
+                        continue;
+                    }
+                }
+                if row.get::<_, bool>(3)?
+                    && !session
+                        .as_deref()
+                        .is_some_and(|id| sqlite_sessions.contains(id))
+                {
+                    // A missing or unreadable DB leaves history intact when only RPC is available.
+                    continue;
+                }
+            }
+            if sessions.contains(&(client, session)) {
+                obsolete.push(key);
+            }
+        }
+        obsolete
     };
     let mut read_prior = tx.prepare_cached(
         "SELECT body FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",
@@ -521,7 +713,7 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
             .optional()?;
         let is_new = prior.is_none();
         if is_new {
-            if let Some(key) = batch.devin_legacy_keys.get(&record.key) {
+            if let Some(key) = batch.prior_keys.get(&record.key) {
                 prior = read_prior.query_row([key], |row| row.get(0)).optional()?;
             }
         }
@@ -529,7 +721,22 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
             crate::pricing::assign("local", &mut record, id, p);
         }
         if let Some(prior) = prior {
-            let old: UsageRecord = serde_json::from_str(&prior)?;
+            let mut old: UsageRecord = serde_json::from_str(&prior)?;
+            if old.metadata["antigravitySqlite"] == true
+                && record.metadata["antigravitySqlite"] != true
+            {
+                // The primary file disappeared since the last successful scan.
+                batch.result.unchanged += 1;
+                continue;
+            }
+            if matches!(record.client.as_str(), "antigravity" | "antigravity-cli") {
+                // Refining hourly coverage or identifying the source is not a user-requested
+                // historical reprice. Retain the former price if all billing inputs agree.
+                old.metadata["granularity"] = record.metadata["granularity"].clone();
+                if let Some(source) = record.metadata.get("antigravitySqlite") {
+                    old.metadata["antigravitySqlite"] = source.clone();
+                }
+            }
             if old.tokens == record.tokens
                 && old.model == record.model
                 && old.provider == record.provider
@@ -571,7 +778,7 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
         tx.execute("INSERT OR IGNORE INTO coverage_choices(date,client,source,batch_id) VALUES (?1,?2,'local','')",params![record.date,record.client])?;
     }
     drop(read_prior);
-    // Keep legacy Devin rows available until their survivors inherit pricing.
+    // Keep legacy rows available until their replacement has inherited pricing.
     for key in obsolete {
         batch.result.removed += tx.execute(
             "DELETE FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",

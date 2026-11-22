@@ -321,7 +321,7 @@ fn start_scan(
     tokio::task::spawn_blocking(move || {
         let r = tokio::runtime::Handle::current().block_on(async {
             match live_paths {
-                Some(paths) => collector::collect_codex_changes(&config, &mut cache, paths).await,
+                Some(paths) => collector::collect_live_changes(&config, &mut cache, paths).await,
                 None => collector::collect_once(&config, &mut cache).await,
             }
         });
@@ -406,7 +406,7 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
                   Ok(r) => {
                       if r.changed > 0 { send(json!({"version":1,"event":"todayUsageChanged","revision":r.revision,"durationMs":r.duration_ms}))?; }
                   }
-                  Err(error) => { eprintln!("Codex live collection failed; periodic scan will retry: {error}"); }
+                  Err(error) => { eprintln!("Live collection failed; periodic scan will retry: {error}"); }
               }
               continue;
           }
@@ -433,7 +433,12 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
          change=async { match &mut watcher { Some((_, rx)) => rx.recv().await, None => std::future::pending().await } }=>{
              match change {
                  Some(crate::codex_watch::Change::Paths(paths)) => { active_files.track(paths.clone()); live_paths.extend(paths); },
-                 Some(crate::codex_watch::Change::Rescan) => live_rescan = true,
+                 Some(crate::codex_watch::Change::Rescan) => {
+                     live_rescan = true;
+                     if let Ok(rebound) = crate::codex_watch::start(&config) {
+                         watcher = Some(rebound);
+                     }
+                 }
                  None => { watcher = None; }
              }
              if live_due.is_none() { live_due = Some(Instant::now()+Duration::from_millis(250)); }

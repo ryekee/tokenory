@@ -1,5 +1,5 @@
-// [INPUT]: Validated filters, the effective ledger view, and the local Codex title index.
-// [OUTPUT]: Effective usage reports, searchable conversation identities and titles, and activity by day or hour.
+// [INPUT]: Validated filters, the effective ledger view, and local Codex/Antigravity title indexes.
+// [OUTPUT]: Effective usage reports with Fast token and estimated cost subsets, searchable conversations, and activity by day or hour.
 // [POS]: Read-only aggregation boundary; never aggregate paginated details.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -123,11 +123,51 @@ fn codex_title<'a>(titles: &'a HashMap<String, String>, session_id: &str) -> Opt
     })
 }
 
-pub(crate) fn conversation_title(home: &Path, id: &ConversationId) -> Option<String> {
-    if id.client != "codex" {
-        return None;
+fn antigravity_titles(home: &Path, client: &str) -> HashMap<String, String> {
+    let candidates: &[&str] = match client {
+        "antigravity" => &[
+            ".gemini/antigravity/conversation_summaries.db",
+            ".gemini/antigravity-ide/conversation_summaries.db",
+        ],
+        "antigravity-cli" => &[".gemini/antigravity-cli/conversation_summaries.db"],
+        _ => return HashMap::new(),
+    };
+    let mut titles = HashMap::new();
+    for rel in candidates {
+        let path = home.join(rel);
+        let Ok(conn) =
+            Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        else {
+            continue;
+        };
+        let Ok(mut stmt) = conn.prepare(
+            "SELECT conversation_id, title FROM conversation_summaries WHERE title != ''",
+        ) else {
+            continue;
+        };
+        let Ok(rows) = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }) else {
+            continue;
+        };
+        for row in rows.flatten() {
+            let title = row.1.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !row.0.is_empty() && !title.is_empty() {
+                titles.entry(row.0).or_insert(title);
+            }
+        }
     }
-    codex_title(&codex_titles(home), &id.session_id).cloned()
+    titles
+}
+
+pub(crate) fn conversation_title(home: &Path, id: &ConversationId) -> Option<String> {
+    match id.client.as_str() {
+        "codex" => codex_title(&codex_titles(home), &id.session_id).cloned(),
+        "antigravity" | "antigravity-cli" => {
+            antigravity_titles(home, &id.client).remove(&id.session_id)
+        }
+        _ => None,
+    }
 }
 
 pub fn conversations(
@@ -140,8 +180,19 @@ pub fn conversations(
     query.filter.validate()?;
     let search = query.search.trim();
     let title_search = search.to_lowercase();
-    let titles = if matches!(query.filter.client.as_deref(), None | Some("codex")) {
+    let filter_client = query.filter.client.as_deref();
+    let codex_map = if matches!(filter_client, None | Some("codex")) {
         codex_titles(home)
+    } else {
+        HashMap::new()
+    };
+    let agy_map = if matches!(filter_client, None | Some("antigravity")) {
+        antigravity_titles(home, "antigravity")
+    } else {
+        HashMap::new()
+    };
+    let agy_cli_map = if matches!(filter_client, None | Some("antigravity-cli")) {
+        antigravity_titles(home, "antigravity-cli")
     } else {
         HashMap::new()
     };
@@ -166,10 +217,11 @@ pub fn conversations(
             client: row.get(0)?,
             session_id: row.get(1)?,
         };
-        let title = if id.client == "codex" {
-            codex_title(&titles, &id.session_id)
-        } else {
-            None
+        let title = match id.client.as_str() {
+            "codex" => codex_title(&codex_map, &id.session_id),
+            "antigravity" => agy_map.get(&id.session_id),
+            "antigravity-cli" => agy_cli_map.get(&id.session_id),
+            _ => None,
         };
         if !row.get::<_, bool>(5)?
             && !title.is_some_and(|value| value.to_lowercase().contains(&title_search))
@@ -195,6 +247,8 @@ pub struct Summary {
     pub tokens: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fast_tokens: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fast_estimated_cost_usd: Option<f64>,
     pub token_breakdown: Tokens,
     pub known_estimated_cost_usd: Option<f64>,
     pub unpriced_tokens: i64,
@@ -278,7 +332,10 @@ const WHERE_SQL:&str=" WHERE (CASE WHEN ?7 IS NOT NULL AND json_extract(body,'$.
 const SUMMARY_SQL:&str="coalesce(sum(tokens),0),coalesce(sum(input),0),coalesce(sum(output),0),coalesce(sum(cache_read),0),coalesce(sum(cache_write),0),coalesce(sum(reasoning),0),sum(estimated_cost),coalesce(sum(CASE WHEN estimated_cost IS NULL THEN tokens ELSE 0 END),0),count(*),count(DISTINCT CASE WHEN tokens>0 THEN date END),sum(requests),count(DISTINCT CASE WHEN json_extract(body, '$.metadata.partialDay')=1 THEN date END),
     sum(CASE WHEN json_extract(body, '$.metadata.inferenceSpeed.speed')='fast'
         AND json_extract(body, '$.metadata.inferenceSpeed.source') IN ('selected', 'reported')
-        THEN tokens END)";
+        THEN tokens END),
+    sum(CASE WHEN json_extract(body, '$.metadata.inferenceSpeed.speed')='fast'
+        AND json_extract(body, '$.metadata.inferenceSpeed.source') IN ('selected', 'reported')
+        THEN estimated_cost END)";
 fn read_summary(row: &Row<'_>, start: usize) -> rusqlite::Result<Summary> {
     let known: Option<f64> = row.get(start + 6)?;
     let pending: i64 = row.get(start + 7)?;
@@ -309,6 +366,7 @@ fn read_summary(row: &Row<'_>, start: usize) -> rusqlite::Result<Summary> {
         requests: row.get(start + 10)?,
         partial_days: row.get(start + 11)?,
         fast_tokens: row.get(start + 12)?,
+        fast_estimated_cost_usd: row.get(start + 13)?,
     })
 }
 fn grouped(c: &Connection, f: &Filter, column: &str) -> Result<Vec<Group>> {

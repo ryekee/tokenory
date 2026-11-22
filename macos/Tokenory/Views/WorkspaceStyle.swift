@@ -26,6 +26,10 @@ enum WorkspaceStyle {
         scheme == .dark ? Color(red: 1, green: 0.68, blue: 0.32) : Color(red: 0.65, green: 0.3, blue: 0.04)
     }
 
+    static func fastUsage(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(red: 1, green: 0.79, blue: 0.46) : Color(red: 0.64, green: 0.35, blue: 0.04)
+    }
+
     static func toolColor(_ key: String) -> Color {
         switch key {
         case "codex": .blue

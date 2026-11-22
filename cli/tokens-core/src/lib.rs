@@ -827,6 +827,24 @@ fn opencode_json_superseded_by_sqlite(
 /// Callers that genuinely want the whole vector still get one: `Vec` is a sink.
 trait MessageSink {
     fn accept(&mut self, message: UnifiedMessage);
+    fn source_error(&mut self, _client: ClientId, _error: String) {}
+}
+
+/// Parsing diagnostics let the ledger retain the previous snapshot of a failed source.
+#[derive(Default)]
+pub struct ScannedMessages {
+    pub messages: Vec<UnifiedMessage>,
+    pub source_errors: Vec<(ClientId, String)>,
+}
+
+impl MessageSink for ScannedMessages {
+    fn accept(&mut self, message: UnifiedMessage) {
+        self.messages.push(message);
+    }
+
+    fn source_error(&mut self, client: ClientId, error: String) {
+        self.source_errors.push((client, error));
+    }
 }
 
 impl MessageSink for Vec<UnifiedMessage> {
@@ -3341,35 +3359,16 @@ fn parse_all_messages_streaming<S: MessageSink>(
         all_messages.extend(crush_messages);
     }
 
-    let antigravity_messages: Vec<UnifiedMessage> = scan_result
-        .get(ClientId::Antigravity)
-        .par_iter()
-        .flat_map(|path| {
-            sessions::antigravity::parse_antigravity_file(path)
-                .into_iter()
-                .map(|mut msg| {
-                    apply_pricing_if_available(&mut msg, pricing);
-                    msg
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    all_messages.extend(antigravity_messages);
-
-    let antigravity_cli_messages: Vec<UnifiedMessage> = scan_result
-        .get(ClientId::AntigravityCli)
-        .par_iter()
-        .flat_map(|path| {
-            sessions::antigravity_cli::parse_antigravity_cli_file(path)
-                .into_iter()
-                .map(|mut msg| {
-                    apply_pricing_if_available(&mut msg, pricing);
-                    msg
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    all_messages.extend(antigravity_cli_messages);
+    for client in [ClientId::Antigravity, ClientId::AntigravityCli] {
+        let parsed = parse_antigravity_unified_messages(&scan_result, client);
+        for (client, error) in parsed.source_errors {
+            sink.source_error(client, error);
+        }
+        for mut message in parsed.messages {
+            apply_pricing_if_available(&mut message, pricing);
+            all_messages.push(message);
+        }
+    }
 
     // Trae API dump uses exact dollar_float totals, so pricing lookup is not needed.
     let trae_messages: Vec<UnifiedMessage> = scan_result
@@ -6173,33 +6172,11 @@ pub fn parse_local_clients(options: LocalParseOptions) -> Result<ParsedMessages,
     counts.set(ClientId::Crush, crush_count);
     messages.extend(crush_msgs);
 
-    let antigravity_msgs: Vec<ParsedMessage> = scan_result
-        .get(ClientId::Antigravity)
-        .par_iter()
-        .flat_map(|path| {
-            sessions::antigravity::parse_antigravity_file(path)
-                .into_iter()
-                .map(|msg| unified_to_parsed(&msg))
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    let antigravity_count = antigravity_msgs.len() as i32;
-    counts.set(ClientId::Antigravity, antigravity_count);
-    messages.extend(antigravity_msgs);
-
-    let antigravity_cli_msgs: Vec<ParsedMessage> = scan_result
-        .get(ClientId::AntigravityCli)
-        .par_iter()
-        .flat_map(|path| {
-            sessions::antigravity_cli::parse_antigravity_cli_file(path)
-                .into_iter()
-                .map(|msg| unified_to_parsed(&msg))
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    let antigravity_cli_count = antigravity_cli_msgs.len() as i32;
-    counts.set(ClientId::AntigravityCli, antigravity_cli_count);
-    messages.extend(antigravity_cli_msgs);
+    for client in [ClientId::Antigravity, ClientId::AntigravityCli] {
+        let parsed = parse_antigravity_unified_messages(&scan_result, client);
+        counts.set(client, parsed.messages.len() as i32);
+        messages.extend(parsed.messages.iter().map(unified_to_parsed));
+    }
 
     let trae_msgs: Vec<ParsedMessage> = {
         let unique_trae_messages = dedupe_latest_trae_messages(
@@ -6444,6 +6421,54 @@ pub async fn parse_local_unified_messages_with_pricing(
     )
 }
 
+/// Parse Antigravity App/IDE SQLite conversation DBs first, then fall back to
+/// legacy `antigravity-cache` JSONL files for sessions not already present in
+/// the direct SQLite stores.
+fn parse_antigravity_unified_messages(scan_result: &scanner::ScanResult, client: ClientId) -> ScannedMessages {
+    let paths = if client == ClientId::Antigravity {
+        &scan_result.antigravity_dbs
+    } else {
+        scan_result.get(client)
+    };
+    let databases: Vec<_> = paths.par_iter().map(|path| {
+        (path, sessions::antigravity_cli::try_parse_antigravity_db_file(path, client.as_str()))
+    }).collect();
+    let mut parsed = ScannedMessages::default();
+    for (path, rows) in databases {
+        match rows {
+            Ok(rows) => parsed.messages.extend(rows),
+            Err(error) => parsed.source_errors.push((client, format!("{}: {error}", path.display()))),
+        }
+    }
+    let legacy_paths = scan_result.get(ClientId::Antigravity);
+    if client == ClientId::AntigravityCli || legacy_paths.is_empty() {
+        return parsed;
+    }
+
+    let db_sessions: HashSet<String> = parsed.messages
+        .iter()
+        .map(|msg| msg.session_id.clone())
+        .collect();
+    let db_response_ids: HashSet<String> = parsed.messages
+        .iter()
+        .filter_map(|msg| msg.dedup_key.clone())
+        .collect();
+
+    let legacy_messages: Vec<UnifiedMessage> = legacy_paths
+        .par_iter()
+        .flat_map(|path| sessions::antigravity::parse_antigravity_file(path))
+        .filter(|msg| {
+            !db_sessions.contains(&msg.session_id)
+                && msg
+                    .dedup_key
+                    .as_ref()
+                    .is_none_or(|key| !db_response_ids.contains(key))
+        })
+        .collect();
+    parsed.messages.extend(legacy_messages);
+    parsed
+}
+
 /// Parse only changed Codex sources, retaining the normal append cache, attribution and dedup keys.
 /// Callers supply paths already restricted to configured Codex roots.
 pub fn parse_changed_codex_files(
@@ -6451,16 +6476,36 @@ pub fn parse_changed_codex_files(
     paths: Vec<PathBuf>,
     persistent: bool,
 ) -> Result<Vec<UnifiedMessage>, String> {
-    let (home_dir, _) = resolve_local_parse_request(&options)?;
     let mut scan = scanner::ScanResult::default();
     *scan.get_mut(ClientId::Codex) = paths;
-    let mut messages = Vec::new();
+    parse_scanned_files(options, scan, vec!["codex".into()], persistent).map(|parsed| parsed.messages)
+}
+
+/// Parse the same discovered files the caller diagnosed, including partial-source errors.
+pub fn parse_scanned_files(
+    options: LocalParseOptions,
+    scan: scanner::ScanResult,
+    clients: Vec<String>,
+    persistent: bool,
+) -> Result<ScannedMessages, String> {
+    let (home_dir, _) = resolve_local_parse_request(&options)?;
+    let mut parsed = ScannedMessages::default();
     parse_all_messages_streaming(
-        &home_dir, &["codex".into()], None, false, &options.scanner_settings,
-        if persistent { SourceCachePolicy::Persistent } else { SourceCachePolicy::InMemory },
-        Some(scan), &mut messages,
+        &home_dir,
+        &clients,
+        None,
+        false,
+        &options.scanner_settings,
+        if persistent {
+            SourceCachePolicy::Persistent
+        } else {
+            SourceCachePolicy::InMemory
+        },
+        Some(scan),
+        &mut parsed,
     );
-    Ok(filter_unified_messages(messages, &options))
+    parsed.messages = filter_unified_messages(parsed.messages, &options);
+    Ok(parsed)
 }
 
 /// Parse local messages without reading or writing the persistent source cache.
@@ -6615,6 +6660,7 @@ pub fn parsed_to_unified(msg: &ParsedMessage, cost: f64) -> UnifiedMessage {
         model_attribution_conflicted: false,
         cache_write_1h: 0,
         inference_speed: None,
+        antigravity_sqlite_time: None,
     }
 }
 

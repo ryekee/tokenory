@@ -510,6 +510,7 @@ mod tests {
             model_attribution_conflicted: false,
             cache_write_1h: 0,
             inference_speed: None,
+            antigravity_sqlite_time: None,
             duration_ms: None,
         }
     }

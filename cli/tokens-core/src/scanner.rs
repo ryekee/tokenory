@@ -89,7 +89,7 @@ pub struct CrushDbSource {
 }
 
 /// Result of scanning all session directories
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ScanResult {
     pub files: [Vec<PathBuf>; ClientId::COUNT],
     /// All OpenCode SQLite databases discovered under the data dir.
@@ -127,6 +127,9 @@ pub struct ScanResult {
     /// VS Code Copilot chat session JSONL files discovered under
     /// `workspaceStorage/*/chatSessions/*.jsonl`.
     pub copilot_vscode_sessions: Vec<PathBuf>,
+    /// Antigravity App / IDE SQLite conversation databases discovered under
+    /// `~/.gemini/antigravity/conversations/*.db` (and `antigravity-ide`).
+    pub antigravity_dbs: Vec<PathBuf>,
 }
 
 impl Default for ScanResult {
@@ -148,6 +151,7 @@ impl Default for ScanResult {
             opencode_json_dir: None,
             devin_dbs: Vec::new(),
             copilot_vscode_sessions: Vec::new(),
+            antigravity_dbs: Vec::new(),
         }
     }
 }
@@ -1947,6 +1951,7 @@ fn scan_all_clients_with_env_strategy_inner(
     // Every OpenClaw agents root the scan covers; each is also searched for
     // per-agent SQLite transcript databases once the roots are settled.
     let mut openclaw_agent_roots: Vec<PathBuf> = Vec::new();
+    let mut antigravity_db_roots: Vec<PathBuf> = Vec::new();
 
     for client_id in &enabled {
         if matches!(
@@ -2000,6 +2005,8 @@ fn scan_all_clients_with_env_strategy_inner(
         } else {
             if client_id == ClientId::OpenClaw {
                 openclaw_agent_roots.push(path.clone());
+            } else if client_id == ClientId::Antigravity {
+                antigravity_db_roots.push(path.clone());
             }
             push_unique_scan_task(&mut tasks, &mut seen_scan_roots, client_id, path);
         }
@@ -2598,6 +2605,43 @@ fn scan_all_clients_with_env_strategy_inner(
             }
         }
         result.openclaw_dbs.sort_unstable();
+    }
+
+    if enabled.contains(&ClientId::Antigravity) {
+        let gemini_home = crate::clients::PathRoot::EnvVar {
+            var: "GEMINI_CLI_HOME",
+            fallback_relative: ".gemini",
+        }
+        .resolve_with_env_strategy(home_dir, use_env_roots);
+        for subdir in ["antigravity/conversations", "antigravity-ide/conversations"] {
+            antigravity_db_roots.push(PathBuf::from(join_native(&gemini_home, subdir)));
+        }
+        let mut seen_antigravity_dbs: HashSet<PathBuf> = HashSet::new();
+        for root in &antigravity_db_roots {
+            if !root.exists() {
+                continue;
+            }
+            let candidates = if root.is_file() {
+                if root
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.ends_with(".db"))
+                {
+                    vec![root.clone()]
+                } else {
+                    Vec::new()
+                }
+            } else {
+                scan_directory(&root.to_string_lossy(), "*.db")
+            };
+            for db_path in candidates {
+                let key = std::fs::canonicalize(&db_path).unwrap_or_else(|_| db_path.clone());
+                if seen_antigravity_dbs.insert(key) {
+                    result.antigravity_dbs.push(db_path);
+                }
+            }
+        }
+        result.antigravity_dbs.sort_unstable();
     }
 
     if enabled.contains(&ClientId::CherryStudio) {

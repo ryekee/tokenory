@@ -55,6 +55,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 - Default to the last 7 days. Align trend labels with the visible edges of the heading, body and chart. Keep chronological order fixed; do not offer a newest-first control.
 - Hide the active-day count when the selected range covers a single date.
 - Tool and model rankings share one panel and a top-level Tokens/cost segmented control. Place shared controls outside both child rankings. Use one-click segments for binary choices.
+- Each ranking bar shows the group's share of the selected metric. The amber end segment is the portion attributed to Fast. Use Fast tokens in Tokens mode and known estimated costs from Fast requests in Cost mode. Share one legend across both rankings and expose the Fast amount on row inspection.
 - Daily values and trailing 30-day averages use the same raw totals. No-activity dates count as zero. Unknown costs remain gaps only in the affected series; never draw unknown costs as zero. Zero-token synthetic records with no cost count as zero. Zero-token records are not active days. Do not introduce erroneous breaks in averages.
 - Daily and 30-day average views use a segmented control. The two import formats use the same single-click choice pattern.
 

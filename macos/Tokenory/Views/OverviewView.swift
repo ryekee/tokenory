@@ -1,5 +1,5 @@
 // [INPUT]: Selected-range report and independently loaded annual activity.
-// [OUTPUT]: Rolling totals, known Fast usage, growing range charts, and independent annual activity.
+// [OUTPUT]: Rolling totals, tool and model rankings with Fast segments, range charts, and annual activity.
 // [POS]: Native overview composition; disclosure keeps detailed caveats off the canvas.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -9,6 +9,7 @@ struct OverviewView: View {
     let isActive: Bool
     let openDatePicker: () -> Void
     @Environment(UsageStore.self) private var store
+    @Environment(\.colorScheme) private var colorScheme
     @State private var rankingMetric: UsageMetric = .tokens
     @State private var previousRange: (UsageDateRange, String?, String?)?
     @State private var scrolledAwayFromTop = false
@@ -46,9 +47,19 @@ struct OverviewView: View {
                                     : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
                                 WorkspacePanel {
                                     VStack(alignment: .leading, spacing: 16) {
-                                        Picker(L("overview.sort"), selection: $rankingMetric) {
-                                            ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
-                                        }.labelsHidden().pickerStyle(.segmented).fixedSize()
+                                        HStack(spacing: 12) {
+                                            Picker(L("overview.sort"), selection: $rankingMetric) {
+                                                ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
+                                            }.labelsHidden().pickerStyle(.segmented).fixedSize()
+                                            Spacer()
+                                            if rankingMetric.fastAmount(in: report.summary) > 0 {
+                                                HStack(spacing: 5) {
+                                                    Capsule().fill(WorkspaceStyle.fastUsage(colorScheme)).frame(width: 10, height: 3)
+                                                        .accessibilityHidden(true)
+                                                    Text(L("fast.title")).font(.caption).foregroundStyle(.secondary)
+                                                }
+                                            }
+                                        }
                                         Divider()
                                         layout {
                                             UsageRankingView(groups: report.clients, kind: .tool, metric: rankingMetric, range: range)
@@ -185,59 +196,96 @@ private struct TokenMixView: View {
     }
 }
 
+private extension UsageMetric {
+    func amount(in summary: UsageSummary) -> Double? {
+        self == .tokens ? Double(summary.tokens) : summary.knownEstimatedCostUsd
+    }
+
+    func fastAmount(in summary: UsageSummary) -> Double {
+        self == .tokens ? Double(summary.fastTokens ?? 0) : summary.fastEstimatedCostUsd ?? 0
+    }
+
+    func fastReadout(in summary: UsageSummary) -> String? {
+        guard fastAmount(in: summary) > 0 else { return nil }
+        return self == .tokens
+            ? LF("fast.tokens", compactTokens(summary.fastTokens ?? 0))
+            : LF("fast.cost", usd(summary.fastEstimatedCostUsd))
+    }
+}
+
 private struct UsageRankingView: View {
     let groups: [UsageGroup]
     let kind: BrandKind
     let metric: UsageMetric
     let range: DashboardDateSpan?
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = false
     private var sorted: [UsageGroup] {
         groups.sorted {
-            let a = metric == .tokens ? Double($0.summary.tokens) : $0.summary.knownEstimatedCostUsd ?? -1
-            let b = metric == .tokens ? Double($1.summary.tokens) : $1.summary.knownEstimatedCostUsd ?? -1
+            let a = metric.amount(in: $0.summary) ?? -1
+            let b = metric.amount(in: $1.summary) ?? -1
             return a == b ? $0.key < $1.key : a > b
         }
     }
     var body: some View {
-        let total = groups.reduce(0.0) { $0 + (metric == .tokens ? Double($1.summary.tokens) : $1.summary.knownEstimatedCostUsd ?? 0) }
+        let total = groups.reduce(0.0) { $0 + (metric.amount(in: $1.summary) ?? 0) }
         VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text(L(kind == .tool ? "usage.by_tool" : "usage.by_model")).font(.headline)
-                    Spacer()
-
-                }.frame(height: 24)
-                ForEach(expanded ? sorted : Array(sorted.prefix(5))) { group in
-                    let amount = metric == .tokens ? Double(group.summary.tokens) : group.summary.knownEstimatedCostUsd
-                    let share = amount.map { total > 0 ? $0 / total : 0 }
-                    HStack(spacing: 10) {
-                        BrandIcon(name: group.key, kind: kind, size: 18)
-                        VStack(spacing: 7) {
-                            HStack {
-                                Text(kind == .tool ? clientName(group.key) : group.key).lineLimit(1).truncationMode(.middle)
-                                Spacer(minLength: 8)
-                                DashboardRollingValue(text: metric == .tokens ? compactTokens(group.summary.tokens) : usd(amount),
-                                                      value: amount, range: range, style: .callout)
-                            }.font(.callout)
-                            GeometryReader { geometry in
-                                Capsule().fill(Color.accentColor.opacity(0.08))
-                                Capsule().fill(Color.accentColor.opacity(0.65))
-                                    .frame(width: geometry.size.width)
-                                    .scaleEffect(x: share ?? 0, y: 1, anchor: .leading)
-                                    .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: range)
-                            }.frame(height: 3).accessibilityHidden(true)
-                        }
-                        DashboardRollingValue(text: share?.formatted(.percent.precision(.fractionLength(0))) ?? "—",
-                                              value: share, range: range, style: .caption2, secondary: true)
-                            .foregroundStyle(.secondary).frame(width: 35, alignment: .trailing)
-                    }.help(group.key + "\n" + L(group.summary.costStatus == "partial" ? "cost.known" : "cost.estimate") + ": " + usd(group.summary.knownEstimatedCostUsd))
-                        .accessibilityElement(children: .combine)
-                }
-                if groups.count > 5 {
-                    Button(L(expanded ? "action.show_less" : "action.show_all")) { expanded.toggle() }
-                        .buttonStyle(.plain).font(.caption).foregroundStyle(Color.accentColor)
-                }
-                if groups.isEmpty { Text(L("usage.empty")).foregroundStyle(.secondary).padding(.vertical, 24) }
+            Text(L(kind == .tool ? "usage.by_tool" : "usage.by_model"))
+                .font(.headline).frame(height: 24)
+            ForEach(expanded ? sorted : Array(sorted.prefix(5))) { group in
+                rankingRow(group, total: total)
+            }
+            if groups.count > 5 {
+                Button(L(expanded ? "action.show_less" : "action.show_all")) { expanded.toggle() }
+                    .buttonStyle(.plain).font(.caption).foregroundStyle(Color.accentColor)
+            }
+            if groups.isEmpty { Text(L("usage.empty")).foregroundStyle(.secondary).padding(.vertical, 24) }
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func rankingRow(_ group: UsageGroup, total: Double) -> some View {
+        let summary = group.summary
+        let amount = metric.amount(in: summary)
+        let share = amount.map { total > 0 ? $0 / total : 0 }
+        let fastShare = total > 0 ? metric.fastAmount(in: summary) / total : 0
+        let fastText = metric.fastReadout(in: summary)
+        let costText = L(summary.costStatus == "partial" ? "cost.known" : "cost.estimate") + ": " + usd(summary.knownEstimatedCostUsd)
+        return HStack(spacing: 10) {
+            BrandIcon(name: group.key, kind: kind, size: 18)
+            VStack(spacing: 7) {
+                HStack {
+                    Text(kind == .tool ? clientName(group.key) : group.key).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    DashboardRollingValue(text: metric == .tokens ? compactTokens(summary.tokens) : usd(amount),
+                                          value: amount, range: range, style: .callout)
+                }.font(.callout)
+                rankingBar(share: share ?? 0, fastShare: fastShare)
+            }
+            DashboardRollingValue(text: share?.formatted(.percent.precision(.fractionLength(0))) ?? "—",
+                                  value: share, range: range, style: .caption2, secondary: true)
+                .foregroundStyle(.secondary).frame(width: 35, alignment: .trailing)
+        }
+        .help([group.key, costText, fastText].compactMap { $0 }.joined(separator: "\n"))
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(fastText ?? "")
+    }
+
+    private func rankingBar(share: Double, fastShare: Double) -> some View {
+        let filled = min(max(share, 0), 1)
+        let highlighted = min(max(fastShare, 0), filled)
+        return GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.accentColor.opacity(0.08))
+                HStack(spacing: 0) {
+                    Rectangle().fill(Color.accentColor.opacity(0.65))
+                        .frame(width: geometry.size.width * (filled - highlighted))
+                    Rectangle().fill(WorkspaceStyle.fastUsage(colorScheme))
+                        .frame(width: geometry.size.width * highlighted)
+                }
+                .clipShape(Capsule())
+                .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: range)
+            }
+        }.frame(height: 3).accessibilityHidden(true)
     }
 }

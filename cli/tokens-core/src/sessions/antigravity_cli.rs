@@ -1,11 +1,14 @@
-//! Antigravity CLI session parser
+//! Antigravity SQLite conversation parser (Antigravity App & Antigravity CLI)
 //!
-//! The Antigravity CLI (the terminal agent, distinct from the Antigravity IDE)
-//! stores each conversation as a SQLite database under
-//! `~/.gemini/antigravity-cli/conversations/<uuid>.db`. Unlike the IDE-backed
-//! [`super::antigravity`] source — which depends on a *running* language server
-//! reachable over RPC and caches JSONL under the config dir — the CLI usage is
-//! already on disk and can be read directly. No RPC, no `antigravity sync`.
+//! Both Antigravity App (`~/.gemini/antigravity/conversations/<uuid>.db`, and
+//! `~/.gemini/antigravity-ide/conversations/<uuid>.db`) and Antigravity CLI
+//! (`~/.gemini/antigravity-cli/conversations/<uuid>.db`) store each conversation
+//! as a SQLite database with the same schema (`gen_metadata`, `steps`,
+//! `trajectory_metadata_blob`). Unlike the legacy IDE RPC cache
+//! [`super::antigravity`] — which depends on a *running* language server
+//! reachable over RPC and caches JSONL under the config dir — these SQLite
+//! conversations are already on disk and can be read directly. No RPC, no
+//! `antigravity sync`.
 //!
 //! Each `gen_metadata` row is one generation encoded as the same
 //! `GeneratorMetadata` protobuf the IDE returns over
@@ -41,7 +44,7 @@
 //!       cuts that by orders of magnitude, because a turn cannot happen before
 //!       the conversation it belongs to nor after the moment we read the file.
 //!   - `#4`                      → usage message
-//!     - `#1` (varint, const)    → fixed system-prompt tokens (≈1132)
+//!     - `#1` (varint)           → internal model enum id (matches `steps.metadata.#11`; NOT billable input)
 //!     - `#2` (varint)           → newly-processed (non-cached) input tokens
 //!     - `#5` (varint)           → cacheRead tokens
 //!     - `#9` (varint)           → output (text) tokens
@@ -59,7 +62,7 @@
 //! server-supplied name that gets renamed (`Gemini 3 Flash` → `Gemini 3.5 Flash
 //! (High)`) and could be localized.
 
-use super::utils::{open_readonly_sqlite_opt, sqlite_for_each_row_on};
+use super::utils::{open_readonly_sqlite, sqlite_for_each_row_on};
 use super::{normalize_workspace_key, workspace_label_from_key, UnifiedMessage};
 use crate::{pricing, provider_identity, TokenBreakdown};
 use rusqlite::Connection;
@@ -67,10 +70,27 @@ use std::collections::{HashMap, HashSet};
 use std::ops::RangeInclusive;
 use std::path::Path;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqliteTime {
+    Request,
+    SessionFallback,
+}
+
 pub fn parse_antigravity_cli_file(path: &Path) -> Vec<UnifiedMessage> {
-    let Some(conn) = open_readonly_sqlite_opt(path) else {
-        return Vec::new();
-    };
+    parse_antigravity_db_file(path, "antigravity-cli")
+}
+
+pub fn parse_antigravity_db_file(path: &Path, client_id: &str) -> Vec<UnifiedMessage> {
+    try_parse_antigravity_db_file(path, client_id).unwrap_or_default()
+}
+
+/// A session snapshot can replace saved rows only after every generation was read.
+pub(crate) fn try_parse_antigravity_db_file(
+    path: &Path,
+    client_id: &str,
+) -> rusqlite::Result<Vec<UnifiedMessage>> {
+    let conn = open_readonly_sqlite(path)?;
+    conn.execute_batch("BEGIN")?;
 
     let session_id = path
         .file_stem()
@@ -85,23 +105,18 @@ pub fn parse_antigravity_cli_file(path: &Path) -> Vec<UnifiedMessage> {
     // attribution from anywhere in the conversation, not just from rows that
     // happen to precede it.
     //
-    // Quiet: a database without `gen_metadata` is not an Antigravity CLI
-    // database at all, so there is nothing to warn about.
-    let mut rows: Vec<(Option<i64>, Vec<u8>)> = Vec::new();
-    sqlite_for_each_row_on(
-        &conn,
-        path,
-        "SELECT idx, data FROM gen_metadata ORDER BY idx",
-        None,
-        &mut |row| {
-            let idx = row.get::<_, Option<i64>>(0)?;
-            let data: Vec<u8> = row.get(1)?;
-            rows.push((idx, data));
-            Ok(())
-        },
-    );
+    // Extra directories can contain SQLite files belonging to other features.
+    if !conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE type='table' AND name='gen_metadata')",
+        [],
+        |row| row.get::<_, bool>(0),
+    )? {
+        return Ok(Vec::new());
+    }
+    let rows = read_generation_rows(&conn)?;
     let session_models = SessionModels::from_blobs(rows.iter().map(|(_, blob)| blob.as_slice()));
     let ctx = GenContext {
+        client_id,
         session_id: &session_id,
         session_timestamp: meta.fallback_ms,
         session_anchor: meta.created_ms,
@@ -125,7 +140,78 @@ pub fn parse_antigravity_cli_file(path: &Path) -> Vec<UnifiedMessage> {
         }
     }
 
-    messages
+    Ok(messages)
+}
+
+fn read_generation_rows(conn: &Connection) -> rusqlite::Result<Vec<(Option<i64>, Vec<u8>)>> {
+    let mut stmt = conn.prepare("SELECT idx, data FROM gen_metadata ORDER BY idx")?;
+    let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    rows.collect()
+}
+
+/// Decoded per-generation metadata for downstream turn analytics, sharing
+/// model recovery and alias normalization with usage parsing.
+#[derive(Debug, Clone)]
+pub struct AntigravityGeneration {
+    pub gen_idx: Option<i64>,
+    pub response_id: Option<String>,
+    pub model_id: String,
+    pub output_tokens: i64,
+    pub reasoning_tokens: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct AntigravityDbGenerations {
+    pub session_id: String,
+    pub workspace_label: Option<String>,
+    pub generations: Vec<AntigravityGeneration>,
+}
+
+pub fn read_antigravity_db_generations(
+    conn: &Connection,
+    path: &Path,
+) -> rusqlite::Result<AntigravityDbGenerations> {
+    let session_id = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let meta = read_trajectory_meta(conn, path);
+
+    let rows = read_generation_rows(conn)?;
+    let session_models = SessionModels::from_blobs(rows.iter().map(|(_, blob)| blob.as_slice()));
+
+    let to_i64 = |v: u64| i64::try_from(v).unwrap_or(i64::MAX);
+    let mut generations = Vec::new();
+    for (gen_idx, blob) in &rows {
+        let Some(chat_model) = message_field(blob, 1) else {
+            continue;
+        };
+        let Some(usage) = message_field(chat_model, 4) else {
+            continue;
+        };
+        let output = to_i64(varint_field(usage, 9).unwrap_or(0));
+        let reasoning = to_i64(varint_field(usage, 10).unwrap_or(0));
+        let total_output = to_i64(varint_field(usage, 3).unwrap_or(0))
+            .max(output.saturating_add(reasoning));
+        let response_id = string_field(usage, 11)
+            .filter(|text| !text.trim().is_empty())
+            .map(str::to_string);
+        let model_id = resolve_chat_model_id(chat_model, &session_models);
+        generations.push(AntigravityGeneration {
+            gen_idx: *gen_idx,
+            response_id,
+            model_id,
+            output_tokens: total_output,
+            reasoning_tokens: reasoning,
+        });
+    }
+
+    Ok(AntigravityDbGenerations {
+        session_id,
+        workspace_label: meta.workspace_label,
+        generations,
+    })
 }
 
 /// Model attribution recovered from the conversation as a whole, for rows whose
@@ -278,11 +364,31 @@ fn display_label_to_model_id(label: &str) -> Option<&'static str> {
 }
 
 struct GenContext<'a> {
+    client_id: &'a str,
     session_id: &'a str,
     session_timestamp: i64,
     session_anchor: Option<i64>,
     session_models: &'a SessionModels,
     step_timestamps: &'a StepTimestamps,
+}
+
+fn resolve_chat_model_id(chat_model: &[u8], session_models: &SessionModels) -> String {
+    let response_model = non_empty_string_field(chat_model, 19);
+    let model_raw = response_model
+        .filter(|m| !is_antigravity_routing_label(m))
+        .or_else(|| session_models.recover(chat_model))
+        .or_else(|| {
+            // Routing labels carry no model identity of their own, but the
+            // sibling `#21` display label names the tier. Recover the concrete
+            // id from it; if the label is unknown, keep the routing label so
+            // the submission-time exclusion still applies.
+            non_empty_string_field(chat_model, 21).and_then(display_label_to_model_id)
+        })
+        .or(response_model)
+        .unwrap_or("unknown");
+    pricing::aliases::resolve_alias(model_raw)
+        .unwrap_or(model_raw)
+        .to_string()
 }
 
 fn parse_gen_metadata(
@@ -294,16 +400,13 @@ fn parse_gen_metadata(
     let chat_model = message_field(blob, 1)?;
     let usage = message_field(chat_model, 4)?;
 
-    // input = fixed system prompt (#1) + newly-processed input (#2). The
-    // constant #1 is, to the best of our reverse-engineering, the agent's fixed
-    // system prompt and counts as billable input; if an official schema later
-    // contradicts this, only the input total needs revisiting.
-    // Clamp untrusted u64 varints into i64 (a corrupt/malicious blob could
-    // encode a value > i64::MAX, which `as i64` would wrap to a negative count)
-    // and combine with saturating_add so totals never overflow.
+    // `#1` is the internal model enum id (matching `steps.metadata.#11`), not
+    // billable prompt tokens; `#2` matches `transcript.jsonl`'s `input_tokens`
+    // and next-turn `cache_read_tokens` (`#5`).
+    // Clamp untrusted u64 varints into i64 so a corrupt/malicious blob never
+    // wraps `as i64` to a negative count.
     let to_i64 = |v: u64| i64::try_from(v).unwrap_or(i64::MAX);
-    let input = to_i64(varint_field(usage, 1).unwrap_or(0))
-        .saturating_add(to_i64(varint_field(usage, 2).unwrap_or(0)));
+    let input = to_i64(varint_field(usage, 2).unwrap_or(0));
     let cache_read = to_i64(varint_field(usage, 5).unwrap_or(0));
     let output = to_i64(varint_field(usage, 9).unwrap_or(0));
     let reasoning = to_i64(varint_field(usage, 10).unwrap_or(0));
@@ -326,42 +429,26 @@ fn parse_gen_metadata(
     //    so `generation_timestamp_ms` returns None. Look up the matching turn in `steps.metadata`
     //    by responseId (`dedup_key`) or generation index.
     // 3. Falls back to `session_timestamp` when no candidate decodes.
-    let timestamp = message_field(chat_model, 9)
+    let request_timestamp = message_field(chat_model, 9)
         .and_then(|gen| generation_timestamp_ms(gen, ctx.session_anchor))
         .or_else(|| {
             dedup_key
                 .as_deref()
                 .and_then(|id| ctx.step_timestamps.by_response_id.get(id).copied())
         })
-        .or_else(|| gen_idx.and_then(|idx| ctx.step_timestamps.by_gen_idx.get(&idx).copied()))
-        .unwrap_or(ctx.session_timestamp);
+        .or_else(|| gen_idx.and_then(|idx| ctx.step_timestamps.by_gen_idx.get(&idx).copied()));
 
-    let response_model = non_empty_string_field(chat_model, 19);
-    let model_raw = response_model
-        .filter(|m| !is_antigravity_routing_label(m))
-        .or_else(|| ctx.session_models.recover(chat_model))
-        .or_else(|| {
-            // Routing labels carry no model identity of their own, but the
-            // sibling `#21` display label names the tier. Recover the concrete
-            // id from it; if the label is unknown, keep the routing label so
-            // the submission-time exclusion still applies.
-            non_empty_string_field(chat_model, 21).and_then(display_label_to_model_id)
-        })
-        .or(response_model)
-        .unwrap_or("unknown");
-    let model_id = pricing::aliases::resolve_alias(model_raw)
-        .unwrap_or(model_raw)
-        .to_string();
+    let model_id = resolve_chat_model_id(chat_model, ctx.session_models);
     let provider_id = provider_identity::inferred_provider_from_model(&model_id)
         .unwrap_or("antigravity")
         .to_string();
 
-    Some(UnifiedMessage::new_with_dedup(
-        "antigravity-cli",
+    let mut message = UnifiedMessage::new_with_dedup(
+        ctx.client_id,
         model_id,
         provider_id,
         ctx.session_id,
-        timestamp,
+        request_timestamp.unwrap_or(ctx.session_timestamp),
         TokenBreakdown {
             input,
             output,
@@ -371,7 +458,13 @@ fn parse_gen_metadata(
         },
         0.0,
         dedup_key,
-    ))
+    );
+    message.antigravity_sqlite_time = Some(if request_timestamp.is_some() {
+        SqliteTime::Request
+    } else {
+        SqliteTime::SessionFallback
+    });
+    Some(message)
 }
 
 /// Session-level facts read from the single `trajectory_metadata_blob` row.
@@ -988,6 +1081,34 @@ fn non_empty_string_field(buf: &[u8], field: u64) -> Option<&str> {
     string_field(buf, field).filter(|text| !text.trim().is_empty())
 }
 
+/// Public wire-format helpers shared with Tokenory's Antigravity turn parser.
+pub fn proto_message_field(buf: &[u8], field: u64) -> Option<&[u8]> {
+    message_field(buf, field)
+}
+
+pub fn proto_varint_field(buf: &[u8], field: u64) -> Option<u64> {
+    varint_field(buf, field)
+}
+
+pub fn proto_string_field(buf: &[u8], field: u64) -> Option<&str> {
+    string_field(buf, field)
+}
+
+pub fn proto_timestamp_ms_field(buf: &[u8], field: u64) -> Option<i64> {
+    message_field(buf, field).and_then(proto_timestamp_ms)
+}
+
+pub fn proto_count_len_fields(buf: &[u8], field: u64) -> usize {
+    let mut reader = ProtoReader::new(buf);
+    let mut count = 0;
+    while let Some((found, wire)) = reader.next_field() {
+        if found == field && matches!(wire, Wire::Len(_)) {
+            count += 1;
+        }
+    }
+    count
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1065,6 +1186,7 @@ mod tests {
         let models = SessionModels::default();
         let step_timestamps = StepTimestamps::default();
         let ctx = GenContext {
+            client_id: "antigravity-cli",
             session_id: "s",
             session_timestamp: session_fallback,
             session_anchor: anchor,
@@ -1088,6 +1210,7 @@ mod tests {
         let models = SessionModels::default();
         let step_timestamps = StepTimestamps::default();
         let ctx = GenContext {
+            client_id: "antigravity-cli",
             session_id,
             session_timestamp,
             session_anchor: Some(session_timestamp),
@@ -1163,8 +1286,8 @@ mod tests {
         // A corrupt/malicious blob encoding a varint > i64::MAX must clamp to a
         // non-negative i64 (saturating), never wrap `as i64` to a negative count.
         let mut usage = Vec::new();
-        usage.extend(enc_varint(1, u64::MAX)); // huge fixed system prompt
-        usage.extend(enc_varint(2, 10)); // + small input -> saturating_add
+        usage.extend(enc_varint(1, 1532)); // internal model enum id (ignored)
+        usage.extend(enc_varint(2, u64::MAX)); // huge input -> clamped to i64::MAX
         usage.extend(enc_varint(9, u64::MAX)); // huge output
         usage.extend(enc_len(11, b"resp-overflow"));
         let mut chat_model = Vec::new();
@@ -1175,7 +1298,7 @@ mod tests {
         let mut seen = HashSet::new();
         let msg = parse_isolated_row(&blob, "s", 1_000, &mut seen).expect("parses");
         assert_eq!(msg.tokens.output, i64::MAX);
-        assert_eq!(msg.tokens.input, i64::MAX); // saturating_add, not negative
+        assert_eq!(msg.tokens.input, i64::MAX);
         assert!(msg.tokens.input >= 0 && msg.tokens.output >= 0);
     }
 
@@ -1215,7 +1338,7 @@ mod tests {
         assert_eq!(message.model_id, "gemini-3.5-flash-high");
         assert_eq!(message.provider_id, "google");
         assert_eq!(message.session_id, "session-test");
-        assert_eq!(message.tokens.input, 1632); // 1132 + 500
+        assert_eq!(message.tokens.input, 500); // #2 only; #1 is model enum id
         assert_eq!(message.tokens.cache_read, 16000);
         assert_eq!(message.tokens.output, 300);
         assert_eq!(message.tokens.reasoning, 40);
@@ -1226,6 +1349,12 @@ mod tests {
             Some("C:/Users/Frank/obsidian-vault")
         );
         assert_eq!(message.workspace_label.as_deref(), Some("obsidian-vault"));
+
+        // Shared parser also attributes desktop App DBs to `antigravity`.
+        let app_messages = parse_antigravity_db_file(&path, "antigravity");
+        assert_eq!(app_messages.len(), 1);
+        assert_eq!(app_messages[0].client, "antigravity");
+        assert_eq!(app_messages[0].tokens.input, 500);
     }
 
     #[test]
