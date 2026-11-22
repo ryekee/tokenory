@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate native assets from the checked-in brand sources.
-[INPUT]: Web 字形和 vendor 品牌素材。
+[INPUT]: 本地字形、vendor 品牌素材和供应商图标。
 [OUTPUT]: CoreSVG 兼容的原生 Assets.xcassets 图标和许可证副本。
 [POS]: 品牌源文件到原生资源的唯一生成入口。
 [PROTOCOL]: Update this header on change, then check AGENTS.md
@@ -52,9 +52,7 @@ def normalize_svg_for_coresvg(svg: str) -> str:
     )
 
 
-source = (ROOT / "web/src/lib/brandIcons.generated.ts").read_text()
-payload = source.split("=", 1)[1].strip().removesuffix(";")
-glyphs = json.loads(re.sub(r",\s*}", "}", payload))
+glyphs = json.loads((ROOT / "assets/brand/glyphs.json").read_text())
 icons = {
     slug: f'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="black" color="black">{glyph}</svg>\n'
     for slug, glyph in glyphs.items()

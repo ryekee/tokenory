@@ -9,10 +9,10 @@ Native macOS utility for checking AI usage and USD cost estimates. Preserve the 
 - Optional floating counter with preset positions, enabled in the menu bar or Settings → HUD. It does not take focus or create a Dock workspace entry. Persist the selected placement and follow the display containing the pointer, checked every 250 ms while visible. Keep the HUD out of other apps’ macOS full-screen Spaces and restore it on the desktop if enabled.
 - HUD 位置在设置页用 2 × 3 布局选择左上／中上／右上／左下／中下／右下；以鼠标所在屏幕 visibleFrame 贴边放置，避开菜单栏与 Dock，上下外壳保留 5 pt 内边距，四角左右外壳边距按底部边距（含 Dock）乘屏幕宽高比计算，并优先避让侧边 Dock。
 - Render the counter at 50% of the original prototype dimensions: a 210 × 82 pt case inside a 220 × 92 pt window. Preserve full-size native audio popover controls. Restoring position must not restore the old larger dimensions.
-- Follow the approved `docs/prototypes/mechanical-hud/index.html`: orange enamel case, recessed dark drums, blue units digit, no header text, Saira Extra Condensed SemiBold, mechanical text-fragment / coin icon buttons. The speaker opens a compact sound popover.
+- Use an orange enamel case, recessed dark drums, a blue units digit, Saira Extra Condensed SemiBold, and mechanical text-fragment / coin icon buttons. Keep the counter free of header text. The speaker opens a compact sound popover.
 - Display all-agent today totals independently of dashboard filters, using the device’s current timezone and local midnight. Tokens remain full integers; USD uses two decimal places. Unavailable cost is —; partially priced cost has ≈ and a hover explanation.
 - New increases accelerate briefly and decelerate over the last 66% of the movement. Sound follows drum crossings. First display, metric/day changes, decreases and Reduce Motion settle silently. Add incoming increments to the current roll without resetting its position, velocity or animation clock. Changed drums use monotone velocity-matched braking to the newest target; unchanged drums finish their existing motion.
-- The HUD speaker button directly toggles sound; adjust volume in Settings. HUD has no context menu. Persist independent sound enablement and volume. Default sound off and volume 35%. Hiding the HUD cancels animation and sound. Keep the standalone demo and font license for future website use.
+- The HUD speaker button directly toggles sound; adjust volume in Settings. HUD has no context menu. Persist independent sound enablement and volume. Default sound off and volume 35%. Hiding the HUD cancels animation and sound. The website demo and its licensed font are maintained in `site/`.
 
 - The app icon is a front-facing orange counter with dark drums turning from 648 to 649. In `AppIcon.icon`, the default and dark appearances both use the orange enamel as the tile fill. The window follows the macOS mask at a constant inward distance (82 units on the 928-unit case), including at the corners. The 18 pt menu bar icon shows the last two drums in an orange case with a blue units digit. Render it in its original colors.
 - Use system typography, semantic foreground/background colors and native controls. Use blue only for selection and the primary chart.
@@ -24,7 +24,7 @@ Native macOS utility for checking AI usage and USD cost estimates. Preserve the 
 
 ## Workspace surfaces
 
-Watermelon references are recorded in `docs/design/watermelon-reference-2026-11-05.md` and `docs/design/watermelon-refinement-2026-11-06.md`. Implement the borrowed composition and interaction patterns with SwiftUI and Swift Charts.
+Implement the workspace composition and interaction patterns with SwiftUI and Swift Charts.
 
 - Align to visible control edges: fixed-width containers must not hide the actual edges of segmented controls. Avoid duplicate spacing between parent and child layouts.
 - Dropdowns use the same single downward chevron and anchored option popover as the model chooser. Show the active value in the trigger and mark the choice in the list. Keep search for longer lists and preserve single-click segmented controls.
@@ -87,7 +87,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 
 ## Copy and controls
 
-- Follow [the bilingual copy review](docs/design/copy-review.md). Use Input / 输入, Coding patterns / 编码习惯, Most productive day / 最高产的一天, Biggest day / 单日最高 and Usage over time / 用量走势.
+- Use Input / 输入, Coding patterns / 编码习惯, Most productive day / 最高产的一天, Biggest day / 单日最高 and Usage over time / 用量走势.
 - Keep permanent copy to titles, metric/range labels and controls. Place useful explanations next to the relevant content; put cost basis and average definitions in help and show missing-price details on inspection. Remove information icons that have neither click nor hover behavior.
 - Use the same small lightning mark for documented Fast mode in Overview, Records and Speed. Overview displays tokens attributed to Fast for the selected filters. Records and Speed mark individual entries, with the mode evidence in help.
 
@@ -110,10 +110,6 @@ This checklist is a design requirement, not a record of completed acceptance.
 - Check the 30-day averages with no-activity dates and unknown costs: zero activity appears as zero, unknown cost stays a gap only in its own series, and no erroneous gaps appear.
 - Switch among overview, details and sources; inspect loading, preserved state and responsiveness. Check calendar hover responsiveness.
 - When a layout defect is found, use appropriate existing skills to inspect the whole app and fix the same class of issue.
-
-The Watermelon documents linked above are historical reference records; this document is the current design specification.
-
-[UI layout audit](docs/local/ui-layout-audit.md) records historical root causes and acceptance; it does not establish that every current state passes.
 
 ## Agent turns
 

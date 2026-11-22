@@ -40,9 +40,21 @@ tokens-export-*.json
 # Tokenory local tooling, build products and private data
 .tools/
 .build/
+.wrangler/
 .superpowers/
 macos/Tokenory.xcodeproj/
 macos/*.xcresult/
 *.xcuserstate
 **/xcuserdata/
 local-data/
+
+# Local environment settings and development materials
+/.codex/environments/
+/.impeccable/
+/kubai-tasks/
+/docs/design/
+/docs/prototypes/
+/docs/research/
+/docs/superpowers/
+/assets/brand/*/tmp/
+/assets/brand/*/*.preview.*

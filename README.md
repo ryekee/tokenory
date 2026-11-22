@@ -136,8 +136,7 @@ xcodebuild -project macos/Tokenory.xcodeproj -scheme Tokenory \
 测试使用独立数据目录，不写个人用量。`macos/project.yml` 是工程源文件，`.xcodeproj` 由 XcodeGen 生成。
 
 - [客户端兼容性验证](docs/local/client-compatibility.md)
-- [实施状态与验收边界](docs/local/acceptance.md)
-- [历史迁移对账](docs/local/migration.md)
+- [上游解析器同步和本地开发目录](docs/local/upstream.md)
 
 </details>
 
@@ -157,7 +156,7 @@ Tokenory 基于 [missuo/tokens](https://github.com/missuo/tokens) 的日志发�
 | 公共排名 | 上游功能 | App 不提交用量 |
 | 共享能力 | 客户端发现、解析、去重、参考价格 | 复用并按需修复 |
 
-基于固定上游版本 `c2f3857c328478e2599a3ba871151ec255e00831`。`macos/` 是 SwiftUI App，`cli/tokenory/` 是本地采集、账本和进程协议，`cli/tokens-core/` 保留上游解析核心。原 `cli/tokens-cli/`、`web/` 和 npm 包保留以便追溯和按需使用，**不是 Tokenory App 的运行依赖**。它们保留原本的联网、登录和提交命令，不能与本地 helper `tokenory` 混淆。
+基于上游版本 `c2f3857c328478e2599a3ba871151ec255e00831`。`macos/` 是 SwiftUI App，`cli/tokenory/` 提供本地采集、账本和进程协议，`cli/tokens-core/` 保留并按需更新上游解析核心，`site/` 提供双语官网。上游 CLI、Web 和自托管部署入口见 [missuo/tokens](https://github.com/missuo/tokens)。
 
 上游来源、构建约定和同步原则见 [上游说明](docs/local/upstream.md)。保留上游版权，遵循 [MIT License](LICENSE)。图标归属见 [品牌资源说明](assets/brand/NOTICE.md)。
 

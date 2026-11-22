@@ -2,7 +2,6 @@
 """Generate the bilingual Tokenory site from static copy and published release metadata."""
 
 import argparse
-import base64
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from html import escape
@@ -256,11 +255,8 @@ def build():
         asset_urls[name] = f"/assets/{name}?v={sha256(contents).hexdigest()[:12]}"
     shutil.copyfile(ROOT / "assets/brand/app-icon.png", assets / "app-icon.png")
     shutil.copyfile(SITE / "icons/LICENSE.txt", assets / "Phosphor-LICENSE.txt")
-    prototype = ROOT / "docs/prototypes/mechanical-hud"
-    hud = (prototype / "index.html").read_text(encoding="utf-8")
-    font = re.search(r"data:font/ttf;base64,([A-Za-z0-9+/=]+)", hud)
-    (assets / "mechanical-digits.ttf").write_bytes(base64.b64decode(font.group(1), validate=True))
-    shutil.copyfile(prototype / "SairaExtraCondensed-OFL.txt", assets / "SairaExtraCondensed-OFL.txt")
+    for name in ("mechanical-digits.ttf", "SairaExtraCondensed-OFL.txt"):
+        shutil.copyfile(SITE / "fonts" / name, assets / name)
     template = Template((SITE / "page.html").read_text(encoding="utf-8"))
 
     for language, base in LOCALES.items():
