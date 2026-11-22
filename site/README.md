@@ -23,4 +23,6 @@ npx --yes wrangler@4.158.0 deploy
 
 通过 Cloudflare 控制台部署时，上传 `site/dist/`，使用生产 Worker `tokenory`，HTML handling 设为 `force-trailing-slash`。首次部署通过该入口完成，生产站点位于 [tokenory.ryek.ee](https://tokenory.ryek.ee/)。
 
-如通过 GitHub Actions 部署，在仓库配置 `CLOUDFLARE_ACCOUNT_ID` 和有 Workers 脚本及自定义域名发布权限的 `CLOUDFLARE_API_TOKEN`，然后在 main 分支运行 **Tokenory website** 并勾选 **deploy**。工作流在 GitHub 发布正式版时更新下载和更新记录。只改了历史发布正文时，手动运行同一工作流刷新官网。
+GitHub 正式发布会触发 **Tokenory website** 工作流，更新官网下载和更新记录。仓库的 Actions Secrets 需要 `CLOUDFLARE_ACCOUNT_ID` 和 `CLOUDFLARE_API_TOKEN`。在 Cloudflare 创建账号级 API Token 时，将 **Individual Workers Editor** 权限限定到 **tokenory** Worker。工作流上传并发布 Worker 版本，沿用现有域名和路由。
+
+只改了历史发布正文时，在 main 分支手动运行 **Tokenory website**，并勾选 **deploy**。
