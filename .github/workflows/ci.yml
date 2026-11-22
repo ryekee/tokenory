@@ -1,42 +1,19 @@
 name: CI
 
-# Does the Rust workspace compile, link, run, and stay lint-clean — on every
-# platform family it ships to. Nothing here publishes anything.
-#
-# Three runners rather than one because the workspace carries 61 `cfg(unix)` /
-# `cfg(windows)` / `cfg(target_os)` branches across 12 files, 20 of them in
-# antigravity.rs and 8 in auth.rs. Code behind a `cfg` the host does not match
-# is never compiled at all, so a Linux-only job would give a green tick to a PR
-# that does not build on Windows — which is where the credential-writing
-# fallback in auth.rs lives.
-#
-# The publish workflow builds eight targets, but only on demand for a release.
-# This is the gate that runs before a PR merges.
+# Tokenory ships on Apple Silicon Macs. Check the Rust workspace on macOS.
+# The inherited Web job checks the separate web/ tree.
 
 # Deliberately unfiltered, with the path decision moved into the `changes` job
 # below. A workflow skipped by a top-level `paths:` filter reports nothing at
 # all, so a check made required later would sit "Pending" forever and block the
 # merge; a *job* skipped by an `if:` reports the "skipped" conclusion, which
-# branch protection accepts. Always starting the workflow is what buys that,
-# and it costs one ~20s runner on a change that touches neither tree.
-#
-# One caveat, measured rather than assumed (PR #102): that guarantee holds for
-# `web`, but not for the matrix. A skipped matrix job never evaluates its
-# matrix, so GitHub cannot expand `name: ${{ matrix.name }}` and reports the
-# three platforms as a single check literally named `matrix.name` instead of
-# Linux/macOS/Windows. Nothing is a required check here today, so this is
-# cosmetic. If Linux, macOS or Windows is ever made required, those names will
-# never report on a web-only PR and will block the merge — at which point move
-# the `if:` off the matrix job and onto its Clippy/Build/Smoke/Test steps, so
-# each platform still reports under its own name for the price of a runner
-# start.
+# branch protection accepts.
 on:
   pull_request:
   push:
     branches: [main]
 
-# A PR that gets three pushes in a minute should not tie up nine runners
-# answering a question about the first one.
+# Cancel older runs when another commit arrives on the same ref.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -49,9 +26,7 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
-  # Which trees does this push actually touch? Most PRs here are CLI-only or
-  # web-only, and before this job a web-only change still paid for three Rust
-  # runners (Windows alone is ~6 minutes).
+  # Run the Rust and Web jobs only when their respective trees change.
   #
   # Hand-rolled rather than a third-party paths-filter action: the whole job is
   # one `git diff`, and a dependency that reads the event payload and gates
@@ -120,20 +95,10 @@ jobs:
           echo "web=$web" >> "$GITHUB_OUTPUT"
 
   build:
-    name: ${{ matrix.name }}
+    name: macOS
     needs: changes
     if: needs.changes.outputs.cli == 'true'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      # Not fail-fast: "builds on Linux, breaks on Windows" is the single most
-      # useful thing this workflow can tell you, and cancelling the other legs
-      # the moment one fails is what hides it.
-      fail-fast: false
-      matrix:
-        include:
-          - { name: Linux, os: ubuntu-latest, bin: tokens }
-          - { name: macOS, os: macos-latest, bin: tokens }
-          - { name: Windows, os: windows-latest, bin: tokens.exe }
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -149,8 +114,8 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             cli/target/
-          key: ci-${{ matrix.os }}-${{ hashFiles('cli/Cargo.lock') }}
-          restore-keys: ci-${{ matrix.os }}-
+          key: ci-macos-latest-${{ hashFiles('cli/Cargo.lock') }}
+          restore-keys: ci-macos-latest-
 
       # tokens-core already carries `#![deny(clippy::all)]`, but tokens-cli does
       # not, so `-D warnings` is what actually holds the line there. The
@@ -175,11 +140,8 @@ jobs:
       # `--version` is the cheapest proof that it does not.
       - name: Smoke test
         shell: bash
-        run: cli/target/release/${{ matrix.bin }} --version
+        run: cli/target/release/tokens --version
 
-      # Currently a no-op: neither crate has a test module or a tests/ dir. It
-      # is here so that the first test anyone writes is run by CI rather than
-      # silently ignored until someone notices.
       - name: Test
         shell: bash
         run: cargo test --manifest-path cli/Cargo.toml
