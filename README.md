@@ -35,7 +35,7 @@
 
 ### 多个工具，自动汇总
 
-支持 42 个 AI 编程客户端的来源发现与用量采集，包括 Claude Code、Codex CLI、Cursor、Gemini CLI 和 OpenCode。自动读取可用的本地日志、数据库或已有缓存，也可为支持额外目录的客户端添加路径。
+支持 43 个 AI 编程客户端的来源发现与用量采集，包括 Claude Code、Codex CLI、Cursor、Gemini CLI 和 OpenCode。自动读取可用的本地日志、数据库或已有缓存，也可为支持额外目录的客户端添加路径。
 
 默认每轮采集结束 60 秒后再次扫描，可在设置中调整。重复扫描不会重复累加；会话累计用量按最新快照更新。
 
@@ -69,7 +69,7 @@ Tokenory 按 API 参考费率估算美元费用，单独保留来源报告的成
 
 ## 支持的客户端
 
-覆盖下列 42 个工具。发现可读的用量记录后自动采集；具体接入方式见表后说明。
+覆盖下列 43 个工具。发现可读的用量记录后自动采集，具体接入方式见表后说明。
 
 | | | | |
 | --- | --- | --- | --- |
@@ -82,13 +82,17 @@ Tokenory 按 API 参考费率估算美元费用，单独保留来源报告的成
 | Kimi | Kiro | MiMo Code | Mux |
 | OpenClaw | OpenCode | OpenCodeReview | Orca |
 | Pi | Qwen | Reasonix | Roo Code |
-| Paseo | Trae | Warp | WorkBuddy |
-| ZCode | Zed Agent | | |
+| Paseo | Trae | TRAE CLI | Warp |
+| WorkBuddy | ZCode | Zed Agent | |
 
 - **本地日志 / SQLite**：直接复用上游解析器。「设置 → 来源」显示发现的文件、记录和读取问题。设置中可为支持额外目录的客户端添加路径。
-- **Cursor、Trae、Warp**：先用上游 `tokens` CLI 同步本机缓存。Antigravity 优先读取本机 SQLite，旧版 IDE 会话也支持读取已有缓存。
+- **Codex CLI** 自动采集 `.jsonl` 和 `.jsonl.zst` 历史会话。同一会话的文本和压缩副本只计一次。
+- **Pi** 优先按日志条目标识和时间识别请求。不同请求共用响应 ID 时分别计入，派生会话中的记录副本只计一次。
+- **Copilot** 直接读取 SDK 的用量日志，包括 VS Code Agent 模式。同一会话已有桌面库或 OTEL 用量时沿用已有来源。额外采集路径可选 Copilot 主目录或其中的 `session-state` 目录。
+- **Antigravity** 正式版、Insiders 和 CLI 均可直接读取本机 SQLite。旧版 IDE 会话也支持读取已有缓存。
+- **Cursor、Trae 和 Warp** 需要先用上游 `tokens` CLI 同步本机缓存。**TRAE CLI** 单独读取 `~/.trae/cli` 下的本机日志，使用自定义目录时可在采集设置添加路径。
 - **Paseo**：发现其配置指定的 Claude / Codex 日志，归入底层工具。**Orca**：发现其 MiMo Code 沙箱数据库，归入 MiMo Code。两者不作为第二份用量累加。
-- **统计精度**：保留源记录提供的粒度。只有会话总量、请求数或费用的来源不会被伪造成逐条 token 数据。新增适配器的源记录暂不参与小时分配。
+- **统计粒度** 保留来源提供的用量口径。Hermes 按助手消息的时间将会话总量近似分配到各日。新增适配器的源记录暂不参与小时分配。
 
 <details>
 <summary>如何生成本机缓存</summary>

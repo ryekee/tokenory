@@ -1,4 +1,4 @@
-// [INPUT]: Local Codex JSONL events, independently of priced usage records.
+// [INPUT]: Local Codex plain and compressed JSONL events, independently of priced usage records.
 // [OUTPUT]: Completed main-turn metadata, selected inference speed and date/model-scoped reports.
 // [POS]: External-event validation, unchanged-file cache and private-text-free storage.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
@@ -378,7 +378,7 @@ impl Cache {
                 return Ok(turns.clone());
             }
         }
-        let turns = parse(std::io::BufReader::new(std::fs::File::open(path)?))?;
+        let turns = tokens_core::sessions::codex::read_rollout(path, |reader| parse(reader))?;
         // A growing log must be read again on the next scan.
         let after = std::fs::metadata(path)?;
         if after.len() == m.len() && after.modified()? == modified {

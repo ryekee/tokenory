@@ -6,7 +6,7 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 - `macos/TokenoryTests/`：原生状态、展示和协议测试。
 - `cli/tokenory/`：本地账本、采集、导入、计价和 IPC；Codex 子代理活动与用量查询在 `src/codex_subagents`；data 保存离线全量目录。
 - 多 Mac 同步：`cli/tokenory/src/device_snapshot.rs` 导出有效账本的用量汇总。原生代码位于 `macos/Tokenory/`，其中 `Models/DeviceUsageSnapshot.swift` 按设备计算总览与活动图，`Services/DeviceCloudSync.swift` 管理私有库的设备授权、快照替换和撤回，`Stores/DeviceSyncStore.swift` 对接本机 worker、云端和界面。
-- `cli/tokens-core/`：上游日志解析及价格数据适配。Codex 补计上下文压缩用量，Devin CLI 按会话内请求去重，Antigravity App 与 CLI 直读本地 SQLite 并与旧缓存去重。
+- `cli/tokens-core/`：上游日志解析及价格数据适配。Codex 补计上下文压缩用量，采集 `.jsonl.zst` 历史归档并与文本副本去重。Pi 按日志条目及时间区分独立请求。Devin CLI 按会话内请求去重，Antigravity App、Insiders 与 CLI 直读本地 SQLite 并与旧缓存去重。Copilot 合并 SDK 日志与既有来源，Hermes 按助手消息时间分配累计用量，TRAE CLI 直接读取独立的本机日志。
 - `assets/brand/`：产品图标和原生品牌资源的生成源；providers 为生成的全量供应商品牌源。
 - `script/`：构建、资源生成、签名和发布入口。
 - `DESIGN.md`：UI/UX 设计规范与验收清单。

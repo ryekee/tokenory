@@ -1,4 +1,4 @@
-// [INPUT]: Configured Codex and Antigravity roots plus filesystem create/modify/remove notifications.
+// [INPUT]: Codex live/archived rollouts, Antigravity roots including Insiders, and filesystem notifications.
 // [OUTPUT]: Changed log/SQLite paths or a rescan request; no usage estimates.
 // [POS]: Live ingestion trigger; periodic scans remain the recovery path.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
@@ -11,6 +11,7 @@ use std::{
     time::SystemTime,
 };
 use tokio::sync::mpsc::{self, UnboundedReceiver};
+use tokens_core::sessions::codex::is_rollout_archive;
 use tokens_core::ClientId;
 
 pub enum Change {
@@ -80,15 +81,13 @@ impl WatchRoots {
             .map(|root| root.join("codex")),
         );
 
-        let mut antigravity = vec![
-            config.home_dir.join(".gemini/antigravity/conversations"),
-            config.home_dir.join(".gemini/antigravity-ide/conversations"),
-            PathBuf::from(
-                ClientId::Antigravity
-                    .data()
-                    .resolve_path_with_env_strategy(&config.home_dir.to_string_lossy(), false),
-            ),
-        ];
+        let home = config.home_dir.to_string_lossy();
+        let mut antigravity = tokens_core::scanner::antigravity_conversation_roots(&home, false);
+        antigravity.push(PathBuf::from(
+            ClientId::Antigravity
+                .data()
+                .resolve_path_with_env_strategy(&home, false),
+        ));
         antigravity.extend(
             config
                 .extra_scan_paths
@@ -125,7 +124,9 @@ impl WatchRoots {
     pub(crate) fn classify_file(&self, path: &Path) -> Option<(ClientId, PathBuf)> {
         let candidate = normalize_sqlite_sidecar(path);
         let norm = normalized(&candidate);
-        if is_jsonl_path(&norm) && self.codex.iter().any(|root| norm.starts_with(root)) {
+        if (is_jsonl_path(&norm) || is_rollout_archive(&norm))
+            && self.codex.iter().any(|root| norm.starts_with(root))
+        {
             return Some((ClientId::Codex, candidate));
         }
         if (is_db_path(&norm) || is_jsonl_path(&norm))

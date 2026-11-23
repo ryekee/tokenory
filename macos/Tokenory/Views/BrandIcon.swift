@@ -1,6 +1,6 @@
 // [INPUT]: 接收工具、提供方或模型标识，读取品牌资源。
 // [OUTPUT]: 提供 Brand、BrandIcon 和 BrandLabel。
-// [POS]: 统一统计页和筛选器的品牌映射。
+// [POS]: 统一统计页和筛选器的品牌映射，TRAE CLI 与 Trae 共用品牌。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
@@ -16,7 +16,7 @@ enum Brand {
         "hermes": "hermesagent", "jcode": "jcode", "junie": "junie", "kilocode": "kilocode",
         "kimi": "kimi", "kiro": "kiro", "micode": "xiaomimimo", "mux": "mux",
         "openclaw": "openclaw", "opencode": "opencode", "opencodereview": "alibaba",
-        "pi": "pi", "qwen": "qwen", "roocode": "roocode", "trae": "trae", "warp": "warp",
+        "pi": "pi", "qwen": "qwen", "roocode": "roocode", "trae": "trae", "trae-cli": "trae", "warp": "warp",
         "workbuddy": "workbuddy", "zcode": "zai", "zed": "zed",
     ]
     // 尚无核实的品牌素材；字母图标不冒充其他项目的品牌。

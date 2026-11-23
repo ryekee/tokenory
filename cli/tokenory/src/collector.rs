@@ -1,6 +1,6 @@
 // [INPUT]: 读取各客户端日志和当前价格快照。
 // [OUTPUT]: 全量或变更 Codex/Antigravity 文件增量采集，生成规范化用量、完成回合、Codex 代理活动与诊断。
-// [POS]: 采集与账本边界；按请求迁移 Antigravity / Devin 旧行，保留历史计价依据。
+// [POS]: 采集与账本边界；更新 Antigravity、Devin、Hermes 和 Pi 历史记录时保留已有计价依据。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
     clients::{source_paths, CLIENTS},
@@ -19,6 +19,8 @@ use std::{
     path::{Path, PathBuf},
     time::{Instant, SystemTime},
 };
+mod hermes;
+
 #[derive(Default)]
 pub struct DiagnosticCache {
     files: HashMap<PathBuf, (u64, SystemTime, Vec<String>)>,
@@ -73,6 +75,8 @@ pub struct ScanResult {
 pub struct ScanBatch {
     pub records: Vec<UsageRecord>,
     prior_keys: HashMap<String, String>,
+    pi_legacy_keys: HashMap<String, String>,
+    incomplete_copilot_sdk_sessions: HashSet<String>,
     pub codex_turns: Vec<crate::codex_turns::CodexTurn>,
     codex_activity: Vec<crate::codex_subagents::ThreadActivity>,
     pub invalidated_turn_ids: Vec<String>,
@@ -250,7 +254,9 @@ pub async fn collect_live_changes(
             }
             _ => {
                 // Allow direct Codex paths passed by tests outside default watch roots.
-                if path.extension().and_then(|s| s.to_str()) == Some("jsonl") {
+                if path.extension().and_then(|s| s.to_str()) == Some("jsonl")
+                    || tokens_core::sessions::codex::is_rollout_archive(&path)
+                {
                     add_client(tokens_core::ClientId::Codex);
                     scan.get_mut(tokens_core::ClientId::Codex).push(path);
                 }
@@ -424,6 +430,8 @@ async fn collect(
     }
     let mut records = Vec::new();
     let mut prior_keys = HashMap::new();
+    let mut pi_legacy_keys = HashMap::new();
+    let incomplete_copilot_sdk_sessions;
     {
         let parsed = tokens_core::parse_scanned_files(
             options.clone(),
@@ -432,6 +440,7 @@ async fn collect(
             cache.persistent,
         )
         .map_err(|e| anyhow!(e))?;
+        incomplete_copilot_sdk_sessions = parsed.incomplete_copilot_sdk_sessions;
         for (client, error) in parsed.source_errors {
             if let Some(source) = sources.iter_mut().find(|s| s.client == client.as_str()) {
                 source.status = "partial".into();
@@ -464,6 +473,14 @@ async fn collect(
         let mut positions: HashMap<(String, String), usize> = HashMap::new();
         for m in messages {
             let snapshot = !matches!(m.client.as_str(), "claude" | "codex");
+            let pi_keys = if m.client == "pi" {
+                m.dedup_key
+                    .as_deref()
+                    .filter(|key| !key.is_empty())
+                    .map(tokens_core::sessions::pi::pi_request_keys)
+            } else {
+                None
+            };
             let devin_keys = (m.client == "devin-cli")
                 .then(|| tokens_core::sessions::devin::devin_cli_request_keys(&m))
                 .flatten();
@@ -484,11 +501,14 @@ async fn collect(
                     let event_key = devin_keys
                         .as_ref()
                         .map(|(key, _)| key.as_str())
+                        .or(pi_keys.map(|(current, _)| current))
                         .or(m.dedup_key.as_deref());
                     let event = event_key.filter(|key| !key.is_empty());
                     match (m.client.as_str(), event) {
                         // RPC and SQLite may name the same request's session differently.
                         ("antigravity", Some(response)) => antigravity_response_key(response),
+                        // Forks can replay a request under a different session ID.
+                        ("pi", Some(request)) => request.to_owned(),
                         _ => {
                             let identity = match event {
                                 Some(key) => json!(["event", key]),
@@ -552,10 +572,29 @@ async fn collect(
                 if snapshot {
                     r.metadata["collectionMode"] = "sessionSnapshot".into();
                 }
+                if m.client == "copilot"
+                    && m.dedup_key.as_deref().is_some_and(|key| {
+                        key.starts_with(tokens_core::sessions::copilot_session_state::DEDUP_PREFIX)
+                    })
+                {
+                    r.metadata["copilotSdk"] = true.into();
+                }
                 if m.client == "antigravity" && m.antigravity_sqlite_time.is_some() {
                     r.metadata["antigravitySqlite"] = true.into();
                 }
+                if m.client == "hermes" {
+                    let (group, _) = m.dedup_key.as_deref()
+                        .and_then(|key| key.rsplit_once('#'))
+                        .context("missing Hermes usage group")?;
+                    r.metadata["hermesUsageGroup"] = format!(
+                        "snapshot:{}",
+                        serde_json::to_string(&(&m.client, &m.session_id, ["event", group]))?
+                    ).into();
+                }
                 r.validate()?;
+                if let Some((current, legacy)) = pi_keys {
+                    pi_legacy_keys.insert(r.key.clone(), legacy.unwrap_or(current).to_owned());
+                }
                 if let Some((_, row_key)) = &devin_keys {
                     let legacy_key = serde_json::to_string(&(
                         &m.client,
@@ -618,6 +657,8 @@ async fn collect(
     Ok(ScanBatch {
         records,
         prior_keys,
+        pi_legacy_keys,
+        incomplete_copilot_sdk_sessions,
         codex_turns,
         codex_activity,
         invalidated_turn_ids,
@@ -657,9 +698,16 @@ fn migrated_antigravity_key(key: &str, session: Option<&str>) -> Option<String> 
     .then(|| antigravity_response_key(&response))
 }
 
+fn pi_legacy_event(key: &str) -> Option<String> {
+    let (client, _, (kind, event)): (String, String, (String, String)) =
+        serde_json::from_str(key.strip_prefix("snapshot:")?).ok()?;
+    (client == "pi" && kind == "event").then_some(event)
+}
+
 pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
     let snapshot = crate::pricing::active_snapshot(&db.connection)?;
     let tx = db.connection.transaction()?;
+    hermes::reconcile(&tx, &mut batch.records)?;
     let sessions: HashSet<_> = batch
         .records
         .iter()
@@ -674,10 +722,25 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
         .collect();
     let has_antigravity = sessions.iter().any(|(client, _)| client == "antigravity");
     let incoming: HashSet<_> = batch.records.iter().map(|r| r.key.as_str()).collect();
+    let mut pi_candidates = HashMap::<&str, Vec<&UsageRecord>>::new();
+    for record in &batch.records {
+        if let Some(previous) = batch.pi_legacy_keys.get(&record.key) {
+            pi_candidates.entry(previous).or_default().push(record);
+        }
+    }
+    let mut saved_copilot_sessions_from_other_sources = HashSet::new();
     // Only replace sessions successfully read in this scan. Missing files and
     // failed sources keep their saved history, as do every imported batch.
     let obsolete = {
-        let mut stmt = tx.prepare("SELECT item_key,client,json_extract(body,'$.sessionId'),coalesce(json_extract(body,'$.metadata.antigravitySqlite'),0) FROM usage_records WHERE source='local' AND batch_id='' AND json_extract(body,'$.metadata.collectionMode')='sessionSnapshot' ORDER BY rowid")?;
+        let mut stmt = tx.prepare(
+            "SELECT item_key, client, json_extract(body, '$.sessionId'),
+                  coalesce(json_extract(body, '$.metadata.antigravitySqlite'), 0),
+                  coalesce(json_extract(body, '$.metadata.copilotSdk'), 0),
+                  CASE WHEN client = 'pi' THEN body END
+             FROM usage_records WHERE source = 'local' AND batch_id = ''
+               AND json_extract(body, '$.metadata.collectionMode') = 'sessionSnapshot'
+             ORDER BY rowid",
+        )?;
         let mut saved = stmt.query([])?;
         let mut obsolete = Vec::new();
         while let Some(row) = saved.next()? {
@@ -687,6 +750,50 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
             }
             let client: String = row.get(1)?;
             let session: Option<String> = row.get(2)?;
+            if client == "pi" && !pi_candidates.is_empty() {
+                let previous_event = pi_legacy_event(&key);
+                if let Some(candidates) = previous_event
+                    .as_deref()
+                    .and_then(|event| pi_candidates.get(event))
+                {
+                    let prior: UsageRecord = serde_json::from_str(&row.get::<_, String>(5)?)?;
+                    // A provider may have reused this response ID for a different
+                    // request. Match the recorded time and billing inputs too.
+                    let observed = candidates
+                        .iter()
+                        .filter(|record| {
+                            record.timestamp_ms == prior.timestamp_ms
+                                && record.provider == prior.provider
+                                && record.model == prior.model
+                                && record.tokens == prior.tokens
+                        })
+                        .min_by(|a, b| {
+                            (a.session_id != session, &a.key).cmp(&(b.session_id != session, &b.key))
+                        });
+                    if let Some(record) = observed {
+                        batch
+                            .prior_keys
+                            .entry(record.key.clone())
+                            .or_insert_with(|| key.clone());
+                        obsolete.push(key);
+                        continue;
+                    }
+                }
+            }
+            if client == "copilot" {
+                if let Some(id) = session
+                    .as_ref()
+                    .filter(|id| batch.incomplete_copilot_sdk_sessions.contains(*id))
+                {
+                    // Existing non-SDK rows cover an unknown portion of this
+                    // journal. Wait for a complete source before replacing them.
+                    if !row.get::<_, bool>(4)? {
+                        saved_copilot_sessions_from_other_sources.insert(id.clone());
+                    }
+                    // A missing archive cannot invalidate saved history.
+                    continue;
+                }
+            }
             if client == "antigravity" {
                 if has_antigravity {
                     if let Some(new_key) = migrated_antigravity_key(&key, session.as_deref())
@@ -720,17 +827,41 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
         "SELECT body FROM usage_records WHERE source='local' AND batch_id='' AND item_key=?1",
     )?;
     for mut record in batch.records {
+        if record.client == "copilot"
+            && record.session_id.as_ref().is_some_and(|id| {
+                saved_copilot_sessions_from_other_sources.contains(id)
+            })
+        {
+            batch.result.unchanged += 1;
+            continue;
+        }
         let mut prior: Option<String> = read_prior
             .query_row([&record.key], |row| row.get(0))
             .optional()?;
         let is_new = prior.is_none();
+        if !is_new
+            && record.client == "copilot"
+            && record
+                .session_id
+                .as_ref()
+                .is_some_and(|id| batch.incomplete_copilot_sdk_sessions.contains(id))
+        {
+            // An incomplete journal can only append deltas. A missing
+            // baseline may make it interpret known events differently.
+            batch.result.unchanged += 1;
+            continue;
+        }
         if is_new {
             if let Some(key) = batch.prior_keys.get(&record.key) {
                 prior = read_prior.query_row([key], |row| row.get(0)).optional()?;
             }
         }
-        if let Some((id, p)) = &snapshot {
-            crate::pricing::assign("local", &mut record, id, p);
+        let has_hermes_allocation = record.metadata["hermesUsageGroup"].is_string();
+        let retained_hermes_estimate = has_hermes_allocation && record.estimated_cost_usd.is_some();
+        if !retained_hermes_estimate {
+            if let Some((id, p)) = &snapshot {
+                crate::pricing::assign("local", &mut record, id, p);
+            }
         }
         if let Some(prior) = prior {
             let mut old: UsageRecord = serde_json::from_str(&prior)?;
@@ -749,7 +880,19 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
                     old.metadata["antigravitySqlite"] = source.clone();
                 }
             }
-            if old.tokens == record.tokens
+            if record.client == "codex"
+                && old.tokens == record.tokens
+                && old.model == record.model
+                && old.provider == record.provider
+                && old.timestamp_ms.is_some()
+            {
+                // The same event may now come from a compressed copy with a
+                // different file modification time. Keep its original timing.
+                record.timestamp_ms = old.timestamp_ms;
+            }
+            if !retained_hermes_estimate
+                && (!has_hermes_allocation || old.timestamp_ms == record.timestamp_ms)
+                && old.tokens == record.tokens
                 && old.model == record.model
                 && old.provider == record.provider
                 && old.metadata == record.metadata
@@ -761,21 +904,24 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
                     record.price_snapshot_id = old.price_snapshot_id;
                 }
             }
-            // A display/timezone preference must not silently move persisted events.
-            if record.metadata["collectionMode"] == "sessionSnapshot" {
-                if let (Some(timestamp), Some(zone)) =
-                    (record.timestamp_ms, old.timezone.as_deref())
-                {
-                    record.date = chrono::DateTime::from_timestamp_millis(timestamp)
-                        .context("invalid persisted timestamp")?
-                        .with_timezone(&zone.parse::<chrono_tz::Tz>()?)
-                        .format("%Y-%m-%d")
-                        .to_string();
+            // Hermes allocations already matched old timezones by timestamp.
+            if !has_hermes_allocation {
+                // A display/timezone preference must not silently move persisted events.
+                if record.metadata["collectionMode"] == "sessionSnapshot" {
+                    if let (Some(timestamp), Some(zone)) =
+                        (record.timestamp_ms, old.timezone.as_deref())
+                    {
+                        record.date = chrono::DateTime::from_timestamp_millis(timestamp)
+                            .context("invalid persisted timestamp")?
+                            .with_timezone(&zone.parse::<chrono_tz::Tz>()?)
+                            .format("%Y-%m-%d")
+                            .to_string();
+                    }
+                } else {
+                    record.date = old.date;
                 }
-            } else {
-                record.date = old.date;
+                record.timezone = old.timezone;
             }
-            record.timezone = old.timezone;
         }
         if put_record(&tx, "local", "", &record)? {
             batch.result.changed += 1;

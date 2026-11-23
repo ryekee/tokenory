@@ -920,26 +920,23 @@ fn parse_linked_entries(
 }
 
 fn parse_openclaw_turns(path: &Path) -> Result<ParseOutcome> {
+    use tokens_core::sessions::codex::read_rollout;
     use tokens_core::sessions::openclaw::{classify_openclaw_jsonl, OpenClawJsonlKind};
-    match classify_openclaw_jsonl(path) {
-        OpenClawJsonlKind::CodexRollout => {
-            let reader = std::io::BufReader::new(std::fs::File::open(path)?);
-            return Ok(ParseOutcome {
-                turns: crate::codex_turns::parse_client(reader, true, true)?,
-                ..ParseOutcome::default()
-            });
-        }
+    let owned_path = match classify_openclaw_jsonl(path) {
+        OpenClawJsonlKind::CodexRollout => true,
         OpenClawJsonlKind::CodexHomeOther => return Ok(ParseOutcome::default()),
-        OpenClawJsonlKind::Transcript => {}
-    }
-    if path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .is_some_and(|s| s.starts_with("rollout-"))
+        OpenClawJsonlKind::Transcript => false,
+    };
+    if owned_path
+        || path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.starts_with("rollout-"))
     {
-        let reader = std::io::BufReader::new(std::fs::File::open(path)?);
         return Ok(ParseOutcome {
-            turns: crate::codex_turns::parse_client(reader, true, false)?,
+            turns: read_rollout(path, |reader| {
+                crate::codex_turns::parse_client(reader, true, owned_path)
+            })?,
             ..ParseOutcome::default()
         });
     }

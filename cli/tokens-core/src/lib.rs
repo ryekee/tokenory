@@ -828,6 +828,7 @@ fn opencode_json_superseded_by_sqlite(
 trait MessageSink {
     fn accept(&mut self, message: UnifiedMessage);
     fn source_error(&mut self, _client: ClientId, _error: String) {}
+    fn incomplete_copilot_sdk_session(&mut self, _session_id: String) {}
 }
 
 /// Parsing diagnostics let the ledger retain the previous snapshot of a failed source.
@@ -835,6 +836,9 @@ trait MessageSink {
 pub struct ScannedMessages {
     pub messages: Vec<UnifiedMessage>,
     pub source_errors: Vec<(ClientId, String)>,
+    /// A rotated SDK journal lacks its original start. Keep earlier ledger rows
+    /// for this session while accepting increments from the remaining journal.
+    pub incomplete_copilot_sdk_sessions: HashSet<String>,
 }
 
 impl MessageSink for ScannedMessages {
@@ -844,6 +848,10 @@ impl MessageSink for ScannedMessages {
 
     fn source_error(&mut self, client: ClientId, error: String) {
         self.source_errors.push((client, error));
+    }
+
+    fn incomplete_copilot_sdk_session(&mut self, session_id: String) {
+        self.incomplete_copilot_sdk_sessions.insert(session_id);
     }
 }
 
@@ -1062,6 +1070,11 @@ fn parse_all_messages_streaming<S: MessageSink>(
         is_headless: bool,
     ) -> CodexSourceOutcome {
         let fallback_timestamp = sessions::utils::file_modified_timestamp_ms(path);
+        let archive_fingerprint = if sessions::codex::is_rollout_archive(path) {
+            message_cache::SourceFingerprint::from_path(path)
+        } else {
+            None
+        };
         let parsed = sessions::codex::parse_codex_file_incremental(
             path,
             0,
@@ -1093,6 +1106,7 @@ fn parse_all_messages_streaming<S: MessageSink>(
             parsed.consumed_offset,
             parsed.state,
             parsed.fallback_timestamp_indices,
+            archive_fingerprint.as_ref(),
         );
 
         (
@@ -1131,18 +1145,32 @@ fn parse_all_messages_streaming<S: MessageSink>(
         consumed_offset: u64,
         state: sessions::codex::CodexParseState,
         fallback_timestamp_indices: Vec<usize>,
+        original_archive_fingerprint: Option<&message_cache::SourceFingerprint>,
     ) -> Option<message_cache::CachedSourceEntry> {
         let fingerprint = message_cache::SourceFingerprint::from_path(path)?;
-        if fingerprint.size != consumed_offset {
-            return None;
-        }
-
-        let codex_incremental = message_cache::build_codex_incremental_cache_with_prefix_hash(
-            path,
-            consumed_offset,
-            state,
-            fingerprint.content_hash,
-        )?;
+        let codex_incremental = if sessions::codex::is_rollout_archive(path) {
+            if original_archive_fingerprint != Some(&fingerprint) {
+                return None;
+            }
+            // The decode consumed the archive as a whole. Store its physical
+            // size for warm cache hits. Archives never resume from this offset.
+            message_cache::CodexIncrementalCache {
+                state,
+                consumed_offset: fingerprint.size,
+                ends_with_newline: true,
+                prefix_hash: fingerprint.content_hash,
+            }
+        } else {
+            if fingerprint.size != consumed_offset {
+                return None;
+            }
+            message_cache::build_codex_incremental_cache_with_prefix_hash(
+                path,
+                consumed_offset,
+                state,
+                fingerprint.content_hash,
+            )?
+        };
 
         Some(message_cache::CachedSourceEntry::new(
             message_cache::CacheIdentity::for_client(ClientId::Codex),
@@ -1913,7 +1941,11 @@ fn parse_all_messages_streaming<S: MessageSink>(
                 return reparse_from_start(true);
             }
 
-            if let Some(codex_incremental) = cached.codex_incremental.as_ref() {
+            if let Some(codex_incremental) = cached
+                .codex_incremental
+                .as_ref()
+                .filter(|_| !sessions::codex::is_rollout_archive(path))
+            {
                 if fingerprint.size > codex_incremental.consumed_offset
                     && message_cache::codex_prefix_matches(path, codex_incremental)
                 {
@@ -1941,6 +1973,7 @@ fn parse_all_messages_streaming<S: MessageSink>(
                             parsed.consumed_offset,
                             parsed.state,
                             fallback_timestamp_indices.clone(),
+                            None,
                         );
                         if let Some(cache_entry) = cache_entry {
                             let messages = finalize_codex_messages(
@@ -2203,7 +2236,7 @@ fn parse_all_messages_streaming<S: MessageSink>(
     // and the flush filter decides — a `synthetic` request keeps the ones a
     // synthetic gateway served, whether or not codex was asked for by name.
     let mut recorded_codex_turns = RecordedCodexTurns::default();
-    let codex_outcomes: Vec<(PathBuf, CodexSourceOutcome)> = scan_result
+    let mut codex_outcomes: Vec<(PathBuf, CodexSourceOutcome)> = scan_result
         .get(ClientId::Codex)
         .par_iter()
         .map(|path| {
@@ -2214,7 +2247,17 @@ fn parse_all_messages_streaming<S: MessageSink>(
         })
         .collect();
     let mut codex_seen: HashSet<String> = HashSet::new();
-    let rollout_threads = codex_rollout_threads(codex_outcomes.iter().map(|(path, _)| path));
+    // A copied archive can have a different filesystem fallback timestamp.
+    // Prefer the original rollout for keys both sources report.
+    codex_outcomes.sort_by_key(|(path, _)| sessions::codex::is_rollout_archive(path));
+    let rollout_threads = codex_rollout_threads(
+        codex_outcomes
+            .iter()
+            .filter(|(path, (outcome, _))| {
+                !sessions::codex::is_rollout_archive(path) || !outcome.messages.is_empty()
+            })
+            .map(|(path, _)| path),
+    );
     for (path, (outcome, turn_coverage)) in codex_outcomes {
         let mut owned_thread: Option<String> = None;
         let mut counted_under_codex = false;
@@ -2299,6 +2342,11 @@ fn parse_all_messages_streaming<S: MessageSink>(
                 .or_default()
                 .insert(message.timestamp);
         }
+        let mut covered_sessions = if scan_result.copilot_session_state_events.is_empty() {
+            HashSet::new()
+        } else {
+            existing_copilot_session_timestamps.keys().cloned().collect()
+        };
 
         // These are the only rows the VS Code lane consults. Once their keys
         // and timestamps are projected above, keeping the full OTEL/desktop
@@ -2320,10 +2368,27 @@ fn parse_all_messages_streaming<S: MessageSink>(
                     return;
                 }
 
+                if !scan_result.copilot_session_state_events.is_empty() {
+                    covered_sessions.insert(message.session_id.clone());
+                }
                 apply_pricing_if_available(&mut message, pricing);
                 flush_message(message, &flush_context, sink);
             },
         );
+        // SDK deltas cover whole sessions. Matching individual timestamps
+        // would count the same requests again at their checkpoint time.
+        for session in sessions::copilot_session_state::parse_sdk_sessions(
+            &scan_result.copilot_session_state_events,
+            &covered_sessions,
+        ) {
+            if !session.complete_from_start {
+                sink.incomplete_copilot_sdk_session(session.session_id);
+            }
+            for mut message in session.messages {
+                apply_pricing_if_available(&mut message, pricing);
+                flush_message(message, &flush_context, sink);
+            }
+        }
     }
 
     let gemini_outcomes: Vec<(PathBuf, CachedParseOutcome)> = scan_result
@@ -2682,7 +2747,8 @@ fn parse_all_messages_streaming<S: MessageSink>(
     }
 
     // Pi branch/fork copies prior assistant records into a new session file
-    // (#1306). The parser stamps cross-session keys (`responseId` preferred);
+    // (#1306). The parser stamps cross-session keys (entry id + timestamp
+    // preferred, `responseId` only without an entry id, #122);
     // this lane drops the copies — first-wins in scan order, same key survives
     // warm cache hits.
     parse_cached_lane_deduped(
@@ -3230,15 +3296,18 @@ fn parse_all_messages_streaming<S: MessageSink>(
         all_messages.extend(kilo_messages);
     }
 
-    let mut hermes_seen: HashSet<String> = HashSet::new();
-    for db_path in scan_result.hermes_db_paths() {
-        let hermes_messages = parse_hermes_sqlite_with_pricing(&db_path, pricing);
-        all_messages.extend(
-            hermes_messages
-                .into_iter()
-                .filter(|message| should_keep_deduped_message(&mut hermes_seen, message)),
-        );
+    // Rows shared by several Hermes databases are deduped inside the parser.
+    let (hermes_messages, hermes_errors) =
+        sessions::hermes::read_hermes_databases(&scan_result.hermes_db_paths());
+    for error in hermes_errors {
+        sink.source_error(ClientId::Hermes, error);
     }
+    all_messages.extend(hermes_messages.into_iter().map(|mut msg| {
+        if msg.cost <= 0.0 {
+            apply_pricing_if_available(&mut msg, pricing);
+        }
+        msg
+    }));
 
     if let Some(db_path) = &scan_result.goose_db {
         let goose_messages: Vec<UnifiedMessage> = sessions::goose::parse_goose_sqlite(db_path)
@@ -3378,6 +3447,15 @@ fn parse_all_messages_streaming<S: MessageSink>(
         .collect();
     let deduped_trae_messages = dedupe_latest_trae_messages(trae_messages);
     all_messages.extend(deduped_trae_messages);
+
+    parse_cached_lane_deduped(
+        &scan_result,
+        &mut source_cache,
+        pricing,
+        &mut all_messages,
+        ClientId::TraeCli,
+        sessions::trae_cli::parse_trae_cli_file,
+    );
 
     let codebuddy_outcomes: Vec<CachedParseOutcome> = scan_result
         .get(ClientId::CodeBuddy)
@@ -5120,21 +5198,6 @@ fn merge_claude_cross_file_duplicate(
     apply_pricing_if_available(existing, pricing);
 }
 
-fn parse_hermes_sqlite_with_pricing(
-    db_path: &Path,
-    pricing: Option<&pricing::PricingService>,
-) -> Vec<UnifiedMessage> {
-    sessions::hermes::parse_hermes_sqlite(db_path)
-        .into_iter()
-        .map(|mut msg| {
-            if msg.cost <= 0.0 {
-                apply_pricing_if_available(&mut msg, pricing);
-            }
-            msg
-        })
-        .collect()
-}
-
 fn select_local_parse_pricing<F>(
     fresh: Result<Arc<pricing::PricingService>, String>,
     stale: F,
@@ -5334,7 +5397,7 @@ pub fn parse_local_clients(options: LocalParseOptions) -> Result<ParsedMessages,
     counts.set(ClientId::Claude, claude_count);
     messages.extend(claude_msgs);
 
-    let codex_files: Vec<(
+    let mut codex_files: Vec<(
         PathBuf,
         Vec<UnifiedMessage>,
         sessions::codex::CodexTurnCoverage,
@@ -5370,7 +5433,15 @@ pub fn parse_local_clients(options: LocalParseOptions) -> Result<ParsedMessages,
     let mut recorded_codex_turns = RecordedCodexTurns::default();
     let mut codex_seen: HashSet<String> = HashSet::new();
     let mut codex_msgs: Vec<ParsedMessage> = Vec::new();
-    let rollout_threads = codex_rollout_threads(codex_files.iter().map(|(path, _, _)| path));
+    codex_files.sort_by_key(|(path, _, _)| sessions::codex::is_rollout_archive(path));
+    let rollout_threads = codex_rollout_threads(
+        codex_files
+            .iter()
+            .filter(|(path, messages, _)| {
+                !sessions::codex::is_rollout_archive(path) || !messages.is_empty()
+            })
+            .map(|(path, _, _)| path),
+    );
     for (path, file_messages, turn_coverage) in codex_files {
         let mut owned_thread: Option<String> = None;
         let mut counted_under_codex = false;
@@ -5455,7 +5526,23 @@ pub fn parse_local_clients(options: LocalParseOptions) -> Result<ParsedMessages,
         );
     }
     let copilot_msgs: Vec<ParsedMessage> =
-        copilot_unified_msgs.iter().map(unified_to_parsed).collect();
+        if scan_result.copilot_session_state_events.is_empty() {
+            copilot_unified_msgs.iter().map(unified_to_parsed).collect()
+        } else {
+            let covered_sessions = copilot_unified_msgs
+                .iter()
+                .map(|message| message.session_id.clone())
+                .collect();
+            let sdk_sessions = sessions::copilot_session_state::parse_sdk_sessions(
+                &scan_result.copilot_session_state_events,
+                &covered_sessions,
+            );
+            copilot_unified_msgs
+                .iter()
+                .chain(sdk_sessions.iter().flat_map(|session| &session.messages))
+                .map(unified_to_parsed)
+                .collect()
+        };
     let copilot_count = copilot_msgs.len() as i32;
     counts.set(ClientId::Copilot, copilot_count);
     messages.extend(copilot_msgs);
@@ -6094,13 +6181,12 @@ pub fn parse_local_clients(options: LocalParseOptions) -> Result<ParsedMessages,
 
     let hermes_db_paths = scan_result.hermes_db_paths();
     if !hermes_db_paths.is_empty() {
-        let mut hermes_seen: HashSet<String> = HashSet::new();
-        let hermes_msgs: Vec<ParsedMessage> = hermes_db_paths
-            .iter()
-            .flat_map(|db_path| sessions::hermes::parse_hermes_sqlite(db_path))
-            .filter(|msg| should_keep_deduped_message(&mut hermes_seen, msg))
-            .map(|msg| unified_to_parsed(&msg))
-            .collect();
+        // Rows shared by several databases are deduped inside the parser.
+        let hermes_msgs: Vec<ParsedMessage> =
+            sessions::hermes::parse_hermes_databases(&hermes_db_paths)
+                .iter()
+                .map(unified_to_parsed)
+                .collect();
         let count = summed_parsed_message_count(&hermes_msgs);
         counts.set(ClientId::Hermes, count);
         messages.extend(hermes_msgs);
@@ -6194,6 +6280,20 @@ pub fn parse_local_clients(options: LocalParseOptions) -> Result<ParsedMessages,
     let trae_count = trae_msgs.len() as i32;
     counts.set(ClientId::Trae, trae_count);
     messages.extend(trae_msgs);
+
+    let trae_cli_msgs: Vec<UnifiedMessage> = scan_result
+        .get(ClientId::TraeCli)
+        .par_iter()
+        .flat_map_iter(|path| sessions::trae_cli::parse_trae_cli_file(path))
+        .collect();
+    let mut trae_cli_seen = HashSet::new();
+    let trae_cli_parsed: Vec<_> = trae_cli_msgs
+        .iter()
+        .filter(|message| should_keep_deduped_message(&mut trae_cli_seen, message))
+        .map(unified_to_parsed)
+        .collect();
+    counts.set(ClientId::TraeCli, summed_parsed_message_count(&trae_cli_parsed));
+    messages.extend(trae_cli_parsed);
 
     let warp_msgs: Vec<ParsedMessage> = scan_result
         .get(ClientId::Warp)
@@ -6590,10 +6690,14 @@ fn headless_capture_superseded(message: &UnifiedMessage, rollout_threads: &HashS
 }
 
 fn should_keep_deduped_message(seen_keys: &mut HashSet<String>, message: &UnifiedMessage) -> bool {
-    message
-        .dedup_key
-        .as_ref()
-        .is_none_or(|key| seen_keys.insert(key.clone()))
+    message.dedup_key.as_deref().is_none_or(|key| {
+        let primary = if message.client == "pi" {
+            sessions::pi::pi_request_keys(key).0
+        } else {
+            key
+        };
+        seen_keys.insert(primary.to_owned())
+    })
 }
 
 fn should_keep_devin_cli_message(seen_keys: &mut HashSet<String>, message: &UnifiedMessage) -> bool {
@@ -10291,6 +10395,70 @@ mod tests {
             assert_eq!(parsed.messages[0].input, 100);
             assert_eq!(parsed.messages[0].output, 20);
         }
+    }
+
+    /// #122: a provider (Magpie) reused one `responseId` across two distinct
+    /// requests. Both must count (2,220 tokens, not 1,110), while a fork copy
+    /// of the same file in another session must still collapse.
+    #[test]
+    #[serial_test::serial]
+    fn test_parse_local_clients_pi_reused_response_id_counts_each_request() {
+        let cache_home = tempfile::TempDir::new().unwrap();
+        let source_home = tempfile::TempDir::new().unwrap();
+        let _cache_env = redirect_cache_home(cache_home.path());
+
+        let sessions_dir = source_home.path().join(".pi/agent/sessions/--fixture--");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+        let transcript = |session: &str| {
+            format!(
+                r#"{{"type":"session","id":"{session}","timestamp":"2026-11-09T00:00:00Z","cwd":"/tmp/test"}}"#
+            ) + "\n"
+                + concat!(
+                    r#"{"type":"message","id":"a","timestamp":"2026-11-09T00:00:01Z","message":{"role":"assistant","provider":"magpie","model":"deepseek-v4.1-flash","responseId":"reused-id","usage":{"input":100,"output":10,"cacheRead":1000,"cacheWrite":0,"totalTokens":1110}}}"#,
+                    "\n",
+                    r#"{"type":"message","id":"b","timestamp":"2026-11-09T00:00:02Z","message":{"role":"assistant","provider":"magpie","model":"deepseek-v4.1-flash","responseId":"reused-id","usage":{"input":100,"output":10,"cacheRead":1000,"cacheWrite":0,"totalTokens":1110}}}"#,
+                    "\n",
+                )
+        };
+        std::fs::write(
+            sessions_dir.join("example.jsonl"),
+            transcript("test-session"),
+        )
+        .unwrap();
+
+        let parse = || {
+            parse_local_clients(LocalParseOptions {
+                home_dir: Some(source_home.path().to_str().unwrap().to_string()),
+                use_env_roots: false,
+                clients: Some(vec!["pi".to_string()]),
+                since: None,
+                until: None,
+                year: None,
+                scanner_settings: scanner::ScannerSettings::default(),
+            })
+            .unwrap()
+        };
+        let total = |parsed: &crate::ParsedMessages| {
+            parsed
+                .messages
+                .iter()
+                .map(|m| m.input + m.output + m.cache_read + m.cache_write + m.reasoning)
+                .sum::<i64>()
+        };
+
+        let parsed = parse();
+        assert_eq!(parsed.messages.len(), 2);
+        assert_eq!(total(&parsed), 2_220);
+
+        // A fork copies both entries verbatim into a new session file.
+        std::fs::write(
+            sessions_dir.join("fork.jsonl"),
+            transcript("forked-session"),
+        )
+        .unwrap();
+        let parsed = parse();
+        assert_eq!(parsed.messages.len(), 2);
+        assert_eq!(total(&parsed), 2_220);
     }
 
     #[test]
@@ -14422,6 +14590,46 @@ mod tests {
 
             assert_eq!(messages, expected);
         }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_codex_archive_cache_tracks_compressed_file_replacement() {
+        let cache_home = tempfile::TempDir::new().unwrap();
+        let source_home = tempfile::TempDir::new().unwrap();
+        let _cache_env = redirect_cache_home(cache_home.path());
+        let archive_dir = source_home.path().join(".codex/archived_sessions");
+        std::fs::create_dir_all(&archive_dir).unwrap();
+        let path = archive_dir.join("session.jsonl.zst");
+        let write_archive = |input| {
+            let context = serde_json::json!({"type":"turn_context","payload":{"model":"gpt-5.4"}});
+            let count = serde_json::json!({"type":"event_msg", "payload":{"type":"token_count",
+                "info":{"total_token_usage":{"input_tokens":input}}}});
+            let transcript = format!("{context}\n{count}\n");
+            let bytes = zstd::encode_all(transcript.as_bytes(), 3).unwrap();
+            std::fs::write(&path, &bytes).unwrap();
+            bytes.len() as u64
+        };
+        let collect = || parse_all_messages_with_pricing(
+            source_home.path().to_str().unwrap(),
+            &["codex".into()],
+            None,
+        );
+        let length = write_archive(100);
+        let first = collect();
+        assert_eq!(first[0].session_id, "session");
+        assert_eq!(first[0].tokens.input, 100);
+        assert_eq!(collect(), first);
+        let entry = message_cache::SourceMessageCache::load()
+            .get(message_cache::CacheIdentity::for_client(ClientId::Codex), &path)
+            .unwrap();
+        assert_eq!(entry.codex_incremental.unwrap().consumed_offset, length);
+
+        write_archive(200);
+        let replacement = collect();
+        assert_eq!(replacement.len(), 1);
+        assert_eq!(replacement[0].tokens.input, 200);
+        assert_eq!(collect(), replacement);
     }
 
     #[test]

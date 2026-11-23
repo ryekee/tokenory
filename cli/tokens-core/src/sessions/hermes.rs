@@ -3,14 +3,21 @@
 //! Parses aggregated session rows from Hermes Agent's SQLite state database:
 //! - `~/.hermes/state.db`
 //! - `$HERMES_HOME/state.db`
+//!
+//! Hermes stores usage only as lifetime totals per session (and per model in
+//! `session_model_usage`), never per API call. Each total is spread across the
+//! assistant messages that fall in its time window, so a session that runs
+//! for days books its usage on the days it was used rather than the day it
+//! started (missuo/tokens#129).
 
 use super::utils::{
     open_readonly_sqlite, resolved_provider, sqlite_for_each_row_on, timestamp_secs_to_ms,
+    SqliteScan,
 };
 use super::UnifiedMessage;
 use crate::TokenBreakdown;
 use rusqlite::Connection;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use tracing::warn;
 
@@ -44,7 +51,9 @@ const PER_MODEL_QUERY: &str = r#"
             SUM(smu.cache_read_tokens)   AS cache_read_tokens,
             SUM(smu.cache_write_tokens)  AS cache_write_tokens,
             SUM(smu.reasoning_tokens)    AS reasoning_tokens,
-            SUM(COALESCE(NULLIF(smu.actual_cost_usd, 0), smu.estimated_cost_usd, 0)) AS cost_usd
+            SUM(COALESCE(NULLIF(smu.actual_cost_usd, 0), smu.estimated_cost_usd, 0)) AS cost_usd,
+            MIN(smu.first_seen)          AS first_seen,
+            MAX(smu.last_seen)           AS last_seen
         FROM session_model_usage smu
         JOIN sessions s ON s.id = smu.session_id
         WHERE smu.model IS NOT NULL
@@ -64,7 +73,8 @@ const PER_MODEL_QUERY: &str = r#"
 
 /// Session-level totals credited to `sessions.model`. Covers Hermes builds that
 /// predate `session_model_usage` and, on builds that have it, sessions with no
-/// child rows in it; column order matches `PER_MODEL_QUERY`.
+/// child rows in it; column order matches `PER_MODEL_QUERY`. `sessions` has no
+/// usage window, so the whole session from `started_at` on is the window.
 const SESSION_TOTALS_QUERY: &str = r#"
         SELECT
             id,
@@ -77,7 +87,9 @@ const SESSION_TOTALS_QUERY: &str = r#"
             cache_read_tokens,
             cache_write_tokens,
             reasoning_tokens,
-            COALESCE(actual_cost_usd, estimated_cost_usd, 0) AS cost_usd
+            COALESCE(actual_cost_usd, estimated_cost_usd, 0) AS cost_usd,
+            NULL AS first_seen,
+            NULL AS last_seen
         FROM sessions
         WHERE model IS NOT NULL
           AND TRIM(model) != ''
@@ -89,6 +101,20 @@ const SESSION_TOTALS_QUERY: &str = r#"
             COALESCE(reasoning_tokens, 0) > 0 OR
             COALESCE(actual_cost_usd, estimated_cost_usd, 0) > 0
           )
+"#;
+
+/// Every assistant message time per session, the only per-call time signal
+/// Hermes keeps. `messages` has carried `session_id`, `role` and `timestamp`
+/// since its first schema. Compaction re-inserts surviving rows as clones with
+/// the original timestamp, so DISTINCT keeps one API call from counting once
+/// per generation. Inactive (compacted or rewound) rows stay: each still
+/// stands for a call that was billed.
+const ASSISTANT_TIMESTAMPS_QUERY: &str = r#"
+        SELECT DISTINCT session_id, timestamp
+        FROM messages
+        WHERE role = 'assistant'
+          AND typeof(timestamp) IN ('integer', 'real')
+        ORDER BY session_id, timestamp
 "#;
 
 /// One usage row, decoded from either query — both project the same columns.
@@ -104,6 +130,10 @@ struct HermesUsageRow {
     cache_write: i64,
     reasoning: i64,
     cost: f64,
+    /// When Hermes first and last recorded usage for this row (epoch seconds);
+    /// NULL for session totals.
+    first_seen: Option<f64>,
+    last_seen: Option<f64>,
 }
 
 fn decode_usage_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<HermesUsageRow> {
@@ -119,42 +149,144 @@ fn decode_usage_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<HermesUsageRow>
         cache_write: row.get::<_, Option<i64>>(8)?.unwrap_or(0),
         reasoning: row.get::<_, Option<i64>>(9)?.unwrap_or(0),
         cost: row.get::<_, Option<f64>>(10)?.unwrap_or(0.0),
+        first_seen: row.get(11)?,
+        last_seen: row.get(12)?,
     })
 }
 
 /// Runs one of the usage queries. Returns `None` when the query cannot run at
 /// all (prepare or execute failure) so the caller can fall back, and `Some` —
 /// possibly empty — when it ran and simply matched nothing.
-fn query_usage_rows(db_path: &Path, conn: &Connection, query: &str) -> Option<Vec<HermesUsageRow>> {
+fn query_usage_rows(
+    db_path: &Path,
+    conn: &Connection,
+    query: &str,
+) -> Result<Option<Vec<HermesUsageRow>>, String> {
     let mut rows = Vec::new();
+    let mut decode_failed = false;
     let scan = sqlite_for_each_row_on(conn, db_path, query, Some("Hermes session"), &mut |row| {
-        rows.push(decode_usage_row(row)?);
-        Ok(())
+        decode_usage_row(row)
+            .map(|row| rows.push(row))
+            .inspect_err(|_| decode_failed = true)
     });
-    scan.ran().then_some(rows)
+    match scan {
+        SqliteScan::NotPrepared => Ok(None),
+        SqliteScan::Ran if !decode_failed => Ok(Some(rows)),
+        _ => Err("incomplete Hermes usage query".into()),
+    }
 }
 
-fn build_message(row: HermesUsageRow, dedup_key: String) -> UnifiedMessage {
-    let provider = resolved_provider(row.billing_provider, &row.model_id, "hermes");
-    let mut msg = UnifiedMessage::new_with_agent(
-        "hermes",
-        row.model_id,
-        provider,
-        row.session_id,
-        timestamp_secs_to_ms(row.started_at),
-        TokenBreakdown {
-            input: row.input.max(0),
-            output: row.output.max(0),
-            cache_read: row.cache_read.max(0),
-            cache_write: row.cache_write.max(0),
-            reasoning: row.reasoning.max(0),
+/// Assistant message times per session, ascending. A schema without the
+/// message timestamps leaves every row on its fallback time.
+fn query_assistant_timestamps(
+    db_path: &Path,
+    conn: &Connection,
+) -> Result<HashMap<String, Vec<f64>>, String> {
+    let mut timestamps: HashMap<String, Vec<f64>> = HashMap::new();
+    let scan = sqlite_for_each_row_on(
+        conn,
+        db_path,
+        ASSISTANT_TIMESTAMPS_QUERY,
+        Some("Hermes message timestamps"),
+        &mut |row| {
+            timestamps.entry(row.get(0)?).or_default().push(row.get(1)?);
+            Ok(())
         },
-        row.cost.max(0.0),
-        Some(HERMES_AGENT_NAME.to_string()),
     );
-    msg.message_count = row.message_count.max(0);
-    msg.dedup_key = Some(dedup_key);
-    msg
+    match scan {
+        SqliteScan::Ran | SqliteScan::NotPrepared => Ok(timestamps),
+        _ => Err("incomplete Hermes assistant timestamp query".into()),
+    }
+}
+
+/// The assistant messages a row's usage is spread over: those inside the
+/// window in which Hermes recorded that usage. Bounding by the window keeps a
+/// model's tokens off messages answered by another model of the same session,
+/// and keeps a session rotated out of a compaction from spreading onto the
+/// parent messages it carries over with their original timestamps.
+fn usage_window<'a>(row: &HermesUsageRow, timestamps: &'a [f64]) -> &'a [f64] {
+    let lo = row.first_seen.unwrap_or(row.started_at);
+    let hi = row.last_seen.unwrap_or(f64::INFINITY);
+    let start = timestamps.partition_point(|&t| t < lo);
+    let end = timestamps.partition_point(|&t| t <= hi).max(start);
+    &timestamps[start..end]
+}
+
+/// Piece `index` of `total` split into `pieces` near-equal integer shares.
+/// Differences of cumulative floors sum back to exactly `total`.
+fn integer_share(total: i64, index: usize, pieces: usize) -> i64 {
+    let cumulative = |k: usize| (i128::from(total) * k as i128 / pieces as i128) as i64;
+    cumulative(index + 1) - cumulative(index)
+}
+
+/// Splits one usage row into a message per assistant message in its window,
+/// each carrying an equal share of every token bucket and of the cost. A row
+/// with no message in its window stays whole at the time its usage was first
+/// recorded, or at `started_at` when that is unknown.
+fn push_spread_messages(
+    row: HermesUsageRow,
+    row_key: &str,
+    timestamps: &[f64],
+    messages: &mut Vec<UnifiedMessage>,
+) {
+    let fallback = [row.first_seen.unwrap_or(row.started_at)];
+    let window = usage_window(&row, timestamps);
+    let times = if window.is_empty() {
+        &fallback[..]
+    } else {
+        window
+    };
+    let pieces = times.len();
+
+    let provider = resolved_provider(row.billing_provider, &row.model_id, "hermes");
+    let tokens = TokenBreakdown {
+        input: row.input.max(0),
+        output: row.output.max(0),
+        cache_read: row.cache_read.max(0),
+        cache_write: row.cache_write.max(0),
+        reasoning: row.reasoning.max(0),
+    };
+    let cost = row.cost.max(0.0);
+    let cumulative_cost = |k: usize| cost * k as f64 / pieces as f64;
+
+    for (index, &timestamp) in times.iter().enumerate() {
+        let piece_tokens = TokenBreakdown {
+            input: integer_share(tokens.input, index, pieces),
+            output: integer_share(tokens.output, index, pieces),
+            cache_read: integer_share(tokens.cache_read, index, pieces),
+            cache_write: integer_share(tokens.cache_write, index, pieces),
+            reasoning: integer_share(tokens.reasoning, index, pieces),
+        };
+        let piece_cost = if index + 1 == pieces {
+            cost - cumulative_cost(index)
+        } else {
+            cumulative_cost(index + 1) - cumulative_cost(index)
+        };
+        // Preserve the session's total message count on one piece. The other
+        // pieces allocate usage without adding requests to that total.
+        let message_count = if index == 0 {
+            row.message_count.max(0)
+        } else {
+            0
+        };
+        if piece_tokens.total() == 0 && piece_cost <= 0.0 && message_count == 0 {
+            continue;
+        }
+
+        let mut msg = UnifiedMessage::new_with_agent(
+            "hermes",
+            row.model_id.clone(),
+            provider.clone(),
+            row.session_id.clone(),
+            timestamp_secs_to_ms(timestamp),
+            piece_tokens,
+            piece_cost.max(0.0),
+            Some(HERMES_AGENT_NAME.to_string()),
+        );
+        msg.message_count = message_count;
+        msg.dedup_key = Some(format!("{row_key}#{index}"));
+        messages.push(msg);
+    }
 }
 
 fn has_session_model_usage(db_path: &Path, conn: &Connection) -> bool {
@@ -177,18 +309,68 @@ fn has_session_model_usage(db_path: &Path, conn: &Connection) -> bool {
 }
 
 pub fn parse_hermes_sqlite(db_path: &Path) -> Vec<UnifiedMessage> {
-    let conn = match open_readonly_sqlite(db_path) {
-        Ok(c) => c,
-        Err(err) => {
-            warn!(
-                db_path = %db_path.display(),
-                error = %err,
-                "Failed to open Hermes state database"
-            );
-            return Vec::new();
-        }
-    };
+    parse_hermes_databases(&[db_path])
+}
 
+/// Parses every Hermes database (the default home plus any profile or extra
+/// path), crediting each usage row to the first database that holds it. The
+/// dedup runs on rows, before they are spread: two copies of one session can
+/// hold different numbers of messages, and deduping the spread pieces would
+/// let the larger copy's extra pieces through on top of the first copy.
+pub fn parse_hermes_databases<P: AsRef<Path>>(db_paths: &[P]) -> Vec<UnifiedMessage> {
+    read_hermes_databases(db_paths).0
+}
+
+pub(crate) fn read_hermes_databases<P: AsRef<Path>>(
+    db_paths: &[P],
+) -> (Vec<UnifiedMessage>, Vec<String>) {
+    let mut seen_rows: HashSet<String> = HashSet::new();
+    let mut messages = Vec::new();
+    let mut errors = Vec::new();
+    for db_path in db_paths {
+        let db_path = db_path.as_ref();
+        let (rows, timestamps) = match read_hermes_database(db_path) {
+            Ok(result) => result,
+            Err(error) => {
+                warn!(db_path = %db_path.display(), %error, "Failed to read Hermes state database");
+                errors.push(format!("{}: {error}", db_path.display()));
+                continue;
+            }
+        };
+        for (row, row_key) in rows {
+            if !seen_rows.insert(row_key.clone()) {
+                continue;
+            }
+            let session_timestamps = timestamps
+                .get(&row.session_id)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            push_spread_messages(row, &row_key, session_timestamps, &mut messages);
+        }
+    }
+    (messages, errors)
+}
+
+type HermesDatabaseRows = (Vec<(HermesUsageRow, String)>, HashMap<String, Vec<f64>>);
+
+fn read_hermes_database(db_path: &Path) -> Result<HermesDatabaseRows, String> {
+    let mut conn = open_readonly_sqlite(db_path).map_err(|error| error.to_string())?;
+    // The cumulative totals and their assistant timestamps must describe the same DB state.
+    let tx = conn.transaction().map_err(|error| error.to_string())?;
+    let rows = query_hermes_usage(db_path, &tx)?;
+    let timestamps = if rows.is_empty() {
+        HashMap::new()
+    } else {
+        query_assistant_timestamps(db_path, &tx)?
+    };
+    Ok((rows, timestamps))
+}
+
+/// Every usage row of one database with the key it dedups under.
+fn query_hermes_usage(
+    db_path: &Path,
+    conn: &Connection,
+) -> Result<Vec<(HermesUsageRow, String)>, String> {
     // Hermes builds that predate `session_model_usage` cannot run the per-model
     // query at all; probing first keeps that expected case quiet instead of
     // logging a prepare failure for every such install. When the table does
@@ -196,13 +378,14 @@ pub fn parse_hermes_sqlite(db_path: &Path) -> Vec<UnifiedMessage> {
     // `session_model_usage` without `reasoning_tokens` — `query_usage_rows`
     // returns None and the session totals below carry the whole database, so
     // drift degrades to coarser data instead of losing all of it.
-    let per_model_rows = if has_session_model_usage(db_path, &conn) {
-        query_usage_rows(db_path, &conn, PER_MODEL_QUERY)
+    let per_model_rows = if has_session_model_usage(db_path, conn) {
+        query_usage_rows(db_path, conn, PER_MODEL_QUERY)?
     } else {
         None
     };
+    let has_per_model_schema = per_model_rows.is_some();
 
-    let mut messages: Vec<UnifiedMessage> = Vec::new();
+    let mut rows: Vec<(HermesUsageRow, String)> = Vec::new();
     // Sessions the per-model pass emitted at least one row for.
     let mut covered_sessions: HashSet<String> = HashSet::new();
     // Sessions whose `message_count` has already been handed to a row.
@@ -224,14 +407,15 @@ pub fn parse_hermes_sqlite(db_path: &Path) -> Vec<UnifiedMessage> {
         // SQLite groups NULL and '' separately, so one (session, model) can
         // reach this loop as two rows that differ only in a NULL vs empty
         // billing_provider. Rendering NULL as a sentinel keeps their keys
-        // apart; folding NULL to "" would collide and the caller's dedup pass
-        // would then drop the second row's tokens outright.
+        // apart; folding NULL to "" would collide and the row dedup in
+        // `parse_hermes_databases` would then drop the second row's tokens
+        // outright.
         let provider_key = row.billing_provider.as_deref().unwrap_or(NULL_PROVIDER_KEY);
         let dedup_key = format!(
             "hermes:{}:{}:{}",
             row.session_id, row.model_id, provider_key
         );
-        messages.push(build_message(row, dedup_key));
+        rows.push((row, dedup_key));
     }
 
     // Reconcile per session, not per table: a Hermes upgrade can create
@@ -244,16 +428,20 @@ pub fn parse_hermes_sqlite(db_path: &Path) -> Vec<UnifiedMessage> {
     // its session totals: if a session has ANY smu row we trust smu, because
     // adding the difference would double count the models smu did record. Do
     // not "fix" this into a per-column reconciliation.
-    for row in query_usage_rows(db_path, &conn, SESSION_TOTALS_QUERY).unwrap_or_default() {
+    let session_totals = query_usage_rows(db_path, conn, SESSION_TOTALS_QUERY)?;
+    if session_totals.is_none() && !has_per_model_schema {
+        return Err("Hermes session totals schema not supported".into());
+    }
+    for row in session_totals.unwrap_or_default() {
         if covered_sessions.contains(&row.session_id) {
             continue;
         }
-        // This path emits at most one message per session, so it keeps the bare
+        // This path yields at most one row per session, so it keeps the bare
         // session id as its dedup key; the per-model keys are namespaced and
         // cannot collide with it.
         let dedup_key = row.session_id.clone();
-        messages.push(build_message(row, dedup_key));
+        rows.push((row, dedup_key));
     }
 
-    messages
+    Ok(rows)
 }
