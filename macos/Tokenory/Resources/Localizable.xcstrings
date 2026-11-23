@@ -1,6 +1,176 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "settings.cloud": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud Sync"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 同步"
+          }
+        }
+      }
+    },
+    "cloud.scope": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share this Mac’s full usage history with your other devices through your private iCloud database. Only totals by time, tool, model and source are uploaded, including estimated costs."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过 iCloud 私有库与其他设备共享这台 Mac 的全部历史用量。上传内容为按时间、工具、模型和来源汇总的 Tokens 与估算费用。"
+          }
+        }
+      }
+    },
+    "cloud.last": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last synced %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近同步 %@"
+          }
+        }
+      }
+    },
+    "cloud.refresh": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync Now"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即同步"
+          }
+        }
+      }
+    },
+    "cloud.storage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud data"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "云端数据"
+          }
+        }
+      }
+    },
+    "cloud.pauseNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turning sync off keeps the last uploaded totals in iCloud. Deleting cloud data keeps the ledger on each Mac."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭同步后，iCloud 会保留上次上传的汇总。删除云端数据会保留每台 Mac 的本地账本。"
+          }
+        }
+      }
+    },
+    "cloud.deleteDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete This Mac’s Cloud Data"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除本机云端数据"
+          }
+        }
+      }
+    },
+    "cloud.deleteAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete All Cloud Data"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除全部云端数据"
+          }
+        }
+      }
+    },
+    "cloud.confirmDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove this Mac’s contribution from every device and stop its uploads? Turning sync on again publishes its full history."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从所有设备的合计中移除这台 Mac 的用量，并停止本机上传？手动重新开启后，会上传本机全部历史。"
+          }
+        }
+      }
+    },
+    "cloud.confirmAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove every Mac’s cloud totals and stop all uploads? Each Mac must turn sync on again to republish its full history."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除所有 Mac 的云端汇总并停止上传？每台 Mac 都需要手动重新开启，才会再次上传各自的全部历史。"
+          }
+        }
+      }
+    },
     "nav.overview": {
       "comment": "Tokenory UI: nav.overview. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",
@@ -2183,6 +2353,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "状态未知"
+          }
+        }
+      }
+    },
+    "cloud.default_ledger_only": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud sync is available with the default Tokenory ledger. This ledger is stored separately."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前使用独立账本。使用 Tokenory 默认账本时可以开启 iCloud 同步。"
           }
         }
       }

@@ -2,7 +2,9 @@
 > L2 | Parent: ../../AGENTS.md
 
 BrandPresentationTests.swift: 验证品牌映射、模板资源、Gemini 图标的原生绘制面积及金额格式。
+DeviceUsageSnapshotTests.swift: 验证整台设备替换、跨设备数值累加、按日期/模型去重计数、子代理筛选、小时与日粒度及协议版本。
 EngineClientTests.swift: 验证引擎协议客户端和分块大目录解析。
+DeviceCloudSyncTests.swift: 验证独立设备授权、暂停与撤回、请求乱序、账本恢复、增量缓存、离线与账号切换，以及断网时本机合计更新、联网补传和删除错误保留。日期切换保留完整的前一份双机汇总，过期计算无效，纯日期改动复用全年活动。
 HUDTests.swift: 验证跨时区与 23/25 小时夏令日；验证整数与金额读数、未知/部分价格、进位和渐停、跨日/切换/减少动态效果、滚动中连续追加与密集更新、设置持久化、字体/双语资源及浮动面板的全屏空间配置。
 LocalizationTests.swift: 验证本地化资源。
 UsageActivityTests.swift: 验证日历、按工具区分模型、移动平均及未知费用。
