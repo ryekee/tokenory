@@ -1,9 +1,36 @@
 // [INPUT]: 接收导航项、选项、说明和折叠内容。
-// [OUTPUT]: 提供统一导航、下拉选择、悬停、折叠和点击说明控件。
-// [POS]: 共享控件保持同一前缘。深色下拉按钮提亮底色，保留原生交互反馈。
+// [OUTPUT]: 提供统一设置开关、操作按钮配色、导航、下拉选择、悬停、折叠和说明控件。
+// [POS]: 共享控件保持同一前缘。设置操作和下拉使用系统失焦颜色，保留原生交互反馈。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
 import SwiftUI
+
+struct SettingsSwitch: View {
+    let label: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(label, isOn: $isOn)
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
+    }
+}
+
+extension View {
+    func settingsActionForeground() -> some View {
+        modifier(SettingsActionForeground())
+    }
+}
+
+private struct SettingsActionForeground: ViewModifier {
+    @Environment(\.appearsActive) private var appearsActive
+
+    func body(content: Content) -> some View {
+        content.foregroundColor(appearsActive ? nil : Color(nsColor: .disabledControlTextColor))
+    }
+}
 
 struct WorkspaceInfoPopover<Content: View>: View {
     let title: String
@@ -31,6 +58,7 @@ struct WorkspaceDropdownTrigger: View {
     @Environment(\.dropdownLabelColor) private var labelColor
     @Environment(\.colorScheme) private var scheme
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.appearsActive) private var appearsActive
     private static let labelSpacing: CGFloat = 8
     private static let chevronSize: CGFloat = 9
 
@@ -43,6 +71,7 @@ struct WorkspaceDropdownTrigger: View {
     let action: () -> Void
 
     private var effectiveLabelColor: Color? {
+        guard appearsActive else { return Color(nsColor: .disabledControlTextColor) }
         guard scheme == .dark else { return labelColor }
         return WorkspaceStyle.darkDropdownLabel.opacity(isEnabled ? 1 : 0.5)
     }
@@ -69,6 +98,7 @@ struct WorkspaceDropdownTrigger: View {
                     .font(.system(size: Self.chevronSize, weight: .semibold))
                     .foregroundStyle(effectiveLabelColor?.opacity(0.78) ?? Color.secondary)
             }.frame(minWidth: flexibleWidth ? 0 : width, idealWidth: width, maxWidth: width)
+                .foregroundColor(appearsActive ? nil : Color(nsColor: .disabledControlTextColor))
         }
         .buttonStyle(.bordered)
         .background {

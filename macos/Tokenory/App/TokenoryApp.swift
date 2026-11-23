@@ -22,9 +22,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard ProcessInfo.processInfo.environment["TOKENORY_TESTING"] != "1" else { return }
         NotificationCenter.default.addObserver(self, selector: #selector(workspaceOpened(_:)), name: NSWindow.didBecomeMainNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(workspaceClosed(_:)), name: NSWindow.willCloseNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(systemClockChanged(_:)), name: .NSSystemTimeZoneDidChange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(systemClockChanged(_:)), name: .NSCalendarDayChanged, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(systemClockChanged(_:)), name: NSWorkspace.didWakeNotification, object: nil)
         UsageStore.shared.start()
         HUDController.shared.start()
         UpdateChecker.shared.start()
+    }
+    @objc private func systemClockChanged(_ notification: Notification) {
+        UsageStore.shared.systemClockChanged()
     }
     @objc private func workspaceOpened(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, window.canBecomeMain, !(window is NSPanel) else { return }
@@ -65,7 +71,7 @@ struct TokenoryApp: App {
                 .renderingMode(.original)
                 .accessibilityLabel("Tokenory")
         }.menuBarExtraStyle(.window)
-        Window("Tokenory", id: "dashboard") { DashboardView().environment(store).environment(\.locale, Localization.locale).environment(\.timeZone, TimeZone(identifier: "Asia/Shanghai")!).focusEffectDisabled().id(language) }.defaultSize(width: 1060, height: 740).defaultLaunchBehavior(ProcessInfo.processInfo.arguments.contains("--show-dashboard") ? .presented : .suppressed).commands { DashboardCommands() }
+        Window("Tokenory", id: "dashboard") { DashboardView().environment(store).environment(\.locale, Localization.locale).environment(\.timeZone, store.systemTimeZone).focusEffectDisabled().id(language) }.defaultSize(width: 1060, height: 740).defaultLaunchBehavior(ProcessInfo.processInfo.arguments.contains("--show-dashboard") ? .presented : .suppressed).commands { DashboardCommands() }
         Settings { SettingsView().environment(store).environment(\.locale, Localization.locale).tint(WorkspaceStyle.selection).focusEffectDisabled() }.windowResizability(.contentSize)
     }
 }

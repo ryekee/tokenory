@@ -1,3 +1,7 @@
+// [INPUT]: System time zone, stored collection preferences and built-in scanner paths.
+// [OUTPUT]: Validated settings with the current system zone.
+// [POS]: Settings file and scan configuration boundary.
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -64,12 +68,23 @@ impl Default for Config {
         Self {
             home_dir: dirs::home_dir().unwrap_or_default(),
             interval_seconds: 60,
-            timezone: "Asia/Shanghai".into(),
+            timezone: Self::system_timezone().name().into(),
             extra_scan_paths: BTreeMap::new(),
         }
     }
 }
 impl Config {
+    pub fn system_timezone() -> chrono_tz::Tz {
+        iana_time_zone::get_timezone()
+            .ok()
+            .and_then(|name| name.parse().ok())
+            .unwrap_or(chrono_tz::UTC)
+    }
+
+    pub fn follow_system_timezone(&mut self) {
+        self.timezone = Self::system_timezone().name().into();
+    }
+
     /// Reject newly introduced duplicates without invalidating existing configurations.
     pub fn validate_new_paths(&self, previous: &Self) -> Result<()> {
         if self.extra_scan_paths == previous.extra_scan_paths && self.home_dir == previous.home_dir
@@ -134,11 +149,13 @@ impl Config {
     }
     pub fn load(directory: &Path) -> Result<Self> {
         let path = directory.join("settings.json");
-        let value = if path.exists() {
+        let mut value = if path.exists() {
             serde_json::from_slice(&std::fs::read(path)?)?
         } else {
             Self::default()
         };
+        // Older settings files contain the previous fixed zone.
+        value.follow_system_timezone();
         value.validate()?;
         Ok(value)
     }
@@ -154,6 +171,23 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn loading_settings_uses_system_zone_instead_of_legacy_value() {
+        let root = tempfile::tempdir().unwrap();
+        let legacy = Config {
+            timezone: match Config::system_timezone() {
+                chrono_tz::UTC => "Asia/Shanghai",
+                _ => "UTC",
+            }.into(),
+            interval_seconds: 120,
+            ..Config::default()
+        };
+        legacy.save(root.path()).unwrap();
+        let loaded = Config::load(root.path()).unwrap();
+        assert_eq!(loaded.timezone, Config::system_timezone().name());
+        assert_eq!(loaded.interval_seconds, 120);
+    }
 
     #[test]
     fn default_roots_follow_scanner_tasks() {

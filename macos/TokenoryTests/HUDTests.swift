@@ -200,13 +200,22 @@ final class HUDTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: name) }
         let preferences = HUDPreferences(defaults: defaults)
         XCTAssertFalse(preferences.enabled)
+        XCTAssertFalse(preferences.autoHideWhenIdle)
+        XCTAssertEqual(preferences.dismissal, .disable)
         XCTAssertFalse(preferences.soundEnabled)
         XCTAssertEqual(preferences.volume, 0.35)
         preferences.placement = .topCenter
+        preferences.autoHideWhenIdle = true
+        preferences.dismissal = .minute1
         preferences.enabled = true; preferences.soundEnabled = true; preferences.volume = 0.6; preferences.metric = .cost
         let restored = HUDPreferences(defaults: defaults)
         XCTAssertEqual(restored.placement, .topCenter)
         XCTAssertTrue(restored.enabled); XCTAssertTrue(restored.soundEnabled)
+        XCTAssertTrue(restored.autoHideWhenIdle)
+        XCTAssertEqual(restored.dismissal, .minute1)
+        XCTAssertEqual(HUDDismissal.allCases.map(\.duration), [nil, .seconds(30), .seconds(60), .seconds(300), nil])
+        restored.dismissal = .ignore
+        XCTAssertEqual(HUDPreferences(defaults: defaults).dismissal, .ignore)
         XCTAssertEqual(restored.volume, 0.6); XCTAssertEqual(restored.metric, .cost)
         defaults.set(8, forKey: "hud.volume")
         XCTAssertEqual(HUDPreferences(defaults: defaults).volume, 1)
@@ -289,4 +298,103 @@ final class HUDTests: XCTestCase {
         let reopened = try XCTUnwrap(controller.panel?.contentView)
         XCTAssertTrue(String(reflecting: type(of: reopened)).contains("NSHostingView"))
     }
+
+    func testIdleHUDWakesForUsageAndTripleClickHonorsSavedAction() async throws {
+        let name = "Tokenory-HUD-visibility-\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = HUDPreferences(defaults: defaults)
+        let store = UsageStore()
+        func report(_ tokens: Int64, cost: Double) -> UsageReport {
+            let summary = UsageSummary(tokens: tokens, tokenBreakdown: TokenBreakdown(input: tokens, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0),
+                                       knownEstimatedCostUsd: cost, unpricedTokens: 0, costStatus: "complete",
+                                       recordCount: 1, activeDays: 1, partialDays: nil, requests: 1)
+            return UsageReport(revision: 0, summary: summary, daily: [], clients: [], providers: [], models: [], details: [], hourly: nil)
+        }
+        store.today = report(100, cost: 1)
+        preferences.enabled = true
+        let controller = HUDController(preferences: preferences, store: store, idleTimeout: .milliseconds(200))
+        controller.start()
+        defer { controller.stop() }
+        XCTAssertEqual(controller.panel?.isVisible, true)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(controller.panel?.isVisible, true)
+        preferences.autoHideWhenIdle = true
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(controller.panel?.isVisible, false)
+        XCTAssertTrue(preferences.enabled)
+        preferences.metric = .cost
+        store.today = report(100, cost: 2)
+        try await Task.sleep(for: .milliseconds(35))
+        XCTAssertEqual(controller.panel?.isVisible, false)
+        preferences.autoHideWhenIdle = false
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(controller.panel?.isVisible, true)
+        preferences.autoHideWhenIdle = true
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(controller.panel?.isVisible, false)
+        store.today = report(120, cost: 2)
+        try await Task.sleep(for: .milliseconds(35))
+        XCTAssertEqual(controller.panel?.isVisible, true)
+        preferences.dismissal = .seconds30
+        controller.dismissFromHUD()
+        preferences.autoHideWhenIdle = false
+        store.today = report(140, cost: 2)
+        try await Task.sleep(for: .milliseconds(35))
+        XCTAssertEqual(controller.panel?.isVisible, false)
+        XCTAssertTrue(preferences.enabled)
+        preferences.enabled = false
+        try await Task.sleep(for: .milliseconds(35))
+        preferences.enabled = true
+        try await Task.sleep(for: .milliseconds(35))
+        XCTAssertEqual(controller.panel?.isVisible, true)
+        preferences.dismissal = .disable
+        controller.dismissFromHUD()
+        XCTAssertFalse(preferences.enabled)
+        XCTAssertEqual(controller.panel?.isVisible, false)
+    }
+
+    func testHUDDoubleClickOpensStatisticsAndTripleClickUsesConfiguredAction() async throws {
+        let name = "Tokenory-HUD-clicks-\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = HUDPreferences(defaults: defaults)
+        preferences.enabled = true
+        var openedStatistics = 0
+        let controller = HUDController(preferences: preferences, store: UsageStore(), openStatistics: { openedStatistics += 1 })
+        controller.start()
+        defer { controller.stop() }
+        let panel = try XCTUnwrap(controller.panel)
+        let readout = CGPoint(x: 110, y: 59)
+        func click(_ count: Int, at location: CGPoint) async throws {
+            for click in 1...count {
+                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                    let event = try XCTUnwrap(NSEvent.mouseEvent(
+                        with: type, location: location, modifierFlags: [],
+                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber,
+                        context: nil, eventNumber: click, clickCount: click, pressure: type == .leftMouseDown ? 1 : 0
+                    ))
+                    NSApp.postEvent(event, atStart: false)
+                }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            try await Task.sleep(for: .seconds(NSEvent.doubleClickInterval + 0.2))
+        }
+        try await click(2, at: readout)
+        XCTAssertEqual(openedStatistics, 1)
+        XCTAssertTrue(panel.isVisible)
+        try await click(2, at: CGPoint(x: 10, y: 59))
+        XCTAssertEqual(openedStatistics, 2)
+        preferences.dismissal = .ignore
+        try await click(3, at: readout)
+        XCTAssertEqual(openedStatistics, 2)
+        XCTAssertTrue(preferences.enabled)
+        XCTAssertTrue(panel.isVisible)
+        preferences.dismissal = .disable
+        try await click(3, at: readout)
+        XCTAssertEqual(openedStatistics, 2)
+        XCTAssertFalse(preferences.enabled)
+        XCTAssertFalse(panel.isVisible)
+    }
+
 }

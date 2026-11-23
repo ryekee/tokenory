@@ -1,6 +1,6 @@
 // [INPUT]: Lazy multi-agent turn report, shared date range and local client/model selection.
-// [OUTPUT]: Turn analytics, selected-turn conversation titles, and distinct empty and retry states.
-// [POS]: Native speed analysis. The fixed header meets the scrolling rows at a shared divider.
+// [OUTPUT]: Turn analytics with six-row pages, project/title/ID search and selected-turn metrics.
+// [POS]: Native speed analysis. The chart and list share turn selection across filters and pages.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
@@ -166,15 +166,24 @@ private struct TurnsContent: View {
     @Binding var order: TurnSort
     @Binding var page: Int
     @State private var selectedBucketStart: Date?
-    private let pageSize = 50
+    @State private var search = ""
+    private let pageSize = 6
+    private let rowHeight: CGFloat = 52
+
+    private var sortedTurns: [AgentTurn] {
+        data.sorted(by: order, in: selectedBucket, search: search)
+    }
 
     private var selectedBucket: TurnSpeedBucket? {
         selectedBucketStart.flatMap { data.speedTimeline?.bucket(at: $0) }
     }
 
     var body: some View {
-        let sorted = data.sorted(by: order, in: selectedBucket)
-        let selected = sorted.first { $0.id == selectedID } ?? sorted.first
+        let sorted = sortedTurns
+        let pageCount = max(1, (sorted.count + pageSize - 1) / pageSize)
+        let currentPage = min(page, pageCount - 1)
+        let visible = sorted.dropFirst(currentPage * pageSize).prefix(pageSize)
+        let selected = visible.first { $0.id == selectedID } ?? visible.first
         return GeometryReader { geometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -188,9 +197,21 @@ private struct TurnsContent: View {
                     let wide = geometry.size.width - 44 >= 720
                     let layout = wide ? AnyLayout(HStackLayout(alignment: .top, spacing: 18)) : AnyLayout(VStackLayout(spacing: 18))
                     layout {
-                        turnList(sorted: sorted, selected: selected).frame(maxWidth: .infinity)
-                        if let selected { WorkspacePanel { TurnDetail(turn: selected) }.frame(maxWidth: .infinity) }
+                        turnList(count: sorted.count, visible: visible, selected: selected,
+                                 page: currentPage, pageCount: pageCount, wide: wide) { next in
+                            page = next
+                            selectedID = sorted[next * pageSize].id
+                        }
+                        if let selected {
+                            WorkspacePanel {
+                                TurnDetail(turn: selected, title: data.title(for: selected))
+                                    .frame(maxWidth: .infinity, maxHeight: wide ? .infinity : nil, alignment: .topLeading)
+                            }
+                        } else if wide {
+                            Color.clear.frame(maxWidth: .infinity).accessibilityHidden(true)
+                        }
                     }
+                    .fixedSize(horizontal: false, vertical: true)
                 }.padding(.horizontal, 22).padding(.bottom, 22)
             }
         }
@@ -199,11 +220,10 @@ private struct TurnsContent: View {
         }
         .onChange(of: range) { _, _ in
             selectedBucketStart = nil
-            showPage(containing: selectedID, in: data.sorted(by: order))
+            showPage(containing: selectedID, in: data.sorted(by: order, search: search))
         }
-        .onChange(of: data.points, initial: true) { _, _ in
+        .onChange(of: sorted.map(\.id), initial: true) { _, _ in
             if selectedBucket == nil { selectedBucketStart = nil }
-            let sorted = data.sorted(by: order, in: selectedBucket)
             if let index = sorted.firstIndex(where: { $0.id == selectedID }) {
                 page = index / pageSize
             } else {
@@ -239,67 +259,69 @@ private struct TurnsContent: View {
         }.frame(maxWidth: .infinity, alignment: .leading).help(help).accessibilityElement(children: .combine)
     }
 
-    private func turnList(sorted: [AgentTurn], selected: AgentTurn?) -> some View {
-        let pageCount = max(1, (sorted.count + pageSize - 1) / pageSize)
-        let start = min(page * pageSize, sorted.count)
-        let visible = Array(sorted.dropFirst(start).prefix(pageSize))
-        return WorkspacePanel {
+    private func turnList(count: Int, visible: ArraySlice<AgentTurn>, selected: AgentTurn?,
+                          page: Int, pageCount: Int, wide: Bool, changePage: @escaping (Int) -> Void) -> some View {
+        WorkspacePanel {
             VStack(spacing: 0) {
                 VStack(spacing: 12) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 12) { listTitle(count: sorted.count); Spacer(); sortPicker }
-                        VStack(alignment: .leading, spacing: 8) { listTitle(count: sorted.count); sortPicker }
+                    HStack(spacing: 8) {
+                        listTitle(count: count).frame(maxWidth: .infinity, alignment: .leading)
+                        sortPicker.fixedSize()
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     rowColumns {
                         Text(L("turns.project")); Text(L("turns.duration")); Text(L("token.reasoning")); Text("tokens/s")
                     }.font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 5)
                     Divider()
                 }
-                ScrollViewReader { scroll in
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(visible) { turn in
-                                Button { selectedID = turn.id } label: {
-                                    rowColumns {
-                                        VStack(alignment: .leading, spacing: 5) {
-                                            HStack(spacing: 5) {
-                                                BrandIcon(name: turn.client, kind: .tool).help(clientName(turn.client))
-                                                Text(turn.project).fontWeight(.medium).lineLimit(1).truncationMode(.middle).help(turn.project)
-                                                if let mode = turn.inferenceSpeed, mode.isFast {
-                                                    FastModeMark(helpText: mode.fastHelp)
-                                                }
-                                            }
-                                            Text(TurnFormat.timestamp(turn.start)).font(.caption2).foregroundStyle(.secondary)
-                                        }
-                                        Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.clockDuration(turn.durationMs)).help(TurnFormat.duration(turn.durationMs))
-                                        Text(turn.reasoningTokens.map { compactTokens($0) } ?? "—")
-                                        Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.number(turn.speed))
-                                    }.font(.callout).monospacedDigit().padding(.vertical, 9).padding(.horizontal, 5)
-                                        .contentShape(Rectangle())
-                                        .background(selected?.id == turn.id ? WorkspaceStyle.selection.opacity(0.1) : .clear)
-                                }.buttonStyle(WorkspaceHoverStyle()).id(turn.id)
-                                    .accessibilityElement(children: .combine)
-                                    .accessibilityAddTraits(selected?.id == turn.id ? [.isSelected] : [])
-                                Divider().opacity(0.5)
-                            }
-                        }
-                    }.frame(height: min(380, CGFloat(visible.count) * 57))
-                        .onChange(of: page) { _, _ in if let first = visible.first { scroll.scrollTo(first.id, anchor: .top) } }
-                        .onChange(of: order) { _, _ in if let first = visible.first { scroll.scrollTo(first.id, anchor: .top) } }
-                        .onChange(of: selectedID) { _, id in if let id { scroll.scrollTo(id, anchor: .center) } }
-                }
-                if pageCount > 1 {
-                    HStack {
-                        Button { page -= 1 } label: { Image(systemName: "chevron.left") }.disabled(page == 0).help(L("action.previous"))
-                        Spacer()
-                        Text(LF("turns.page", page + 1, pageCount)).font(.caption).monospacedDigit()
-                        Spacer()
-                        Button { page += 1 } label: { Image(systemName: "chevron.right") }.disabled(page == pageCount - 1).help(L("action.next"))
+                VStack(spacing: 0) {
+                    if visible.isEmpty {
+                        Text(L("turns.search_empty")).font(.callout).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 18)
                     }
-                    .padding(.top, 12)
+                    ForEach(visible) { turn in
+                        Button { selectedID = turn.id } label: {
+                            rowColumns {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    HStack(spacing: 5) {
+                                        BrandIcon(name: turn.client, kind: .tool).help(clientName(turn.client))
+                                        Text(turn.project).fontWeight(.medium).lineLimit(1).truncationMode(.middle).help(turn.project)
+                                        if let mode = turn.inferenceSpeed, mode.isFast {
+                                            FastModeMark(helpText: mode.fastHelp)
+                                        }
+                                    }
+                                    let subtitle = data.matchingSubtitle(for: turn, search: search.trimmingCharacters(in: .whitespacesAndNewlines))
+                                        ?? TurnFormat.timestamp(turn.start)
+                                    Text(subtitle).font(.caption2).foregroundStyle(.secondary)
+                                        .lineLimit(1).truncationMode(.middle).help(subtitle)
+                                }
+                                Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.clockDuration(turn.durationMs)).help(TurnFormat.duration(turn.durationMs))
+                                Text(turn.reasoningTokens.map { compactTokens($0) } ?? "—")
+                                Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.number(turn.speed))
+                            }
+                            .font(.callout).monospacedDigit().padding(.horizontal, 5)
+                            .frame(height: rowHeight)
+                            .contentShape(Rectangle())
+                            .background(selected?.id == turn.id ? WorkspaceStyle.selection.opacity(0.1) : .clear)
+                        }
+                        .buttonStyle(WorkspaceHoverStyle())
+                        .overlay(alignment: .bottom) { Divider().opacity(0.5).allowsHitTesting(false) }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(selected?.id == turn.id ? [.isSelected] : [])
+                    }
+                }
+                .frame(height: CGFloat(pageSize) * rowHeight, alignment: .top)
+                Spacer(minLength: 12)
+                HStack {
+                    Button { changePage(page - 1) } label: { Image(systemName: "chevron.left") }
+                        .disabled(page == 0).accessibilityLabel(L("action.previous")).help(L("action.previous"))
+                    Spacer()
+                    Text(LF("turns.page", page + 1, pageCount)).font(.caption).monospacedDigit()
+                    Spacer()
+                    Button { changePage(page + 1) } label: { Image(systemName: "chevron.right") }
+                        .disabled(page + 1 >= pageCount).accessibilityLabel(L("action.next")).help(L("action.next"))
                 }
             }
+            .frame(maxHeight: wide ? .infinity : nil, alignment: .top)
         }
     }
     @ViewBuilder
@@ -309,7 +331,7 @@ private struct TurnsContent: View {
                 Text("\(TurnFormat.speedBucket(selectedBucket, granularity: granularity)) · \(LF("turns.count", count))").font(.headline)
                 Button(L("turns.show_all")) {
                     selectedBucketStart = nil
-                    showPage(containing: selectedID, in: data.sorted(by: order))
+                    showPage(containing: selectedID, in: data.sorted(by: order, search: search))
                 }.controlSize(.small)
             }
         } else {
@@ -318,9 +340,11 @@ private struct TurnsContent: View {
         }
     }
     private var sortPicker: some View {
-        WorkspaceDropdown(label: L("overview.sort"), selection: $order, options: TurnSort.allCases,
-                          width: 105, title: { $0.title })
-            .controlSize(.small)
+        TurnListPicker(order: $order, search: Binding(get: { search }, set: { value in
+            search = value
+            page = 0
+            selectedID = nil
+        }))
     }
     private func rowColumns<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 8) {
@@ -342,31 +366,85 @@ private struct TurnsContent: View {
         } else if let selectedBucket, !selectedBucket.interval.contains(turn.start) {
             selectedBucketStart = nil
         }
+        if !data.matches(turn, search: search.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            search = ""
+        }
         selectedID = turn.id
-        showPage(containing: turn.id, in: data.sorted(by: order, in: selectedBucket))
+        showPage(containing: turn.id, in: sortedTurns)
+    }
+}
+
+private struct TurnListPicker: View {
+    @Binding var order: TurnSort
+    @Binding var search: String
+    @State private var showing = false
+    @FocusState private var searchFocused: Bool
+
+    var body: some View {
+        WorkspaceDropdownTrigger(label: L("turns.search_sort"), value: search.isEmpty ? order.title : search,
+                                 width: max(105, WorkspaceDropdownTrigger.fittingWidth(for: TurnSort.allCases.map(\.title)))) {
+            showing.toggle()
+        }
+        .controlSize(.small)
+        .popover(isPresented: $showing, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 0) {
+                    WorkspaceDropdownSearchField(prompt: L("turns.search_prompt"), text: $search, focus: $searchFocused) {
+                        showing = false
+                    }
+                    if !search.isEmpty {
+                        Button {
+                            search = ""
+                            searchFocused = true
+                        } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(.secondary).padding(.trailing, 12)
+                        .accessibilityLabel(L("turns.clear_search")).help(L("turns.clear_search"))
+                    }
+                }
+                VStack(spacing: 1) {
+                    ForEach(TurnSort.allCases, id: \.self) { option in
+                        WorkspaceDropdownRow(selected: option == order) {
+                            order = option
+                            showing = false
+                        } content: { Text(option.title) }
+                    }
+                }.padding(.horizontal, 6).padding(.bottom, 6)
+            }
+            .frame(width: 280)
+            .onAppear { searchFocused = true }
+        }
     }
 }
 
 private struct TurnDetail: View {
     let turn: AgentTurn
-    @Environment(UsageStore.self) private var store
-    @State private var conversationTitle: (id: UsageConversation.ID, text: String)?
+    let title: String?
 
-    private var conversationID: UsageConversation.ID {
-        .init(client: turn.client, sessionId: turn.sessionId)
+    private var basis: String {
+        turn.durationEstimated ? L("turns.basis_summary") + " " + L("turns.basis_estimate") : L("turns.basis_summary")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(TurnFormat.timestamp(turn.start)).font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Text(TurnFormat.timestamp(turn.start)).font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    WorkspaceInfoPopover(title: L("turns.basis")) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(basis)
+                            LabeledContent(L("turns.session"), value: turn.sessionId)
+                            LabeledContent(L("turns.turn"), value: turn.turnId)
+                        }.font(.caption).textSelection(.enabled).padding(14).frame(width: 320)
+                    }.help(basis).accessibilityHint(basis)
+                }
                 Text(turn.project).font(.title3.weight(.semibold)).textSelection(.enabled)
-                if let conversationTitle, conversationTitle.id == conversationID {
-                    Text(conversationTitle.text)
+                if let title {
+                    Text(title)
                         .font(.callout).foregroundStyle(.secondary).lineLimit(2)
-                        .textSelection(.enabled).help(conversationTitle.text)
+                        .textSelection(.enabled).help(title)
                         .accessibilityLabel(L("record.conversation"))
-                        .accessibilityValue(conversationTitle.text)
+                        .accessibilityValue(title)
                 }
                 HStack(spacing: 12) {
                     BrandLabel(name: turn.client, kind: .tool, title: clientName(turn.client))
@@ -404,7 +482,6 @@ private struct TurnDetail: View {
                 detailMetric("token.reasoning", value: turn.reasoningTokens.map { $0.formatted(.number.locale(Localization.locale)) } ?? "—")
                 detailMetric("turns.ttft", value: TurnFormat.number(turn.ttftMs.map { Double($0) / 1000 }), unit: L("turns.seconds_unit"))
             }
-            Divider()
             VStack(alignment: .leading, spacing: 8) {
                 Text(LF("turns.responses_tools", turn.requests.map { $0.formatted(.number.locale(Localization.locale)) } ?? "—", turn.toolCalls.map { $0.formatted(.number.locale(Localization.locale)) } ?? "—")).font(.caption).foregroundStyle(.secondary)
                 HStack { Text(L("turns.generated")); Spacer(); Text(turn.generatedTokens.formatted(.number.locale(Localization.locale))).monospacedDigit() }.font(.caption)
@@ -423,22 +500,7 @@ private struct TurnDetail: View {
                     }
                 }
             }
-            DisclosureGroup(L("turns.basis")) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(L("turns.average_speed_help"))
-                    Text(L("turns.ttft_help"))
-                    Text(L("turns.wait_help"))
-                    Text(L("turns.scope"))
-                    if turn.durationEstimated { Text(L("turns.estimated_help")) }
-                    LabeledContent(L("turns.session"), value: turn.sessionId)
-                    LabeledContent(L("turns.turn"), value: turn.turnId)
-                }.font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-            }.disclosureGroupStyle(WorkspaceDisclosureStyle()).font(.caption)
-        }
-        .task(id: conversationID) { [id = conversationID] in
-            let title = try? await store.conversationTitle(id)
-            guard !Task.isCancelled else { return }
-            conversationTitle = title.map { (id, $0) }
+            .padding(.top, 6)
         }
     }
     private func detailMetric(_ key: String, value: String, unit: String = "") -> some View {

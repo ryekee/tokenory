@@ -1,5 +1,5 @@
 // [INPUT]: Today's real ledger summary, persisted HUD preferences, accessibility settings, and whether the panel is on the active Space.
-// [OUTPUT]: Half-size orange mechanical counter with snapshot-consistent rolling, sound, and a double-click shortcut to the dashboard.
+// [OUTPUT]: Half-size mechanical counter with rolling, sound preview on unmute, and configurable click gestures.
 // [POS]: Floating panel content; no dashboard filters or simulated increments.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -8,13 +8,15 @@ import SwiftUI
 struct MechanicalHUDView: View {
     static let windowSize = CGSize(width: 220, height: 92)
     let canPlaySound: () -> Bool
+    let dismiss: () -> Void
+    var openStatistics: (() -> Void)? = nil
     @Environment(UsageStore.self) private var store
     @Environment(HUDPreferences.self) private var preferences
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openWindow) private var openWindow
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
-    @State private var dayClock = 0
     @State private var animator = HUDAnimator()
+    @State private var pendingDashboardOpen: Task<Void, Never>?
 
     private var reading: HUDReading {
         HUDReading(day: (store.todayDay ?? LocalUsageDay(now: Date()).day) + ":" + (store.todayTimeZone ?? TimeZone.autoupdatingCurrent.identifier), metric: preferences.metric,
@@ -51,7 +53,7 @@ struct MechanicalHUDView: View {
                 .shadow(color: .white.opacity(0.25), radius: 0, y: 1)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
-                Button { preferences.soundEnabled.toggle(); HUDSound.shared.update(preferences: preferences) } label: {
+                Button { preferences.soundEnabled.toggle(); HUDSound.shared.preview(preferences: preferences) } label: {
                     Image(systemName: preferences.soundEnabled ? "speaker.wave.2" : "speaker.slash").font(.system(size: 13))
                 }
                 .buttonStyle(HUDMechanicalButton(selected: preferences.soundEnabled, round: true))
@@ -65,7 +67,7 @@ struct MechanicalHUDView: View {
         .background {
             RoundedRectangle(cornerRadius: 28)
                 .fill(LinearGradient(colors: [Color(red: 1, green: 0.71, blue: 0.35), Color(red: 0.97, green: 0.57, blue: 0.20), Color(red: 0.82, green: 0.36, blue: 0.08)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .onTapGesture(count: 2) { revealDashboard() }
+                .gesture(clickGesture)
         }
         .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color(red: 0.66, green: 0.33, blue: 0.12), lineWidth: 1).allowsHitTesting(false))
         .overlay(RoundedRectangle(cornerRadius: 27).inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.65), .clear, .black.opacity(0.20)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2).allowsHitTesting(false))
@@ -91,25 +93,35 @@ struct MechanicalHUDView: View {
                 if !Task.isCancelled, !animator.isRolling { HUDSound.shared.stop() }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in dayClock += 1 }
-        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in dayClock += 1 }
-        .task(id: dayClock) {
-            while !Task.isCancelled {
-                let now = Date()
-                await store.refreshToday(now: now)
-                let midnight = LocalUsageDay(now: now).end
-                do { try await Task.sleep(for: .seconds(max(0, midnight.timeIntervalSinceNow))) } catch { return }
-            }
-        }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
             animator.settle()
-            Task { await store.refreshToday() }
         }
-        .onDisappear { animator.settle(); HUDSound.shared.stop() }
+        .onDisappear {
+            pendingDashboardOpen?.cancel()
+            animator.settle()
+            HUDSound.shared.stop()
+        }
     }
 
     private func revealDashboard() {
-        openDashboard(using: openWindow)
+        if let openStatistics { openStatistics() }
+        else { openDashboard(using: openWindow) }
+    }
+
+    private var clickGesture: some Gesture {
+        TapGesture(count: 2).onEnded {
+            pendingDashboardOpen?.cancel()
+            pendingDashboardOpen = Task { @MainActor in
+                // Give a third click the same interval macOS uses for multi-click gestures.
+                do { try await Task.sleep(for: .seconds(NSEvent.doubleClickInterval)) } catch { return }
+                guard !Task.isCancelled else { return }
+                revealDashboard()
+            }
+        }
+        .simultaneously(with: TapGesture(count: 3).onEnded {
+            pendingDashboardOpen?.cancel()
+            dismiss()
+        })
     }
 
     private var readout: some View {
@@ -143,13 +155,18 @@ struct MechanicalHUDView: View {
         .background(LinearGradient(colors: [Color(red: 0.38, green: 0.18, blue: 0.07), Color(red: 0.70, green: 0.36, blue: 0.14)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 15))
         .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.28), lineWidth: 1).allowsHitTesting(false))
         .contentShape(RoundedRectangle(cornerRadius: 15))
-        .onTapGesture(count: 2) { revealDashboard() }
+        .gesture(clickGesture)
         .help(help)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L(preferences.metric == .tokens ? "hud.today_tokens" : "hud.today_cost"))
         .accessibilityValue((reading.partial ? "≈ " : "") + (animator.reading?.formatted ?? "—"))
         .accessibilityHint(help)
-        .accessibilityAction(named: Text(L("action.open_stats"))) { revealDashboard() }
+        .accessibilityActions {
+            Button(L("action.open_stats"), action: revealDashboard)
+            if preferences.dismissal != .ignore {
+                Button(L("hud.dismiss.action"), action: dismiss)
+            }
+        }
     }
 }
 

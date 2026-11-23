@@ -1,12 +1,15 @@
 // [INPUT]: Validated filters, the effective ledger view, and local Codex/Antigravity title indexes.
-// [OUTPUT]: Effective usage reports with Fast and Codex subagent subsets, daily totals by client and source, searchable conversations, and activity by day or hour.
+// [OUTPUT]: Effective usage reports with Fast and Codex subagent subsets, archived day totals, searchable conversations, and system-local hourly activity.
 // [POS]: Read-only aggregation boundary; never aggregate paginated details.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
+    config::Config,
     db::{revision, Database},
     usage::{validate_date, Tokens, UsageRecord},
 };
 use anyhow::{ensure, Result};
+use chrono::{DateTime, SecondsFormat, TimeZone, Timelike};
+use rusqlite::functions::FunctionFlags;
 use rusqlite::{params_from_iter, types::Null, Connection, Row, ToSql};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -116,14 +119,14 @@ pub(crate) fn codex_titles(home: &Path) -> HashMap<String, String> {
         .collect()
 }
 
-fn codex_title<'a>(titles: &'a HashMap<String, String>, session_id: &str) -> Option<&'a String> {
+pub(crate) fn codex_title<'a>(titles: &'a HashMap<String, String>, session_id: &str) -> Option<&'a String> {
     titles.get(session_id).or_else(|| {
         let thread = thread_id_from_rollout_path(Path::new(session_id))?;
         titles.get(&thread)
     })
 }
 
-fn antigravity_titles(home: &Path, client: &str) -> HashMap<String, String> {
+pub(crate) fn antigravity_titles(home: &Path, client: &str) -> HashMap<String, String> {
     let candidates: &[&str] = match client {
         "antigravity" => &[
             ".gemini/antigravity/conversation_summaries.db",
@@ -349,7 +352,7 @@ pub fn activity(db: &mut Database, f: &Filter) -> Result<ActivityReport> {
         .query_map(params_from_iter(f.sql_parameters()), |r| {
             Ok(ModelDay { date: r.get(0)?, client: r.get(1)?, model: r.get(2)?, summary: read_summary(r, 3)? })
         })?.collect::<rusqlite::Result<Vec<_>>>()?;
-    let hourly = hourly_aggregate(&tx, f, "%H")?;
+    let hourly = hourly_aggregate(&tx, f, false)?;
     let result = ActivityReport { revision: revision(&tx)?, from: from.into(), to: to.into(), daily, model_days, hourly };
     tx.commit()?;
     Ok(result)
@@ -415,7 +418,7 @@ fn hourly(c: &Connection, f: &Filter) -> Result<Option<HourlyReport>> {
     if f.timestamp_from_ms.is_some() || f.from.is_none() || f.from != f.to {
         return Ok(None);
     }
-    Ok(Some(hourly_aggregate(c, f, "%Y-%m-%dT%H:00:00+08:00")?))
+    Ok(Some(hourly_aggregate(c, f, true)?))
 }
 pub(crate) fn reporting_hour_sql(format: &str) -> (String, String) {
     // Imported daily totals cannot be reconstructed as hourly activity. Only
@@ -424,17 +427,65 @@ pub(crate) fn reporting_hour_sql(format: &str) -> (String, String) {
     let timed = format!("coalesce(json_extract(body, '$.metadata.granularity') NOT IN ('day', 'sourceRecord'), 1) AND coalesce(strftime('%Y-%m-%d', {timestamp}, 'unixepoch', '+8 hours') = date, 0)");
     (timed, format!("strftime('{format}', {timestamp}, 'unixepoch', '+8 hours')"))
 }
-fn hourly_aggregate(c: &Connection, f: &Filter, format: &str) -> Result<HourlyReport> {
-    let (timed, key) = reporting_hour_sql(format);
-    let buckets = c.prepare(&format!("SELECT {key} AS hour, {SUMMARY_SQL} FROM effective_usage{WHERE_SQL} AND ({timed}) GROUP BY hour ORDER BY hour"))?
-        .query_map(params_from_iter(f.sql_parameters()), |r| {
-            Ok(Group { key: r.get(0)?, summary: read_summary(r, 1)? })
-        })?.collect::<rusqlite::Result<Vec<_>>>()?;
-    let unallocated = c.query_row(
-        &format!("SELECT {SUMMARY_SQL} FROM effective_usage{WHERE_SQL} AND NOT ({timed})"),
-        params_from_iter(f.sql_parameters()),
-        |r| read_summary(r, 0),
+pub(crate) fn register_local_hour(c: &Connection) -> Result<()> {
+    c.create_scalar_function(
+        "local_usage_hour",
+        4,
+        FunctionFlags::SQLITE_DETERMINISTIC,
+        |ctx| {
+            let Some(instant) = ctx
+                .get::<Option<i64>>(0)?
+                .and_then(DateTime::from_timestamp_millis)
+            else {
+                return Ok(None);
+            };
+            let zone = ctx.get_or_create_aux(1, |value| {
+                value.as_str()?.parse::<chrono_tz::Tz>().map_err(anyhow::Error::msg)
+            })?;
+            let local = instant.with_timezone(&*zone);
+            let day = local.date_naive();
+            if day.format("%Y-%m-%d").to_string() != ctx.get::<String>(2)? {
+                return Ok(None);
+            }
+            if !ctx.get::<bool>(3)? {
+                return Ok(Some(format!("{:02}", local.hour())));
+            }
+            // Anchor the chart's hours at local midnight, including short or long DST days.
+            let midnight = day.and_time(chrono::NaiveTime::MIN);
+            let start = zone
+                .from_local_datetime(&midnight)
+                .earliest()
+                .or_else(|| chrono_tz::GapInfo::new(&midnight, &zone)?.end);
+            Ok(start.and_then(|start| {
+                let elapsed_hours = (instant.timestamp() - start.timestamp()) / 3600;
+                let bucket = start.checked_add_signed(chrono::TimeDelta::hours(elapsed_hours))?;
+                Some(bucket.to_rfc3339_opts(SecondsFormat::Secs, false))
+            }))
+        },
     )?;
+    Ok(())
+}
+
+fn hourly_aggregate(c: &Connection, f: &Filter, include_day: bool) -> Result<HourlyReport> {
+    let zone = Config::system_timezone().name();
+    let params = f.sql_parameters().into_iter().chain([&zone as &dyn ToSql, &include_day]);
+    let key = "CASE WHEN coalesce(json_extract(body,'$.metadata.granularity') NOT IN ('day','sourceRecord'),1)
+               THEN local_usage_hour(json_extract(body,'$.timestampMs'),?11,date,?12) END";
+    let order = if include_day { "julianday(hour)" } else { "hour" };
+    let mut stmt = c.prepare(&format!(
+        "SELECT {key} AS hour, {SUMMARY_SQL} FROM effective_usage{WHERE_SQL} GROUP BY hour ORDER BY {order}"
+    ))?;
+    let mut rows = stmt.query(params_from_iter(params))?;
+    let mut buckets = Vec::new();
+    let mut unallocated = Summary { cost_status: "empty".into(), ..Default::default() };
+    while let Some(row) = rows.next()? {
+        let summary = read_summary(row, 1)?;
+        if let Some(key) = row.get(0)? {
+            buckets.push(Group { key, summary });
+        } else {
+            unallocated = summary;
+        }
+    }
     Ok(HourlyReport { buckets, unallocated })
 }
 pub fn report(db: &mut Database, f: &Filter) -> Result<Report> {

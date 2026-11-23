@@ -20,9 +20,11 @@ final class LocalizationTests: XCTestCase {
     }
 
     @MainActor
-    func testReportingDateKeepsBeijingBoundary() {
+    func testReportingDateUsesSystemMidnight() {
         let date = Localization.date("2026-11-05")!
         XCTAssertEqual(UsageStore.day(date), "2026-11-05")
-        XCTAssertEqual(ISO8601DateFormatter().string(from: date), "2026-11-04T16:00:00Z")
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        XCTAssertEqual(date, calendar.date(from: DateComponents(year: 2026, month: 11, day: 5)))
     }
 }

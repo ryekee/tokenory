@@ -1,5 +1,5 @@
 // [INPUT]: Typed usage summaries and today-only turn statistics.
-// [OUTPUT]: Locale-aware formats, device legend and readout in Sources order, full-height source and Fast shares, and three-column menu summary.
+// [OUTPUT]: Locale-aware formats, device legend and focus-aware toolbar switch, source and Fast shares, and three-column menu summary.
 // [POS]: Shared native usage presentation; speed does not depend on dashboard filters.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -175,10 +175,12 @@ struct OverviewDeviceLegend: View {
 }
 
 struct OverviewLocalToggle: View {
+    @Environment(\.appearsActive) private var appearsActive
     @Binding var localOnly: Bool
     var body: some View {
         HStack(spacing: 6) {
             Text(L("cloud.overview.localOnly")).font(.callout)
+                .foregroundStyle(appearsActive ? Color.primary : Color(nsColor: .disabledControlTextColor))
                 .onTapGesture { localOnly.toggle() }
                 .accessibilityHidden(true)
             Toggle(L("cloud.overview.localOnly"), isOn: $localOnly)

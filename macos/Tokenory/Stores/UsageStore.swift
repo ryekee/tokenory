@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 按同一次选择发布本机与双机报告、明细对话筛选、请求状态、全年活动、当日用量、回合、价格、采集状态和来源刷新结果。
+// [OUTPUT]: 按系统日期刷新本机统计和当日用量，同步发布所选日期的设备汇总、明细、回合、价格及来源状态。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -101,6 +101,8 @@ final class UsageStore {
     var settings: EngineSettings?
     var clients: [ClientInfo] = []
     private var eventTask: Task<Void, Never>?
+    private var dayTask: Task<Void, Never>?
+    private(set) var systemTimeZone = TimeZone.current
     private(set) var todayTimeZone: String?
     private var refreshGeneration = 0
     private var reportGeneration = 0
@@ -118,23 +120,43 @@ final class UsageStore {
         cloud = DeviceSyncStore(engine: self.engine, usesDefaultLedger: directory.standardizedFileURL.path == primaryLedger.standardizedFileURL.path)
         updateDateRange()
     }
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-    static func day(_ date: Date) -> String { dayFormatter.string(from: date) }
+    static func day(_ date: Date) -> String { Localization.dayKey(date) }
     func start() {
         if eventTask == nil {
             eventTask = Task { [weak self, engine] in
                 for await event in engine.events { guard let self else { return }; await consume(event) }
             }
+            scheduleDayRefresh()
         }
         Task {
             do { try await engine.start(); connected = true; error = nil; cloud.start(); await refresh() }
             catch { fail(error) }
+        }
+    }
+
+    private func scheduleDayRefresh() {
+        dayTask?.cancel()
+        let midnight = LocalUsageDay(now: .now).end
+        dayTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(max(0, midnight.timeIntervalSinceNow))) } catch { return }
+            guard !Task.isCancelled else { return }
+            self?.systemClockChanged()
+        }
+    }
+
+    func systemClockChanged() {
+        let zone = TimeZone.current
+        let changedZone = zone != systemTimeZone
+        if changedZone { systemTimeZone = zone }
+        scheduleDayRefresh()
+        guard connected else { return }
+        Task {
+            if changedZone {
+                await refresh()
+                if let query = requestedTurnQuery { await loadAgentTurns(query, force: true) }
+            } else {
+                await refreshToday()
+            }
         }
     }
 
@@ -168,9 +190,6 @@ final class UsageStore {
         try await engine.request("conversations", payload: .encode(lookup), as: [UsageConversation].self)
     }
 
-    func conversationTitle(_ id: UsageConversation.ID) async throws -> String? {
-        try await engine.request("conversationTitle", payload: .encode(id))["title"].string
-    }
     func selectDateRange(_ range: UsageDateRange, now: Date = .now) {
         dateRange = range
         updateDateRange(now: now, resetOffset: true)

@@ -1,5 +1,5 @@
 // [INPUT]: Ledger records, turn and Codex activity evidence, and SQLite backups.
-// [OUTPUT]: Migrated analytics schema, consistent restore and bounded transient storage.
+// [OUTPUT]: Migrated analytics schema, local hour conversion, consistent restore and bounded transient storage.
 // [POS]: SQLite persistence and backup boundary.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::usage::UsageRecord;
@@ -20,6 +20,7 @@ impl Database {
         let connection = Connection::open(directory.join("tokenory.sqlite3"))?;
         connection.busy_timeout(Duration::from_secs(5))?;
         connection.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;")?;
+        crate::queries::register_local_hour(&connection)?;
         let version: i64 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(
             version <= 6,

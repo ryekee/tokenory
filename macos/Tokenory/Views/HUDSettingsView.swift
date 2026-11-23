@@ -1,5 +1,5 @@
 // [INPUT]: Shared, persisted HUD preferences and local audio service.
-// [OUTPUT]: Visibility, six screen positions with the workspace selection color, display metric and sound controls.
+// [OUTPUT]: Visibility, idle-hide switch, triple-click action, position and stepped audio controls with live preview.
 // [POS]: Settings section and its sound controls.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -12,16 +12,22 @@ struct HUDSettingsView: View {
                 VStack(spacing: 16) {
                     HStack {
                         Text(L("hud.show")); Spacer()
-                        Toggle(L("hud.show"), isOn: $preferences.enabled).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        SettingsSwitch(label: L("hud.show"), isOn: $preferences.enabled)
+                    }
+                    HStack {
+                        Text(L("hud.auto_hide")); Spacer()
+                        SettingsSwitch(label: L("hud.auto_hide"), isOn: $preferences.autoHideWhenIdle)
+                    }
+                    HStack {
+                        Text(L("hud.dismiss.title")); Spacer()
+                        WorkspaceDropdown(
+                            label: L("hud.dismiss.title"), selection: $preferences.dismissal,
+                            options: HUDDismissal.allCases,
+                            width: WorkspaceDropdownTrigger.fittingWidth(for: HUDDismissal.allCases.map(\.label)),
+                            title: { $0.label }
+                        )
                     }
                     Divider()
-                    HStack {
-                        Text(L("hud.metric")); Spacer()
-                        Picker(L("hud.metric"), selection: $preferences.metric) {
-                            Text(L("usage.tokens")).tag(HUDMetric.tokens)
-                            Text(L("hud.cost")).tag(HUDMetric.cost)
-                        }.pickerStyle(.segmented).labelsHidden().frame(width: 200)
-                    }
                     HStack(alignment: .top) {
                         Text(L("hud.position")); Spacer()
                         Grid(horizontalSpacing: 6, verticalSpacing: 6) {
@@ -55,22 +61,32 @@ struct HUDAudioControls: View {
     @Environment(HUDPreferences.self) private var preferences
     @State private var sound = HUDSound.shared
     var body: some View {
-        @Bindable var preferences = preferences
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text(L("hud.sound")); Spacer()
-                Toggle(L("hud.sound"), isOn: $preferences.soundEnabled).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                SettingsSwitch(label: L("hud.sound"), isOn: Binding(get: { preferences.soundEnabled }, set: { enabled in
+                    preferences.soundEnabled = enabled
+                    sound.preview(preferences: preferences)
+                }))
             }
-            HStack(spacing: 12) {
+            HStack {
                 Text(L("hud.volume"))
-                Slider(value: $preferences.volume, in: 0...1).labelsHidden().accessibilityLabel(L("hud.volume"))
-                Text(preferences.volume.formatted(.percent.precision(.fractionLength(0))))
-                    .monospacedDigit().foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
+                Spacer(minLength: 12)
+                HStack(spacing: 8) {
+                    Image(systemName: "speaker.fill").foregroundStyle(.secondary).accessibilityHidden(true)
+                    Slider(value: Binding(get: { preferences.volume }, set: { volume in
+                        guard volume != preferences.volume else { return }
+                        preferences.volume = volume
+                        sound.preview(preferences: preferences)
+                    }), in: 0...1, step: 0.05) { Text(L("hud.volume")) }
+                        .labelsHidden()
+                    Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary).accessibilityHidden(true)
+                    Text(preferences.volume.formatted(.percent.precision(.fractionLength(0))))
+                        .monospacedDigit().foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
+                }
+                .frame(maxWidth: 300)
             }
             if let error = sound.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
         }
-        .onChange(of: preferences.soundEnabled) { _, _ in sound.update(preferences: preferences) }
-        .onChange(of: preferences.volume) { _, _ in sound.update(preferences: preferences) }
-        .onDisappear { sound.stop() }
     }
 }

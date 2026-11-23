@@ -1,5 +1,5 @@
 // [INPUT]: Native transcripts, agent databases, and the client catalog.
-// [OUTPUT]: Completed turns with timestamp-estimated duration, reported Claude inference speed and explicit source capabilities.
+// [OUTPUT]: Completed turns, searchable local conversation titles, recorded or estimated timing and source capabilities.
 // [POS]: Additional-client parsing boundary; never retain message or tool content.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 mod antigravity;
@@ -1106,8 +1106,35 @@ pub struct Report {
     models: Vec<String>,
     clients: Vec<String>,
     turns: Vec<CodexTurn>,
+    #[serde(rename = "conversationTitles", skip_serializing_if = "HashMap::is_empty")]
+    conversation_titles: HashMap<String, HashMap<String, String>>,
     capabilities: Vec<Capability>,
 }
+
+impl Report {
+    pub(crate) fn add_conversation_titles(&mut self, home: &Path) {
+        for client in ["codex", "antigravity", "antigravity-cli"] {
+            let sessions: HashSet<_> = self.turns.iter().filter(|t| t.client == client)
+                .map(|t| t.session_id.as_str()).collect();
+            if sessions.is_empty() { continue; }
+            let index = if client == "codex" {
+                crate::queries::codex_titles(home)
+            } else {
+                crate::queries::antigravity_titles(home, client)
+            };
+            let titles: HashMap<_, _> = sessions.into_iter().filter_map(|id| {
+                let title = if client == "codex" {
+                    crate::queries::codex_title(&index, id)
+                } else {
+                    index.get(id)
+                }?;
+                Some((id.to_owned(), title.clone()))
+            }).collect();
+            if !titles.is_empty() { self.conversation_titles.insert(client.to_owned(), titles); }
+        }
+    }
+}
+
 pub fn query(db: &mut Database, f: &Filter) -> Result<Report> {
     f.validate()?;
     ensure!(
@@ -1156,6 +1183,7 @@ pub fn query(db: &mut Database, f: &Filter) -> Result<Report> {
         models,
         clients,
         turns,
+        conversation_titles: HashMap::new(),
         capabilities,
     };
     tx.commit()?;

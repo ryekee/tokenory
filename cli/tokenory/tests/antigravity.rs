@@ -1,3 +1,4 @@
+use chrono::TimeZone;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::{
@@ -177,8 +178,7 @@ async fn discovers_antigravity_app_and_cli_dbs_dedupes_legacy_cache_and_tracks_h
     let home = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
 
-    // 2026-11-21 10:00:00+08:00 = 2026-11-21T02:00:00Z = 1795226400000 ms
-    let t0 = 1_795_226_400_000i64;
+    let t0 = fixture_midmorning();
     let app_db = home
         .path()
         .join(".gemini/antigravity/conversations/sess-app.db");
@@ -584,7 +584,11 @@ async fn live_changes_and_worker_watch_antigravity_wal_updates_in_real_time() {
 }
 
 const TEST_MODEL: &str = "gemini-3.5-flash-high";
-const TEST_TIME: i64 = 1_795_226_400_000;
+
+fn fixture_midmorning() -> i64 {
+    Config::system_timezone().with_ymd_and_hms(2026, 11, 21, 10, 0, 0)
+        .earliest().unwrap().timestamp_millis()
+}
 
 struct LedgerFixture {
     _home: tempfile::TempDir,
@@ -619,7 +623,7 @@ impl LedgerFixture {
             .iter()
             .map(|(id, tokens)| {
                 json!({
-            "type":"usage", "sessionId":session, "modelId":TEST_MODEL, "timestamp":TEST_TIME,
+            "type":"usage", "sessionId":session, "modelId":TEST_MODEL, "timestamp":fixture_midmorning(),
             "input":tokens, "responseId":id
         }).to_string()
             })
@@ -640,7 +644,7 @@ impl LedgerFixture {
         let conn = create_antigravity_db(&path, false, false);
         conn.execute(
             "INSERT INTO trajectory_metadata_blob(id,data) VALUES ('main',?1)",
-            [build_trajectory_meta("file:///test", TEST_TIME)],
+            [build_trajectory_meta("file:///test", fixture_midmorning())],
         )
         .unwrap();
         for (idx, (id, input)) in rows.iter().enumerate() {
@@ -796,6 +800,7 @@ async fn granularity_upgrade_preserves_price_until_usage_changes() {
 #[tokio::test]
 async fn hourly_buckets_require_a_request_timestamp_for_app_and_cli() {
     let mut f = LedgerFixture::new();
+    let request_start = fixture_midmorning() + 3_600_000;
     for client in ["antigravity", "antigravity-cli"] {
         let path = f.sqlite(
             client,
@@ -807,15 +812,15 @@ async fn hourly_buckets_require_a_request_timestamp_for_app_and_cli() {
             "INSERT INTO steps(idx,step_type,status,metadata) VALUES (0,15,3,?1),(1,15,3,?2)",
             params![
                 build_planner_step_meta(
-                    TEST_TIME + 3_600_000,
-                    TEST_TIME + 3_601_000,
+                    request_start,
+                    request_start + 1_000,
                     "turn-1",
                     "timed",
                     1
                 ),
                 build_planner_step_meta(
-                    TEST_TIME + 3_600_000,
-                    TEST_TIME + 3_601_000,
+                    request_start,
+                    request_start + 1_000,
                     "turn-2",
                     "",
                     2

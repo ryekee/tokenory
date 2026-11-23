@@ -25,6 +25,42 @@ fn count(total: i64, minute: i32) -> String {
 }
 
 #[tokio::test]
+async fn zone_change_only_affects_new_archive_entries() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let dir = home.path().join(".codex/sessions");
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("active.jsonl");
+    fs::write(&path, header() + &count(100, 1)).unwrap();
+    let mut config = Config {
+        home_dir: home.path().into(),
+        timezone: "Asia/Tokyo".into(),
+        ..Default::default()
+    };
+    let mut db = Database::open(data.path()).unwrap();
+    let mut cache = DiagnosticCache::default();
+    let first = collect_once(&config, &mut cache).await.unwrap();
+    assert_eq!(persist(&mut db, first).unwrap().added, 1);
+
+    config.timezone = "America/Los_Angeles".into();
+    let mut file = fs::OpenOptions::new().append(true).open(&path).unwrap();
+    file.write_all(count(125, 2).as_bytes()).unwrap();
+    let next = collect_codex_changes(&config, &mut cache, Some(vec![path]))
+        .await
+        .unwrap();
+    let result = persist(&mut db, next).unwrap();
+    assert_eq!((result.added, result.updated), (1, 0));
+    let report = report(&mut db, &Filter::default()).unwrap();
+    let archive: Vec<_> = report.details.iter().map(|row| {
+        (row.record.date.as_str(), row.record.timezone.as_deref(), row.record.tokens.input)
+    }).collect();
+    assert_eq!(archive, [
+        ("2026-11-16", Some("Asia/Tokyo"), 100),
+        ("2026-11-15", Some("America/Los_Angeles"), 25),
+    ]);
+}
+
+#[tokio::test]
 async fn compaction_usage_agrees_between_changed_file_and_full_scan_ledgers() {
     let home = tempfile::tempdir().unwrap();
     let active_data = tempfile::tempdir().unwrap();

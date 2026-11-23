@@ -27,37 +27,43 @@ struct UsageTrend {
         return (0...4).map { points[$0 * (points.count - 1) / 4] }
     }
 
-    init(report: UsageReport, filter: UsageFilter, now: Date = Date()) {
+    init(report: UsageReport, filter: UsageFilter, now: Date = Date(), timeZone: TimeZone = .autoupdatingCurrent) {
         hourly = report.hourly != nil
         unallocatedTokens = report.hourly?.unallocated.tokens ?? 0
-        var values: [(Date, UsageSummary?)] = []
-        let duration: TimeInterval = hourly ? 3600 : 86400
-        if let hours = report.hourly, let day = filter.from.flatMap(Localization.date) {
+        var calendar = Localization.reportingCalendar
+        calendar.timeZone = timeZone
+        let values: [(start: Date, duration: TimeInterval, summary: UsageSummary?)]
+        if let hours = report.hourly, let day = filter.from.flatMap({ Localization.date($0, timeZone: timeZone) }),
+           let bounds = calendar.dateInterval(of: .day, for: day) {
             let parser = ISO8601DateFormatter()
             let lookup = Dictionary(uniqueKeysWithValues: hours.buckets.compactMap { group in
                 parser.date(from: group.key).map { ($0, group.summary) }
             })
-            values = (0..<24).map { hour in
-                let date = day.addingTimeInterval(Double(hour) * 3600)
-                return (date, lookup[date])
+            values = stride(from: 0.0, to: bounds.duration, by: 3600).map { elapsed in
+                let date = bounds.start.addingTimeInterval(elapsed)
+                return (date, min(3600, bounds.duration - elapsed), lookup[date])
             }
         } else {
-            values = report.daily.compactMap { group in Localization.date(group.key).map { ($0, group.summary) } }
-                .sorted { $0.0 < $1.0 }
+            values = report.daily.compactMap { group in
+                guard let day = Localization.date(group.key, timeZone: timeZone),
+                      let bounds = calendar.dateInterval(of: .day, for: day) else { return nil }
+                return (bounds.start, bounds.duration, group.summary)
+            }.sorted { $0.start < $1.start }
         }
-        hasPricedUsage = values.contains { $0.1?.knownEstimatedCostUsd != nil }
+        hasPricedUsage = values.contains { $0.summary?.knownEstimatedCostUsd != nil }
         var segment = 0
-        var previous: Date?
-        points = values.map { date, summary in
+        var previousEnd: Date?
+        points = values.map { date, duration, summary in
             let future = date > now
-            if summary?.costStatus == "unknown" || future || (previous.map { date.timeIntervalSince($0) > duration * 1.01 } ?? false) {
+            if summary?.costStatus == "unknown" || future || (previousEnd.map { date > $0 } ?? false) {
                 segment += 1
             }
-            previous = date
+            previousEnd = date.addingTimeInterval(duration)
             return UsageTrendPoint(start: date, duration: duration, summary: summary, costSegment: segment, isFuture: future)
         }
-        let start = values.first?.0 ?? now
-        domain = start...(values.last?.0 ?? start).addingTimeInterval(duration)
+        let start = values.first?.start ?? now
+        let end = values.last.map { $0.start.addingTimeInterval($0.duration) } ?? start.addingTimeInterval(86400)
+        domain = start...end
         tokenMaximum = Self.axisMaximum(points.compactMap { $0.tokens.map(Double.init) }.max() ?? 0)
         costMaximum = Self.axisMaximum(points.compactMap(\.cost).max() ?? 0)
     }

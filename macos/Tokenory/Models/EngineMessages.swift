@@ -81,7 +81,7 @@ struct ConversationLookup: Encodable, Equatable, Sendable {
     var filter: UsageFilter
     var search: String
 }
-struct TokenBreakdown: Codable, Sendable { let input: Int64; let output: Int64; let cacheRead: Int64; let cacheWrite: Int64; let reasoning: Int64 }
+struct TokenBreakdown: Codable, Equatable, Sendable { let input: Int64; let output: Int64; let cacheRead: Int64; let cacheWrite: Int64; let reasoning: Int64 }
 struct InferenceSpeed: Codable, Equatable, Sendable {
     let speed: String
     let source: String

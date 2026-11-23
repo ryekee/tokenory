@@ -1,5 +1,5 @@
 // [INPUT]: 接收原生应用的 JSON 请求，读取采集和价格数据。
-// [OUTPUT]: 输出协议响应、分块设备快照、每日各工具有效来源用量、对话目录和本地标题、多客户端回合查询、扫描状态和账本更新事件。
+// [OUTPUT]: 输出协议响应、系统时区设置、分块设备快照、有效来源、对话及回合查询、扫描状态和账本更新事件。
 // [POS]: 单写者 worker 合并日志事件与活跃文件检查，协调全量/增量采集、计价和查询。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -263,10 +263,14 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
         "conversationTitle" => Ok(json!({
             "title": queries::conversation_title(&config.home_dir, &payload(v)?)
         })),
-        "turnAnalytics" => Ok(serde_json::to_value(crate::turn_analytics::query(
-            db,
-            &payload(v)?,
-        )?)?),
+        "turnAnalytics" => {
+            let filter: Filter = payload(v)?;
+            let mut report = crate::turn_analytics::query(db, &filter)?;
+            if filter.timestamp_from_ms.is_none() {
+                report.add_conversation_titles(&config.home_dir);
+            }
+            Ok(serde_json::to_value(report)?)
+        }
         "codexTurns" => Ok(serde_json::to_value(crate::codex_turns::query(
             db,
             &payload(v)?,
@@ -291,7 +295,10 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
         }
         "sources" => sources(db),
         "prices" => prices(db),
-        "settings" => Ok(serde_json::to_value(&config)?),
+        "settings" => {
+            config.follow_system_timezone();
+            Ok(serde_json::to_value(&config)?)
+        }
         "defaultScanPaths" => Ok(serde_json::to_value(crate::config::default_scan_paths(&config.home_dir))?),
         "priceSnapshot" => {
             let p: Id = payload(v)?;
@@ -343,18 +350,10 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
             Ok(json!({"path":p.path}))
         }
         "updateSettings" => {
-            let value: Config = payload(v)?;
+            let mut value: Config = payload(v)?;
+            value.follow_system_timezone();
             value.validate()?;
             value.validate_new_paths(config)?;
-            ensure!(
-                value.timezone == config.timezone
-                    || db.connection.query_row(
-                        "SELECT count(*) FROM usage_records WHERE source='local'",
-                        [],
-                        |r| r.get::<_, i64>(0)
-                    )? == 0,
-                "event timezone is locked once usage exists; historical dates are preserved"
-            );
             value.save(&db.directory)?;
             *config = value;
             Ok(serde_json::to_value(&config)?)
@@ -363,11 +362,12 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
     }
 }
 fn start_scan(
-    config: Config,
+    mut config: Config,
     mut cache: DiagnosticCache,
     live_paths: Option<Option<Vec<PathBuf>>>,
 ) -> JoinHandle<(DiagnosticCache, Result<ScanBatch>)> {
     tokio::task::spawn_blocking(move || {
+        config.follow_system_timezone();
         let r = tokio::runtime::Handle::current().block_on(async {
             match live_paths {
                 Some(paths) => collector::collect_live_changes(&config, &mut cache, paths).await,

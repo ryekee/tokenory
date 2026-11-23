@@ -1,5 +1,5 @@
 // [INPUT]: 接收导入预览、采集状态和来源覆盖记录。
-// [OUTPUT]: 提供导入格式切换、预览、来源概览和导出入口。
+// [OUTPUT]: 「选择文件」菜单选择导入格式，再预览文件；按设备展示来源，提供 JSON 或 CSV 导出。
 // [POS]: 设置中的数据页内联导入预览、冲突选择和批次历史；来源页按设备展示用量。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -25,7 +25,6 @@ struct ImportView: View {
     }
 
     @Environment(UsageStore.self) private var store
-    @State private var source = "cc-switch"
     @State private var preview: ImportPreview?
     @State private var acceptedDates = false
     @State private var acceptedPartial = false
@@ -36,14 +35,15 @@ struct ImportView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(L("nav.imports")).font(.headline)
             HStack(spacing: 12) {
-                Picker(L("import.format"), selection: $source) {
-                    Text("CC Switch").tag("cc-switch")
-                    Text(L("import.tokens_ci")).tag("tokens-ci")
-                }.pickerStyle(.segmented).fixedSize()
-                Button(L("import.choose")) { choose() }
+                Text(L("nav.imports")).font(.headline)
+                Spacer()
                 if busy { ProgressView().controlSize(.small) }
+                Menu(L("import.choose")) {
+                    Button("CC Switch") { choose(source: "cc-switch") }
+                    Button(L("import.tokens_ci")) { choose(source: "tokens-ci") }
+                }
+                .settingsActionForeground().fixedSize()
             }
             if let notice { Text(notice).font(.callout).foregroundStyle(.secondary) }
             if let preview {
@@ -54,10 +54,6 @@ struct ImportView: View {
             DisclosureGroup(L("import.batches")) { batchHistory }
         }
         .disabled(busy)
-        .onChange(of: source) { _, _ in
-            preview = nil
-            notice = nil
-        }
         .alert(item: $pendingUndo) { batch in
             Alert(title: Text(L("import.confirm_undo")),
                   message: Text(LF("import.undo_scope", batch.source, batch.dates)),
@@ -70,16 +66,24 @@ struct ImportView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L("import.preview")).font(.headline)
             Text(preview.tokens.formatted(.number.locale(Localization.locale)) + " tokens").font(.title2).monospacedDigit()
-            Text(LF("import.summary", Localization.dateRange(preview.start, preview.end), preview.dayCount, preview.rowCount)).foregroundStyle(.secondary)
-            if preview.sourceTimezone == nil { Toggle(L("import.keep_dates"), isOn: $acceptedDates) }
-            if !preview.partialDates.isEmpty { Toggle(LF("import.partial_dates", preview.partialDates.map(Localization.day).formatted(.list(type: .and).locale(Localization.locale))), isOn: $acceptedPartial) }
+            Text(LF("import.summary", Localization.dateRange(preview.start, preview.end), preview.dayCount, preview.rowCount))
+                .font(.callout).foregroundStyle(.secondary)
+            if preview.sourceTimezone == nil {
+                Toggle(L("import.keep_dates"), isOn: $acceptedDates).toggleStyle(.checkbox).controlSize(.small)
+            }
+            if !preview.partialDates.isEmpty {
+                Toggle(LF("import.partial_dates", preview.partialDates.map(Localization.day).formatted(.list(type: .and).locale(Localization.locale))), isOn: $acceptedPartial)
+                    .toggleStyle(.checkbox).controlSize(.small)
+            }
             if !preview.conflicts.isEmpty {
                 Divider()
                 Text(L("import.conflicts"))
                 if preview.conflicts.count > 1 {
                     HStack {
                         Button(L("import.keep_all")) { for c in preview.conflicts { choices[c.id] = "existing" } }
+                            .settingsActionForeground()
                         Button(L("import.replace_all")) { for c in preview.conflicts { choices[c.id] = "imported" } }
+                            .settingsActionForeground()
                     }
                 }
                 ForEach(preview.conflicts) { conflict in
@@ -101,6 +105,7 @@ struct ImportView: View {
             HStack {
                 Spacer()
                 Button(L("action.cancel")) { self.preview = nil }
+                    .settingsActionForeground()
                 Button(L("import.apply")) { apply(preview) }
                     .buttonStyle(.borderedProminent)
                     .disabled((!acceptedDates && preview.sourceTimezone == nil)
@@ -136,14 +141,15 @@ struct ImportView: View {
                 Spacer()
                 if batch["active"].bool == true, let id = batch["id"].string {
                     Button(L("import.undo")) { pendingUndo = PendingUndo(id: id, source: source, dates: dates) }
+                        .settingsActionForeground()
                 }
             }.padding(.vertical, 4)
         }
         if store.sources != .null && store.sources["batches"].array.isEmpty {
-            Text(L("import.no_batches")).foregroundStyle(.secondary)
+            Text(L("import.no_batches")).font(.callout).foregroundStyle(.secondary)
         }
     }
-    private func choose() {
+    private func choose(source: String) {
         guard let file = FilePanels.open() else { return }
         busy = true; notice = nil; preview = nil
         Task {
@@ -208,9 +214,8 @@ struct SourcesView: View {
             } else if !store.cloud.enabled {
                 Text(L("source.sync_paused")).font(.caption).foregroundStyle(.secondary)
             }
-            Divider().padding(.vertical, 4)
-            if store.sources != .null { supportedClients }
-            exportControls
+            if store.sources != .null { WorkspacePanel { supportedClients } }
+            WorkspacePanel { exportControls }
         }
         .disclosureGroupStyle(WorkspaceDisclosureStyle())
         .task { await loadSources() }
@@ -227,14 +232,15 @@ struct SourcesView: View {
                     } label: {
                         Label(L("action.scan"), systemImage: "arrow.clockwise")
                     }
-                    .disabled(!store.connected || store.scanning)
+                    .settingsActionForeground().disabled(!store.connected || store.scanning)
                 }
                 Divider()
                 if let error = store.sourcesError {
                     HStack(spacing: 10) {
                         Label(L(store.sources == .null ? "source.load_failed" : "source.refresh_failed"),
                               systemImage: "exclamationmark.circle").help(error)
-                        Button(L("action.retry")) { Task { await loadSources() } }.disabled(sourceLoading)
+                        Button(L("action.retry")) { Task { await loadSources() } }
+                            .settingsActionForeground().disabled(sourceLoading)
                     }.font(.callout).padding(.vertical, 4)
                 } else if store.sources == .null {
                     HStack(spacing: 8) {
@@ -370,7 +376,8 @@ struct SourcesView: View {
                             BrandLabel(name: client.key, kind: .tool, title: clientName(client.key))
                                 .lineLimit(2)
                             Spacer(minLength: 8)
-                            Text(LF("source.counted", compactTokens(client.summary.tokens))).monospacedDigit()
+                            Text(LF("source.counted", compactTokens(client.summary.tokens)))
+                                .monospacedDigit().foregroundStyle(.secondary)
                         }.font(.callout)
                     }
                 }
@@ -407,27 +414,32 @@ struct SourcesView: View {
     }
 
     private var exportControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L("export.scope_note")).font(.caption).foregroundStyle(.secondary)
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
-                exportScopeRow("field.date", exportDateRange)
-                if let client = store.filter.client { exportScopeRow("field.tool", clientName(client)) }
-                if let provider = store.filter.provider { exportScopeRow("field.provider", provider) }
-                if let model = store.filter.model { exportScopeRow("field.model", model) }
-                if let source = store.filter.source { exportScopeRow("field.source", exportSource(source)) }
-                if let start = store.filter.timestampFromMs { exportScopeRow("export.time_from", exportTime(start)) }
-                if let end = store.filter.timestampToMs { exportScopeRow("export.time_to", exportTime(end)) }
+        HStack(alignment: .top, spacing: 20) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(L("export.scope_note")).foregroundStyle(.secondary)
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
+                    exportScopeRow("field.date", exportDateRange)
+                    if let client = store.filter.client { exportScopeRow("field.tool", clientName(client)) }
+                    if let provider = store.filter.provider { exportScopeRow("field.provider", provider) }
+                    if let model = store.filter.model { exportScopeRow("field.model", model) }
+                    if let source = store.filter.source { exportScopeRow("field.source", exportSource(source)) }
+                    if let start = store.filter.timestampFromMs { exportScopeRow("export.time_from", exportTime(start)) }
+                    if let end = store.filter.timestampToMs { exportScopeRow("export.time_to", exportTime(end)) }
+                }
+                .textSelection(.enabled)
+                Text(L("export.note")).foregroundStyle(.secondary)
             }
             .font(.caption)
-            .textSelection(.enabled)
-            HStack {
-                Button(L("export.json")) { export("json") }
-                Button(L("export.csv")) { export("csv") }
-                if let notice { Text(notice).foregroundStyle(.secondary) }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .trailing, spacing: 6) {
+                Menu(L("export.action")) {
+                    Button("JSON") { export("json") }
+                    Button("CSV") { export("csv") }
+                }
+                .settingsActionForeground().fixedSize()
+                if let notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
             }
-            Text(L("export.note")).font(.caption).foregroundStyle(.secondary)
         }
-        .padding(.top, 4)
     }
 
     private func exportScopeRow(_ key: String, _ value: String) -> some View {

@@ -155,6 +155,7 @@ async fn session_snapshot_updates_replaces_stale_models_and_preserves_missing_or
     let path = ".mux/sessions/workspace/session-usage.json";
     let config = Config {
         home_dir: home.path().into(),
+        timezone: "Asia/Shanghai".into(),
         ..Default::default()
     };
     let mut db = Database::open(data.path()).unwrap();

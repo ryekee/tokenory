@@ -1,5 +1,5 @@
 // [INPUT]: Local and combined daily/hourly reports and device-specific bucket indexes.
-// [OUTPUT]: Dual-axis Tokens bars and cost line with equal-width legend marks, range transitions and a shared hover readout.
+// [OUTPUT]: Dual-axis trend in the local or device snapshot time zone, with a shared hover readout.
 // [POS]: Upper overview chart; preserves unknown prices and unallocated hours.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -12,6 +12,7 @@ struct UsageTrendChart: View {
     private let trend: UsageTrend
     private let readoutWidth: CGFloat
     private let reservesPendingLine: Bool
+    private let timeZone: TimeZone
     let filter: UsageFilter
     let animateRangeChanges: Bool
     let openDatePicker: () -> Void
@@ -24,9 +25,13 @@ struct UsageTrendChart: View {
     private var range: DashboardDateSpan { DashboardDateSpan(from: filter.from, to: filter.to) }
     private var canAnimateRange: Bool { animateRangeChanges && !reduceMotion }
     private var costColor: Color { WorkspaceStyle.costColor(scheme) }
+    private var calendar: Calendar {
+        var calendar = Localization.reportingCalendar
+        calendar.timeZone = timeZone
+        return calendar
+    }
     private var axisDateFormat: Date.FormatStyle {
-        Date.FormatStyle(locale: Localization.locale, calendar: Localization.reportingCalendar,
-                         timeZone: Localization.reportingCalendar.timeZone).month(.abbreviated).day()
+        Date.FormatStyle(locale: Localization.locale, calendar: calendar, timeZone: timeZone).month(.abbreviated).day()
     }
 
     init(report: UsageReport, localReport: UsageReport, remoteReports: [String: UsageReport],
@@ -36,9 +41,10 @@ struct UsageTrendChart: View {
         self.filter = filter
         self.animateRangeChanges = animateRangeChanges
         self.openDatePicker = openDatePicker
-        trend = UsageTrend(report: report, filter: filter)
+        timeZone = remoteReports.isEmpty ? .autoupdatingCurrent : TimeZone(identifier: DeviceUsageSnapshot.reportingTimezone)!
+        trend = UsageTrend(report: report, filter: filter, timeZone: timeZone)
         sources = Self.deviceBuckets(localReport: localReport, localName: localName, remoteReports: remoteReports,
-                                     deviceName: deviceName, hourly: report.hourly != nil)
+                                     deviceName: deviceName, hourly: report.hourly != nil, timeZone: timeZone)
         reservesPendingLine = trend.points.contains { ($0.summary?.unpricedTokens ?? 0) > 0 }
         readoutWidth = CursorTooltipLayout.summaryWidth(names: sources.isEmpty ? [] : [L("cloud.overview.total")] + sources.map(\.name),
             tokens: trend.points.compactMap(\.tokens).max() ?? 0, cost: trend.points.compactMap(\.cost).max(), partial: reservesPendingLine)
@@ -102,13 +108,13 @@ struct UsageTrendChart: View {
         let values: [Date: UsageSummary]
     }
     private static func deviceBuckets(localReport: UsageReport, localName: String, remoteReports: [String: UsageReport],
-                                      deviceName: (String) -> String, hourly: Bool) -> [DeviceBuckets] {
+                                      deviceName: (String) -> String, hourly: Bool, timeZone: TimeZone) -> [DeviceBuckets] {
         guard !remoteReports.isEmpty else { return [] }
         let parser = ISO8601DateFormatter()
         func index(_ report: UsageReport) -> [Date: UsageSummary] {
             let groups = hourly ? report.hourly?.buckets ?? [] : report.daily
             return Dictionary(uniqueKeysWithValues: groups.compactMap { group in
-                let date = hourly ? parser.date(from: group.key) : Localization.date(group.key)
+                let date = hourly ? parser.date(from: group.key) : Localization.date(group.key, timeZone: timeZone)
                 return date.map { ($0, group.summary) }
             })
         }
@@ -266,17 +272,12 @@ struct UsageTrendChart: View {
         let current = points.firstIndex { $0.id == selectedDate } ?? (delta > 0 ? -1 : points.count)
         selectedDate = points[min(max(current + delta, 0), points.count - 1)].id
     }
-    private static let hourFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-        formatter.dateFormat = "HH:mm"
-        return formatter
-    }()
-    private func hour(_ date: Date) -> String { Self.hourFormatter.string(from: date) }
+    private func hour(_ date: Date) -> String {
+        Date.VerbatimFormatStyle(format: "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
+                                 locale: Locale(identifier: "en_US_POSIX"), timeZone: timeZone, calendar: calendar).format(date)
+    }
     private func label(_ point: UsageTrendPoint, hourly: Bool) -> String {
-        if hourly { return "\(hour(point.start))–\(hour(point.start.addingTimeInterval(3600)))" }
-        let calendar = Localization.reportingCalendar
+        if hourly { return "\(hour(point.start))–\(hour(point.start.addingTimeInterval(point.duration)))" }
         return point.start.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, locale: Localization.locale,
                                                       calendar: calendar, timeZone: calendar.timeZone))
     }

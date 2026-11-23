@@ -92,13 +92,30 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Share this Mac’s full usage history with your other devices through your private iCloud database. Only totals by time, tool, model and source are uploaded, including estimated costs."
+            "value": "Sync this Mac’s usage and estimated costs through your private iCloud storage."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "通过 iCloud 私有库与其他设备共享这台 Mac 的全部历史用量。上传内容为按时间、工具、模型和来源汇总的 Tokens 与估算费用。"
+            "value": "通过 iCloud 私有库同步本机的用量与估算费用汇总。"
+          }
+        }
+      }
+    },
+    "cloud.just_now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "just now"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刚刚"
           }
         }
       }
@@ -160,13 +177,47 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Turning sync off keeps the last uploaded totals in iCloud. Deleting cloud data keeps the ledger on each Mac."
+            "value": "Turning sync off keeps the last upload. Deleting cloud data keeps local ledgers."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "关闭同步后，iCloud 会保留上次上传的汇总。删除云端数据会保留每台 Mac 的本地账本。"
+            "value": "关闭同步会保留上次上传的汇总。删除只影响云端。"
+          }
+        }
+      }
+    },
+    "cloud.delete_data": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Data"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除数据"
+          }
+        }
+      }
+    },
+    "cloud.choose_delete_scope": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose which cloud data to delete"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择要删除的云端数据"
           }
         }
       }
@@ -1983,13 +2034,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estimates use USD API rates. For codex-auto-review, Tokenory uses a tokens.ci reference estimate. Neither represents your bill. Missing prices fill automatically. Recalculate to update existing amounts."
+            "value": "Estimates use USD API rates, with a tokens.ci reference rate for codex-auto-review. Refresh fills missing prices and previews changes to saved estimates."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "费用按美元 API 费率估算；codex-auto-review 使用 tokens.ci 参考估算。估算不代表实际账单。待计价记录自动补齐；更新已有金额请使用「重新计算已有估算」。"
+            "value": "费用按美元 API 费率估算，codex-auto-review 采用 tokens.ci 的参考费率。刷新会补齐待计价记录，并预览已有估算的变化。"
           }
         }
       }
@@ -2008,24 +2059,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "刷新费率"
-          }
-        }
-      }
-    },
-    "price.reestimate": {
-      "comment": "Tokenory UI: price.reestimate. Keep product names and technical IDs unchanged.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recalculate saved estimates…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重新计算已有估算…"
           }
         }
       }
@@ -2239,6 +2272,24 @@
         }
       }
     },
+    "price.refresh_fallback": {
+      "comment": "Tokenory UI: price.refresh_fallback. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rates couldn’t be refreshed. This preview uses saved rates."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "费率刷新失败，预览使用已保存的费率。"
+          }
+        }
+      }
+    },
     "price.refreshed": {
       "comment": "Tokenory UI: price.refreshed. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",
@@ -2246,13 +2297,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rates refreshed. Saved estimates are unchanged."
+            "value": "Rates refreshed."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "费率已刷新，已有估算保持不变。"
+            "value": "费率已刷新。"
           }
         }
       }
@@ -2390,13 +2441,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Local events use this time zone. Imports keep their original dates when the system time zone changes."
+            "value": "New local records follow your Mac’s time zone. Existing records and imports keep their archived dates."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "本地记录按此时区归档。系统时区变化时，导入记录仍保留原日期。"
+            "value": "新记录按 Mac 的系统时区归档。已有记录和导入记录保留原日期。"
           }
         }
       }
@@ -2462,13 +2513,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Save collection settings"
+            "value": "Save"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "保存采集设置"
+            "value": "保存"
           }
         }
       }
@@ -2480,13 +2531,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Collection settings saved."
+            "value": "Saved"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "采集设置已保存。"
+            "value": "已保存"
           }
         }
       }
@@ -2509,6 +2560,24 @@
         }
       }
     },
+    "data.backup_management": {
+      "comment": "Tokenory UI: data.backup_management. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage Backups"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份管理"
+          }
+        }
+      }
+    },
     "data.backup": {
       "comment": "Tokenory UI: data.backup. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",
@@ -2516,13 +2585,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Back up database…"
+            "value": "Create Backup"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "创建数据库备份…"
+            "value": "创建备份"
           }
         }
       }
@@ -2552,13 +2621,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Restore database backup…"
+            "value": "Restore from Backup"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "恢复数据库备份…"
+            "value": "从备份中恢复"
           }
         }
       }
@@ -2740,24 +2809,6 @@
         }
       }
     },
-    "import.format": {
-      "comment": "Tokenory UI: import.format. Keep product names and technical IDs unchanged.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Format"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "格式"
-          }
-        }
-      }
-    },
     "import.tokens_ci": {
       "comment": "Tokenory UI: import.tokens_ci. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",
@@ -2783,13 +2834,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose JSON file…"
+            "value": "Choose File"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "选择 JSON 文件…"
+            "value": "选择文件"
           }
         }
       }
@@ -3017,13 +3068,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Import history"
+            "value": "Imported"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "导入批次"
+            "value": "已导入"
           }
         }
       }
@@ -3172,42 +3223,6 @@
         }
       }
     },
-    "export.json": {
-      "comment": "Tokenory UI: export.json. Keep product names and technical IDs unchanged.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Export JSON…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导出 JSON…"
-          }
-        }
-      }
-    },
-    "export.csv": {
-      "comment": "Tokenory UI: export.csv. Keep product names and technical IDs unchanged.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Export CSV…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导出 CSV…"
-          }
-        }
-      }
-    },
     "export.scope_note": {
       "extractionState": "manual",
       "localizations": {
@@ -3307,6 +3322,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "仅导出本机账本中计入统计的记录，包含来源与计价依据。"
+          }
+        }
+      }
+    },
+    "export.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出"
           }
         }
       }
@@ -4034,7 +4066,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ tokens have no hourly timestamp"
+            "value": "%@ tokens could not be assigned to an hour"
           }
         },
         "zh-Hans": {
@@ -4094,13 +4126,6 @@
             "value": "未知提供方"
           }
         }
-      }
-    },
-    "settings.scan_paths": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Scan locations" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "采集位置" } }
       }
     },
     "settings.duplicate_path": {
@@ -4186,13 +4211,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Check for Updates…"
+            "value": "Check for Updates"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "检查更新…"
+            "value": "检查更新"
           }
         }
       }
@@ -5388,6 +5413,108 @@
         }
       }
     },
+    "turns.search_sort": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search and sort turns"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索与排序"
+          }
+        }
+      }
+    },
+    "turns.search_prompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search by project, title or turn ID"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索项目名、回合名或回合 ID"
+          }
+        }
+      }
+    },
+    "turns.search_empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching turns"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配的回合"
+          }
+        }
+      }
+    },
+    "turns.clear_search": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear search"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除搜索"
+          }
+        }
+      }
+    },
+    "turns.basis_summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throughput is generated tokens divided by total turn time. Overlapping tool waits count once. First-token wait comes from the client."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回合吞吐 = 生成 tokens ÷ 总耗时。并行工具等待只计一次。首 token 等待取自客户端记录。"
+          }
+        }
+      }
+    },
+    "turns.basis_estimate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ marks duration and throughput estimated from log timestamps."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ 表示按日志时间估算的耗时和吞吐。"
+          }
+        }
+      }
+    },
     "turns.basis": {
       "extractionState": "manual",
       "localizations": {
@@ -5991,6 +6118,142 @@
         }
       }
     },
+    "hud.dismiss.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Triple-click HUD"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "三击 HUD"
+          }
+        }
+      }
+    },
+    "hud.dismiss.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide HUD"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏 HUD"
+          }
+        }
+      }
+    },
+    "hud.dismiss.disable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn Off"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接关闭"
+          }
+        }
+      }
+    },
+    "hud.dismiss.seconds30": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide for 30 seconds"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏 30 秒"
+          }
+        }
+      }
+    },
+    "hud.dismiss.minute1": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide for 1 minute"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏 1 分钟"
+          }
+        }
+      }
+    },
+    "hud.dismiss.minutes5": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide for 5 minutes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏 5 分钟"
+          }
+        }
+      }
+    },
+    "hud.auto_hide": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-hide (30s)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动隐藏 (30s)"
+          }
+        }
+      }
+    },
+    "hud.dismiss.ignore": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignore"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "忽略"
+          }
+        }
+      }
+    },
     "hud.show": {
       "extractionState": "manual",
       "localizations": {
@@ -6021,23 +6284,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "隐藏 HUD"
-          }
-        }
-      }
-    },
-    "hud.metric": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Display"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示指标"
           }
         }
       }
@@ -6541,13 +6787,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saving…"
+            "value": "Saving"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "正在保存…"
+            "value": "保存中"
           }
         }
       }

@@ -6,8 +6,8 @@ DeviceCloudSync.swift: 私有 CloudKit 设备汇总、发布顺序、远端资�
 DeviceCloudErrors.xcstrings: 依照应用所选中英文显示同步与账号错误。
 LoginItemService.swift: 系统登录启动状态与操作。
 UpdateChecker.swift: Sparkle 更新检查、计划及按应用语言选择更新清单。
-HUDController.swift: 每 250 ms 跟随鼠标所在屏幕；不抢焦点的浮动面板留在桌面空间，按 visibleFrame 避让菜单栏和 Dock；关闭 HUD 时释放视图。
+HUDController.swift: 每 250 ms 跟随鼠标所在屏幕；不抢焦点的浮动面板留在桌面空间，按 visibleFrame 避让菜单栏和 Dock；开启自动隐藏后，30 秒无新用量时隐藏，新用量唤醒。三击按偏好关闭、暂时隐藏或忽略。隐藏时释放视图与音效。
 HUDAnimator.swift: 首次、跨日与指标变化静默落位；小步进采用进位缓动，大跨度使用限转滚动；新读数保留当前位置、速度与时钟，实际数字齿位驱动音效。
-HUDSound.swift: 本地 PCM 机械点击声、音量和静音；停止后释放音频执行。
+HUDSound.swift: 本地 PCM 机械点击声、音量和静音。滚动声与即时音量试听共用样本，分别停止。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md
