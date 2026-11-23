@@ -32,6 +32,20 @@ final class PresentationDataTests: XCTestCase {
         }
     }
 
+    func testOverviewDeviceSharesPartitionFastWithinEachSource() {
+        func shares(_ total: Double, _ amount: Double, _ other: Double, _ fast: Double, _ otherFast: Double) -> [Double] {
+            let pieces = OverviewShareSegments(total: total, amount: amount, other: other, fast: fast, otherFast: otherFast)
+            return [pieces.localStandard, pieces.localFast, pieces.otherStandard, pieces.otherFast]
+        }
+        XCTAssertEqual(shares(200, 120, 50, 30, 20), [0.30, 0.05, 0.15, 0.10])
+        XCTAssertEqual(shares(2, 1.25, 0.5, 0.375, 0.125), [0.25, 0.125, 0.1875, 0.0625])
+        XCTAssertEqual(shares(80, 80, 0, 80, 0), [0, 1, 0, 0])
+        XCTAssertEqual(shares(80, 80, 80, 80, 80), [0, 0, 0, 1])
+        XCTAssertEqual(shares(80, 80, 24, 80, 24), [0, 0.7, 0, 0.3])
+        XCTAssertEqual(shares(80, 80, 24, 0, 0), [0.7, 0, 0.3, 0])
+        XCTAssertEqual(shares(0, 0, 0, 0, 0), [0, 0, 0, 0])
+    }
+
     @MainActor func testInactivePanelDropdownUsesTheNativeButtonBackground() throws {
         let dropdown = WorkspaceDropdownTrigger(label: "Tool", value: "All tools", width: 126) {}
         let view = HStack(spacing: 0) {
@@ -66,6 +80,63 @@ final class PresentationDataTests: XCTestCase {
                                    (panel.blueComponent, native.blueComponent)] {
             XCTAssertEqual(actual, expected, accuracy: 0.06)
         }
+    }
+
+    @MainActor func testRankingBarPaintsBothFastPortionsAtFullHeight() throws {
+        let bar = OverviewShareBar(total: 200, amount: 120, other: 50, fast: 30, otherFast: 20, height: 5)
+            .frame(width: 200).environment(\.colorScheme, .light)
+        let view = HStack(spacing: 0) {
+            bar
+            Rectangle().fill(WorkspaceStyle.fastUsage(.light)).frame(width: 20, height: 5)
+        }
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+        XCTAssertEqual(bitmap.pixelsWide, 440)
+        XCTAssertEqual(bitmap.pixelsHigh, 10)
+        let fast = try XCTUnwrap(bitmap.colorAt(x: 420, y: 5)?.usingColorSpace(.sRGB))
+        for y in [1, 5, 8] {
+            // Pixel centers on both sides of each of the four source/mode boundaries.
+            for (x, expectsFast) in [(118, false), (121, true), (138, true), (141, false),
+                                     (198, false), (201, true), (226, true), (244, false)] {
+                let value = try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+                let distance = max(abs(value.redComponent - fast.redComponent),
+                                   abs(value.greenComponent - fast.greenComponent),
+                                   abs(value.blueComponent - fast.blueComponent))
+                XCTAssertEqual(distance < 0.025, expectsFast, "pixel (\(x), \(y)): \(value), compared with \(fast)")
+            }
+        }
+    }
+
+    func testOverviewCountsDistinctUsedModelsAndShowsUnknownDevicePrices() {
+        let used = summary(20, cost: 1), unpriced = summary(3, cost: nil), empty = summary(0, cost: nil)
+        let groups = [UsageGroup(key: "shared", summary: used), UsageGroup(key: "shared", summary: used),
+                      UsageGroup(key: "remote", summary: unpriced), UsageGroup(key: "unused", summary: empty)]
+        let report = UsageReport(revision: 1, summary: used, daily: [], clients: [], providers: [],
+                                 models: groups, details: [], hourly: nil)
+        XCTAssertEqual(report.overviewModelCount, 2)
+        XCTAssertEqual(OverviewDeviceRow(id: "r", name: "Mac", summary: unpriced).cost, usd(nil))
+        XCTAssertEqual(OverviewDeviceRow(id: "r", name: "Mac", summary: nil).cost, usd(0))
+        XCTAssertEqual(OverviewDeviceRow(id: "r", name: "Mac", summary: empty).cost, usd(0))
+    }
+
+    @MainActor
+    func testStackedDeviceChartSegmentsShareOneBaseline() throws {
+        let marks = DashboardChartMarks(
+            bars: [.init(frame: CGRect(x: 10, y: 70, width: 14, height: 30), emphasized: true),
+                   .init(frame: CGRect(x: 10, y: 25, width: 14, height: 45), emphasized: true, otherDevice: true)],
+            series: [], dots: [], frameSize: CGSize(width: 120, height: 100),
+            range: DashboardDateSpan(from: "2026-11-22", to: "2026-11-22"),
+            animateRangeChanges: false, takeEntrance: { false },
+            barColor: .systemBlue, lineColor: .systemPurple, otherDeviceColor: .systemTeal
+        )
+        let chart = DashboardChartMarks.PlotView()
+        chart.update(marks)
+        let layers = try XCTUnwrap(chart.layer?.sublayers?.first?.sublayers)
+        XCTAssertEqual(layers.count, 2)
+        XCTAssertEqual(layers[0].frame.maxY, layers[1].frame.minY)
+        XCTAssertEqual(layers[1].frame.maxY, 75)
+        XCTAssertNotEqual(layers[0].backgroundColor, layers[1].backgroundColor)
     }
 
     func testOdometerMovesHigherWheelsInTheCarryIntervalOnly() {

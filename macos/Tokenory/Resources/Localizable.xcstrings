@@ -171,6 +171,91 @@
         }
       }
     },
+    "cloud.overview.total": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合计"
+          }
+        }
+      }
+    },
+    "cloud.overview.localOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac only"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只看本机"
+          }
+        }
+      }
+    },
+    "cloud.overview.others": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other Macs"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他设备"
+          }
+        }
+      }
+    },
+    "cloud.overview.local": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机"
+          }
+        }
+      }
+    },
+    "cloud.overview.localValue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机 %@"
+          }
+        }
+      }
+    },
     "nav.overview": {
       "comment": "Tokenory UI: nav.overview. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",
@@ -6190,6 +6275,13 @@
             "value": "Fast"
           }
         }
+      }
+    },
+    "fast.value_accessibility": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Fast %@ tokens" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "Fast %@ tokens" } }
       }
     },
     "fast.tokens": {

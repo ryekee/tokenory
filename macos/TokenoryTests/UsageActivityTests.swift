@@ -19,6 +19,35 @@ final class UsageActivityTests: XCTestCase {
             ModelDay(date: "2026-11-03", client: "claude", model: "same-model", summary: summary(60, nil))
         ])
     }
+    func testMonthLabelsFavorFullMonthsAtBothEdges() {
+        let candidates = [
+            ActivityMonthLabelLayout.Candidate(week: 0, title: "Nov", width: 16, partial: true),
+            ActivityMonthLabelLayout.Candidate(week: 1, title: "Dec", width: 16, partial: false),
+            ActivityMonthLabelLayout.Candidate(week: 5, title: "Jan", width: 14, partial: false),
+            ActivityMonthLabelLayout.Candidate(week: 9, title: "Feb", width: 16, partial: false)
+        ]
+        let labels = ActivityMonthLabelLayout.resolve(candidates, weeks: 10, cell: 7)
+        XCTAssertNil(labels[0])
+        XCTAssertEqual(labels[1]?.title, "Dec")
+        XCTAssertEqual(labels[5]?.title, "Jan")
+        XCTAssertEqual(labels[9]?.title, "Feb")
+        XCTAssertEqual(labels[9]?.offset, -9)
+    }
+
+    func testMonthLabelsPreservePartialMonthWhenThereIsRoom() {
+        let candidates = [
+            ActivityMonthLabelLayout.Candidate(week: 0, title: "11月", width: 14, partial: true),
+            ActivityMonthLabelLayout.Candidate(week: 3, title: "12月", width: 14, partial: false),
+            ActivityMonthLabelLayout.Candidate(week: 7, title: "1月", width: 10, partial: false)
+        ]
+        for cell: CGFloat in [7, 10, 15] {
+            let labels = ActivityMonthLabelLayout.resolve(candidates, weeks: 8, cell: cell)
+            XCTAssertEqual(labels[0]?.title, "11月")
+            XCTAssertEqual(labels[3]?.title, "12月")
+            XCTAssertEqual(labels[7]?.title, "1月")
+        }
+    }
+
     func testCalendarFillsMissingDaysAndUsesMondayRows() {
         let activity = UsageActivity(report: report)
         XCTAssertEqual(activity.days.count, 4)

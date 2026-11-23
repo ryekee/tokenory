@@ -1,5 +1,5 @@
 // [INPUT]: Typed usage summaries and today-only turn statistics.
-// [OUTPUT]: Locale-aware formats, the shared Fast mark, and the three-column menu summary.
+// [OUTPUT]: Locale-aware formats, device legend, full-height source and Fast shares, and three-column menu summary.
 // [POS]: Shared native usage presentation; speed does not depend on dashboard filters.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -95,5 +95,134 @@ struct ErrorBanner: View {
                 Button { store.error = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel(L("action.dismiss_error"))
             }.padding(12).background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8)).padding(.top, 8)
         }
+    }
+}
+
+extension UsageReport {
+    var overviewModelCount: Int {
+        Set(models.lazy.filter { $0.summary.tokens > 0 }.map(\.key)).count
+    }
+}
+
+// IDs come from the device registry. Different Macs can share the same display name.
+struct OverviewDeviceRow: Identifiable {
+    let id: String
+    let name: String
+    let summary: UsageSummary?
+    var models: Int?
+
+    var tokens: String { (summary?.tokens ?? 0).formatted(.number.locale(Localization.locale)) }
+    var cost: String {
+        guard let summary, summary.tokens != 0 || summary.knownEstimatedCostUsd != nil || summary.unpricedTokens > 0 else { return usd(0) }
+        return (summary.unpricedTokens > 0 && summary.knownEstimatedCostUsd != nil ? "≈ " : "") + usd(summary.knownEstimatedCostUsd)
+    }
+}
+
+struct OverviewDeviceReadout: View {
+    let rows: [OverviewDeviceRow]
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 5) {
+            GridRow {
+                Color.clear.frame(width: 1, height: 1)
+                Text("Tokens").gridColumnAlignment(.trailing)
+                Text("USD").gridColumnAlignment(.trailing)
+                if rows.first?.models != nil { Text(L("overview.models")).gridColumnAlignment(.trailing) }
+            }.font(.caption2).foregroundStyle(WorkspaceStyle.subtext)
+            ForEach(rows) { row in
+                GridRow {
+                    Text(row.name).lineLimit(1).truncationMode(.middle)
+                    Text(row.tokens)
+                    Text(row.cost)
+                    if let models = row.models { Text(models.formatted(.number.locale(Localization.locale))) }
+                }
+                .fontWeight(row.id == "total" ? .semibold : .regular)
+                .accessibilityElement(children: .combine)
+            }
+        }.monospacedDigit().font(.caption)
+    }
+}
+
+struct OverviewDeviceLegend: View {
+    static let swatchWidth: CGFloat = 8
+    @Environment(\.colorScheme) private var scheme
+    var body: some View {
+        HStack(spacing: 10) {
+            swatch(WorkspaceStyle.localUsage, "cloud.overview.local")
+            swatch(WorkspaceStyle.otherDevices(scheme), "cloud.overview.others")
+        }
+    }
+    private func swatch(_ color: Color, _ key: String) -> some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 1).fill(color).frame(width: Self.swatchWidth, height: Self.swatchWidth)
+            Text(L(key))
+        }.font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+    }
+}
+
+struct OverviewLocalToggle: View {
+    @Binding var localOnly: Bool
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(L("cloud.overview.localOnly")).font(.callout)
+                .onTapGesture { localOnly.toggle() }
+                .accessibilityHidden(true)
+            Toggle(L("cloud.overview.localOnly"), isOn: $localOnly)
+                .toggleStyle(.switch).labelsHidden().controlSize(.small)
+        }
+        .padding(.horizontal, 10)
+        .fixedSize()
+    }
+}
+
+// Disjoint fractions of one ranking total, ordered by device and then service mode.
+struct OverviewShareSegments: Equatable {
+    let localStandard: Double
+    let localFast: Double
+    let otherStandard: Double
+    let otherFast: Double
+
+    init(total: Double, amount: Double, other: Double, fast: Double = 0, otherFast: Double = 0) {
+        let divisor = total > 0 ? total : 1
+        let used = min(max(0, amount), max(0, total))
+        let remote = min(max(0, other), used)
+        let local = used - remote
+        let allFast = min(max(0, fast), used)
+        let reportedRemoteFast = min(max(0, otherFast), allFast)
+        let remoteFast = min(reportedRemoteFast, remote)
+        let localFast = min(allFast - reportedRemoteFast, local)
+        localStandard = (local - localFast) / divisor
+        self.localFast = localFast / divisor
+        otherStandard = (remote - remoteFast) / divisor
+        self.otherFast = remoteFast / divisor
+    }
+}
+
+struct OverviewShareBar: View {
+    let total: Double
+    let amount: Double
+    let other: Double
+    var fast: Double = 0
+    var otherFast: Double = 0
+    var height: CGFloat = 4
+    var range: DashboardDateSpan? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let shares = OverviewShareSegments(total: total, amount: amount, other: other, fast: fast, otherFast: otherFast)
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            ZStack(alignment: .leading) {
+                Capsule().fill(WorkspaceStyle.localUsage.opacity(0.08))
+                HStack(spacing: 0) {
+                    Rectangle().fill(WorkspaceStyle.localUsage).frame(width: width * shares.localStandard)
+                    Rectangle().fill(WorkspaceStyle.fastUsage(scheme)).frame(width: width * shares.localFast)
+                    Rectangle().fill(WorkspaceStyle.otherDevices(scheme)).frame(width: width * shares.otherStandard)
+                    Rectangle().fill(WorkspaceStyle.fastUsage(scheme)).frame(width: width * shares.otherFast)
+                }.clipShape(Capsule())
+                    .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: shares)
+            }
+        }.frame(height: height).accessibilityHidden(true)
     }
 }

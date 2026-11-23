@@ -51,6 +51,13 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 
 ## Overview and trends
 
+- When several Macs contribute to the selected range, align the total Tokens, estimated cost and distinct model count on shared typographic baselines. Show the matching figure for this Mac directly below each total. Count a shared model once in the total. Use a desktop symbol and a localized “This Mac” label on the Tokens and cost detail rows. Keep the secondary model count numeric. Align the symbol, label and value with the Fast row. Hovering the primary or secondary number opens the device breakdown; trailing space and labels remain inactive.
+- Stack other Macs in mint above this Mac’s blue Tokens in both hourly and daily charts. Draw both sources as solid colors at rest. Plot the combined cost as a single pink line, with a legend sample the width of a Tokens swatch. A readout starts with the total, followed by this Mac and each participating Mac, with full Tokens and USD on the same row. Preserve unknown and partial prices.
+- Use the same local/other colors in tool, model and subagent bars. The Codex summary includes participating devices. Conversation details come from this Mac and their percentages use its subagent totals.
+- Place one “This Mac only” switch immediately before the date picker in the Overview toolbar. It scopes every panel and filter menu to the same device selection and defaults to all participating Macs. The activity calendar uses the same per-device readout as the usage chart.
+
+- Place inspection cards beside the pointer and keep its selected number, bar, day cell or point clear. Flip at the window edges. Measure a compact, stable card for the available series and device rows so its dimensions stay constant while traversing dates.
+
 - Place the Codex subagent panel after the tool and model rankings and before annual activity when the selected filters have confirmed Codex subagent activity. Show starts, Tokens and estimated cost together. Use horizontal bars and percentage labels for Tokens and cost. The summary compares with the filtered Codex total. Keep the per-conversation section collapsed. Its rows compare with the subagent total and reveal models and main-agent context on expansion.
 - The existing total includes confirmed subagent usage as part of its ledger total. Match the Coding patterns metrics with medium-weight title3 numbers. The subagent panel counts newly started threads on their start dates and shows tokens from effective usage records in the selected range. A verified start can display the card before any usage is recorded.
 
@@ -58,7 +65,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 - Default to the last 7 days. Align trend labels with the visible edges of the heading, body and chart. Keep chronological order fixed; do not offer a newest-first control.
 - Hide the active-day count when the selected range covers a single date.
 - Tool and model rankings share one panel and a top-level Tokens/cost segmented control. Place shared controls outside both child rankings. Use one-click segments for binary choices.
-- Each ranking bar shows the group's share of the selected metric. The amber end segment is the portion attributed to Fast. Use Fast tokens in Tokens mode and known estimated costs from Fast requests in Cost mode. Share one legend across both rankings and expose the Fast amount on row inspection.
+- Each ranking bar shows the group's share of the selected metric. Lay out this Mac’s standard and Fast amounts, then the other Macs’ standard and Fast amounts, as adjacent full-height segments. Both Fast segments use the theme’s yellow. Their widths come out of their respective source totals. Use Fast tokens in Tokens mode and known estimated costs from Fast requests in Cost mode. Share one legend across both rankings and expose the Fast amount on row inspection.
 - Daily values and trailing 30-day averages use the same raw totals. No-activity dates count as zero. Unknown costs remain gaps only in the affected series; never draw unknown costs as zero. Zero-token synthetic records with no cost count as zero. Zero-token records are not active days. Do not introduce erroneous breaks in averages.
 - Daily and 30-day average views use a segmented control. The two import formats use the same single-click choice pattern.
 
@@ -94,7 +101,8 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 ## Performance
 
 - Build the date picker's two visible months once at opening and reuse their labels when selecting dates.
-- Keep the date and scan buttons adjacent. Show report progress in the scan icon's existing space.
+- Keep the date and scan buttons adjacent. For a range refresh, use the scan icon's existing space after 300 ms, with a minimum visible duration of 500 ms. For a first Overview load that exceeds the delay, show static placeholders in the metric and chart positions.
+- On a range change, publish the local report, combined totals, and device breakdown together. Toolbar date changes keep the reading position. Selecting a day in the activity calendar takes the reader to the top for that day's report.
 - Keep the current content visible until the new date-range report arrives. Drive rolling readouts from one count with carry and borrow. For large changes, briefly fade to the final portion of the same count, then roll to the result. For unit changes, fade between the two formatted values. Move plot marks independently of axis layout. Bars start at zero after an empty range, and lines draw left to right. Empty results mount only the empty state. Respect Reduce Motion and reuse annual data across range changes.
 - If a report request fails, offer Retry for the current selection. Keep any previous results visible and identify their date range. A first-load failure replaces the loading indicator.
 - An empty Speed report shows one state with a date or filter action. In Overview, hide empty totals and rankings and show one state for the selected dates. Show the annual panels when their scope has records. Use inline text for a missing hourly breakdown or an empty management section.
