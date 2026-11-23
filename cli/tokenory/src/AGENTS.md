@@ -11,7 +11,7 @@ config.rs: 保存采集配置；读取扫描器实际默认路径，拒绝新添
 db.rs: 维护 SQLite schema、记录和备份；迁移/恢复包含独立回合表；一次升级仅备份一次，自动备份保留 3 份，预览保留 24 小时内最近 3 份。
 device_snapshot.rs: 从同一个 SQLite 读事务生成 `deviceUsageSnapshot`。空请求返回一台 Mac 全部有效历史的版本、账本时区、按日期/可用小时/工具/来源/供应商/模型的用量，及支持筛选的子代理启动计数。逐条记录、会话身份、标题及路径均不出账本。
 import.rs: 预览、提交和撤销历史导入。
-ipc.rs: 向原生应用提供 worker JSON 协议、默认采集路径、有效账本的已用模型、对话目录、按会话查标题、总览子代理卡及 codexTurns / turnAnalytics 查询。`dailySourceUsage` 接受空对象，一次返回全部日期的有效用量，每行仅有 date、client、source、tokens。
+ipc.rs: 向原生应用提供 worker JSON 协议、默认采集路径、有效账本的已用模型、对话目录、按会话查标题、总览子代理卡及 codexTurns / turnAnalytics 查询。`dailySourceUsage` 接受空对象，一次返回全部日期的有效用量，每行仅有 date、client、source、tokens。 `deviceUsageSnapshot` 接受 `stream: true`，按同一请求 ID 返回有序 UTF-8 分块及完成帧。旧单帧请求超过 64 MiB 时返回可恢复错误。
 lib.rs: 导出账本引擎模块。
 main.rs: 提供 CLI 命令和单写者锁；compact 回收空闲页。
 remote_pricing.rs: 拉取并校验官方远程费率表，保留最近一次有效修订。

@@ -1,6 +1,16 @@
+// [INPUT]: Native requests and the bundled worker's JSON lines.
+// [OUTPUT]: Typed results, complete device snapshots, events and worker errors.
+// [POS]: Process and request lifecycle at the native IPC boundary.
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
 
 actor EngineClient {
+    private struct SnapshotRequest {
+        let continuation: CheckedContinuation<Data, Error>
+        var data = Data()
+        var nextIndex = 0
+    }
+
     let events: AsyncStream<EngineEnvelope>
     private let eventSink: AsyncStream<EngineEnvelope>.Continuation
     private var process: Process?
@@ -8,6 +18,7 @@ actor EngineClient {
     private var outputPipe: Pipe?
     private var errorPipe: Pipe?
     private var pending: [String: CheckedContinuation<JSONValue, Error>] = [:]
+    private var pendingSnapshots: [String: SnapshotRequest] = [:]
     private var generation = UUID()
     private var lastDiagnostic = ""
     private let helper: URL
@@ -49,22 +60,47 @@ actor EngineClient {
     }
 
     func request(_ operation: String, payload: JSONValue = .object([:])) async throws -> JSONValue {
-        guard process?.isRunning == true, let input else { throw EngineError(code: "stopped", message: L("error.stopped")) }
-        let id = UUID().uuidString
-        var data = try JSONEncoder().encode(EngineRequest(id: id, operation: operation, payload: payload)); data.append(10)
+        let request = EngineRequest(id: UUID().uuidString, operation: operation, payload: payload)
         return try await withCheckedThrowingContinuation { continuation in
-            pending[id] = continuation
-            do { try input.write(contentsOf: data) }
-            catch { pending.removeValue(forKey: id)?.resume(throwing: error) }
-            Task { [weak self] in
-                try? await Task.sleep(for: .seconds(180))
-                await self?.expire(id)
-            }
+            pending[request.id] = continuation
+            do { try send(request) }
+            catch { pending.removeValue(forKey: request.id)?.resume(throwing: error) }
         }
     }
 
     func request<Result: Decodable & Sendable>(_ operation: String, payload: JSONValue = .object([:]), as type: Result.Type) async throws -> Result {
         try await request(operation, payload: payload).decode(type)
+    }
+
+    nonisolated func deviceUsageSnapshot() async throws -> DeviceUsageSnapshot {
+        let data = try await requestSnapshotData()
+        return try JSONDecoder().decode(DeviceUsageSnapshot.self, from: data)
+    }
+
+    private func requestSnapshotData() async throws -> Data {
+        try Task.checkCancellation()
+        let request = EngineRequest(id: UUID().uuidString, operation: "deviceUsageSnapshot", payload: .object(["stream": .bool(true)]))
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                pendingSnapshots[request.id] = SnapshotRequest(continuation: continuation)
+                do { try send(request) }
+                catch { pendingSnapshots.removeValue(forKey: request.id)?.continuation.resume(throwing: error) }
+            }
+        } onCancel: {
+            Task { await self.cancelSnapshot(request.id) }
+        }
+    }
+
+    private func send(_ request: EngineRequest) throws {
+        guard process?.isRunning == true, let input else { throw EngineError(code: "stopped", message: L("error.stopped")) }
+        var data = try JSONEncoder().encode(request)
+        data.append(10)
+        try input.write(contentsOf: data)
+        let id = request.id
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(180))
+            await self?.expire(id)
+        }
     }
 
     func stop() async {
@@ -101,21 +137,55 @@ actor EngineClient {
         do {
             let message = try JSONDecoder().decode(EngineEnvelope.self, from: data)
             guard message.version == 1 else { throw EngineError(code: "version", message: L("error.version")) }
-            if let id = message.id, let continuation = pending.removeValue(forKey: id) {
+            if let id = message.id, pendingSnapshots[id] != nil {
+                try receiveSnapshot(message, id: id)
+            } else if let id = message.id, let continuation = pending.removeValue(forKey: id) {
                 if let error = message.error { continuation.resume(throwing: error) }
                 else if let result = message.result { continuation.resume(returning: result) }
                 else { continuation.resume(throwing: EngineError(code: "protocol", message: L("error.protocol"))) }
             } else if message.event != nil { eventSink.yield(message) }
         } catch { protocolFailed(error.localizedDescription, generation: token) }
     }
+
+    private func receiveSnapshot(_ message: EngineEnvelope, id: String) throws {
+        let malformed = EngineError(code: "protocol", message: L("error.protocol"))
+        guard message.event == nil else { throw malformed }
+        if let chunk = message.snapshotChunk {
+            guard message.result == nil, message.error == nil, pendingSnapshots[id]?.nextIndex == chunk.index,
+                  !chunk.json.isEmpty, chunk.json.utf8.count <= 1024 * 1024 else { throw malformed }
+            pendingSnapshots[id]?.data.append(contentsOf: chunk.json.utf8)
+            pendingSnapshots[id]?.nextIndex += 1
+        } else if let error = message.error, message.result == nil {
+            pendingSnapshots.removeValue(forKey: id)?.continuation.resume(throwing: error)
+        } else {
+            guard let transfer = pendingSnapshots[id], transfer.nextIndex > 0, message.error == nil,
+                  message.result?["chunks"].int == Int64(transfer.nextIndex) else { throw malformed }
+            pendingSnapshots.removeValue(forKey: id)
+            transfer.continuation.resume(returning: transfer.data)
+        }
+    }
+
     private func diagnostic(_ data: Data, generation token: UUID) {
         guard token == generation else { return }
         lastDiagnostic = String((lastDiagnostic + String(decoding: data, as: UTF8.self)).suffix(3000))
     }
-    private func expire(_ id: String) { pending.removeValue(forKey: id)?.resume(throwing: EngineError(code: "timeout", message: L("error.timeout"))) }
+    private func cancelSnapshot(_ id: String) {
+        pendingSnapshots.removeValue(forKey: id)?.continuation.resume(throwing: CancellationError())
+    }
+    private func expire(_ id: String) {
+        let error = EngineError(code: "timeout", message: L("error.timeout"))
+        pending.removeValue(forKey: id)?.resume(throwing: error)
+        pendingSnapshots.removeValue(forKey: id)?.continuation.resume(throwing: error)
+    }
+    private func failPending(_ error: EngineError) {
+        for continuation in pending.values { continuation.resume(throwing: error) }
+        pending.removeAll()
+        for request in pendingSnapshots.values { request.continuation.resume(throwing: error) }
+        pendingSnapshots.removeAll()
+    }
     private func protocolFailed(_ reason: String, generation token: UUID) {
         guard token == generation else { return }
-        for continuation in pending.values { continuation.resume(throwing: EngineError(code: "protocol", message: reason)) }; pending.removeAll()
+        failPending(EngineError(code: "protocol", message: reason))
         eventSink.yield(EngineEnvelope(version: 1, id: nil, result: nil, error: nil, event: "stopped", payload: nil, message: reason, revision: nil))
         process?.terminate()
     }
@@ -123,7 +193,7 @@ actor EngineClient {
         guard token == generation else { return }
         input = nil; outputPipe?.fileHandleForReading.readabilityHandler = nil; errorPipe?.fileHandleForReading.readabilityHandler = nil
         let reason = status == 0 ? L("status.stopped") : LF("error.exit", status, lastDiagnostic)
-        for continuation in pending.values { continuation.resume(throwing: EngineError(code: "stopped", message: reason)) }; pending.removeAll()
+        failPending(EngineError(code: "stopped", message: reason))
         eventSink.yield(EngineEnvelope(version: 1, id: nil, result: nil, error: nil, event: "stopped", payload: nil, message: reason, revision: nil))
     }
 }
