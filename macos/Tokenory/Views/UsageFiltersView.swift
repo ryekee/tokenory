@@ -8,6 +8,7 @@ struct UsageFiltersView: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.colorScheme) private var scheme
     let showsSource: Bool
+    var localOnly = true
 
     var body: some View {
         HStack(spacing: 8) {
@@ -41,21 +42,28 @@ struct UsageFiltersView: View {
         Group {
             WorkspaceDropdown(
                 label: L("field.tool"), selection: dimension(\.client),
-                options: [""] + rankedKeys(store.catalog?.clients), width: 104, flexibleWidth: true,
+                options: [""] + available(store.catalog?.clients, store.cloud.remoteCatalog?.clients), width: 104, flexibleWidth: true,
                 title: { $0.isEmpty ? L("filter.tools") : clientName($0) },
                 brand: { $0.isEmpty ? nil : ($0, .tool) }
             )
             WorkspaceDropdown(
                 label: L("field.provider"), selection: dimension(\.provider),
-                options: [""] + rankedKeys(store.catalog?.providers), width: 104, flexibleWidth: true,
+                options: [""] + available(store.catalog?.providers, store.cloud.remoteCatalog?.providers), width: 104, flexibleWidth: true,
                 title: { $0.isEmpty ? L("filter.providers") : $0 },
                 brand: { $0.isEmpty ? nil : ($0, .provider) }
             )
             WorkspaceModelDropdown(
-                selection: dimension(\.model), models: store.catalog?.models.map(\.key) ?? [],
+                selection: dimension(\.model), models: available(store.catalog?.models, store.cloud.remoteCatalog?.models),
                 width: 140, flexibleWidth: true
             )
         }
+    }
+
+    private func available(_ local: [UsageGroup]?, _ remote: [UsageGroup]?) -> [String] {
+        let keys = rankedKeys(local)
+        guard !localOnly else { return keys }
+        let localKeys = Set(keys)
+        return keys + rankedKeys(remote).filter { !localKeys.contains($0) }
     }
 
     private func rankedKeys(_ groups: [UsageGroup]?) -> [String] {

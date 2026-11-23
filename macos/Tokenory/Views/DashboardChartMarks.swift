@@ -1,4 +1,4 @@
-// [INPUT]: Plot-local bar frames, line segments, dots, and committed date range.
+// [INPUT]: Plot-local device segments, cost curve, dots and committed date range.
 // [OUTPUT]: Core Animation marks with bounded bar growth and a horizontal line reveal.
 // [POS]: AppKit drawing surface under the dashboard chart's hover controls.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
@@ -10,6 +10,7 @@ struct DashboardChartMarks: NSViewRepresentable {
     struct Bar {
         let frame: CGRect
         let emphasized: Bool
+        var otherDevice = false
     }
 
     struct Dot: Equatable {
@@ -26,6 +27,7 @@ struct DashboardChartMarks: NSViewRepresentable {
     let takeEntrance: () -> Bool
     let barColor: NSColor
     let lineColor: NSColor
+    var otherDeviceColor: NSColor? = nil
 
     func makeNSView(context: Context) -> PlotView { PlotView() }
 
@@ -176,10 +178,11 @@ struct DashboardChartMarks: NSViewRepresentable {
         private func updateColors(_ marks: DashboardChartMarks) {
             effectiveAppearance.performAsCurrentDrawingAppearance {
                 let accent = marks.barColor.cgColor
+                let other = (marks.otherDeviceColor ?? marks.barColor).cgColor
                 let cost = marks.lineColor.cgColor
                 for (bar, layer) in zip(marks.bars, barLayers) {
-                    layer.backgroundColor = accent
-                    layer.opacity = bar.emphasized ? 0.7 : 0.25
+                    layer.backgroundColor = bar.otherDevice ? other : accent
+                    layer.opacity = bar.emphasized ? 1 : 0.35
                 }
                 line.strokeColor = cost
                 for dot in dotLayers { dot.backgroundColor = cost }

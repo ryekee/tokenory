@@ -13,25 +13,25 @@ struct UsageHabitsView: View {
         WorkspacePanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(L("habits.title")).font(.headline)
+                    Text(L("habits.title")).font(.headline).foregroundStyle(WorkspaceStyle.text)
                     Spacer()
-                    Text(L("activity.year")).font(.caption).foregroundStyle(.secondary)
+                    Text(L("activity.year")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                 }
                 if let peak = activity.peak, let weekday = activity.topWeekday {
                     let total = activity.weekdayTokens.reduce(0, +)
                     HStack(alignment: .top, spacing: 24) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(L("activity.weekday")).font(.caption).foregroundStyle(.secondary)
+                            Text(L("activity.weekday")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                             Text(weekdayName(weekday)).font(.title3.weight(.medium))
                             Text(compactTokens(activity.weekdayTokens[weekday]) + " tokens · " + LF("habits.share", (Double(activity.weekdayTokens[weekday]) / Double(total)).formatted(.percent.precision(.fractionLength(0)))))
-                                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                                .font(.caption).foregroundStyle(WorkspaceStyle.subtext).monospacedDigit()
                         }.frame(maxWidth: .infinity, alignment: .leading)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(L("activity.peak")).font(.caption).foregroundStyle(.secondary)
+                            Text(L("activity.peak")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                             Text(compactTokens(peak.tokens) + " tokens").font(.title3.weight(.medium)).monospacedDigit()
-                            Text(Localization.day(peak.key) + " · " + usd(peak.cost)).font(.caption).foregroundStyle(.secondary)
+                            Text(Localization.day(peak.key) + " · " + usd(peak.cost)).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                         }.frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    }.foregroundStyle(WorkspaceStyle.text)
                 }
                 Divider()
                 let layout = horizontal
@@ -44,7 +44,7 @@ struct UsageHabitsView: View {
                         .frame(maxWidth: .infinity)
                     if let hourly = report.hourly {
                         if hourly.buckets.isEmpty {
-                            Text(L("usage.no_hourly")).font(.caption).foregroundStyle(.secondary)
+                            Text(L("usage.no_hourly")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         } else {
                             let lookup = Dictionary(uniqueKeysWithValues: hourly.buckets.map { ($0.key, $0.summary.tokens) })
@@ -69,15 +69,16 @@ private struct HabitsDistribution: View {
     let labels: [String]
     let fullLabels: [String]
     @State private var selected: Int?
+    @State private var tooltipPointer = TooltipPointer()
     @Environment(\.colorScheme) private var scheme
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(title).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
             Chart(values.indices, id: \.self) { index in
                 RectangleMark(xStart: .value("Period", Double(index) - 0.36),
                               xEnd: .value("Period", Double(index) + 0.36),
                               yStart: .value("Tokens", 0), yEnd: .value("Tokens", values[index]))
-                    .foregroundStyle(Color.accentColor.opacity(selected == index || values[index] == values.max() ? 0.8 : 0.35))
+                    .foregroundStyle(WorkspaceStyle.localUsage.opacity(selected == index || values[index] == values.max() ? 1 : 0.35))
                     .cornerRadius(2)
                     .accessibilityLabel(fullLabels[index])
                     .accessibilityValue(values[index].formatted(.number.locale(Localization.locale)) + " tokens")
@@ -93,10 +94,16 @@ private struct HabitsDistribution: View {
                 GeometryReader { geometry in
                     if let plot = proxy.plotFrame {
                         let frame = geometry[plot]
+                        let mark = selected.flatMap { index -> CGRect? in
+                            guard let center = proxy.position(forX: Double(index)) else { return nil }
+                            let bar = frame.width / CGFloat(values.count) * 0.72
+                            return CGRect(x: frame.minX + center - bar / 2, y: frame.minY, width: bar, height: frame.height)
+                        }
                         Rectangle().fill(.clear).contentShape(Rectangle())
                             .onContinuousHover { phase in
                                 switch phase {
                                 case .active(let location):
+                                    tooltipPointer.move(to: location)
                                     if frame.contains(location), let x: Double = proxy.value(atX: location.x - frame.minX) {
                                         let index = Int(x.rounded())
                                         selected = values.indices.contains(index) ? index : nil
@@ -104,16 +111,19 @@ private struct HabitsDistribution: View {
                                 case .ended: selected = nil
                                 }
                             }
-                        if let selected {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(fullLabels[selected]).fontWeight(.medium)
-                                HStack { Text("Tokens").foregroundStyle(.secondary); Spacer(); Text(values[selected].formatted(.number.locale(Localization.locale))).monospacedDigit() }
-                            }.font(.caption).padding(12).frame(width: 220)
-                                .background(WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: 8))
-                                .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
-                                .offset(x: min(max(0, (proxy.position(forX: selected) ?? 0) - 110), max(0, geometry.size.width - 220)), y: -15)
-                                .allowsHitTesting(false)
-                        }
+                            .selectedTooltip(avoiding: mark, pointer: tooltipPointer) {
+                                if let selected {
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(fullLabels[selected]).fontWeight(.medium)
+                                        HStack(spacing: 8) {
+                                            Text("Tokens").foregroundStyle(WorkspaceStyle.subtext)
+                                            Spacer(minLength: 0)
+                                            Text(values[selected].formatted(.number.locale(Localization.locale))).monospacedDigit()
+                                        }
+                                    }.font(.caption).lineLimit(1).frame(width: max(87,
+                                        CursorTooltipLayout.textWidth((values.max() ?? 0).formatted(.number.locale(Localization.locale))) + 51))
+                                }
+                            }
                     }
                 }
             }.frame(height: 85)

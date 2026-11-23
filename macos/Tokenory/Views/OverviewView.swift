@@ -1,4 +1,4 @@
-// [INPUT]: Selected-range report and independently loaded annual activity.
+// [INPUT]: Selected-range and annual reports for this Mac and participating devices.
 // [OUTPUT]: Rolling totals, independent Codex subagent card, rankings, range charts, and annual activity.
 // [POS]: Native overview composition; disclosure keeps detailed caveats off the canvas.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
@@ -6,6 +6,9 @@ import SwiftUI
 
 private struct CodexSubagentsView: View {
     let report: CodexSubagentReport
+    let local: CodexSubagentReport?
+    let hasRemote: Bool
+    let remote: [CodexSubagentReport]
     let codexSummary: UsageSummary?
     @Environment(\.colorScheme) private var colorScheme
     private let metricFont = Font.title3.weight(.medium).monospacedDigit()
@@ -24,8 +27,9 @@ private struct CodexSubagentsView: View {
         WorkspacePanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text(L("subagents.title")).font(.headline)
+                    Text(L("subagents.title")).font(.headline).foregroundStyle(WorkspaceStyle.text)
                     Spacer()
+                    if hasRemote { OverviewDeviceLegend() }
                     WorkspaceInfoPopover(title: L("subagents.basis")) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(L("subagents.count_help"))
@@ -48,15 +52,15 @@ private struct CodexSubagentsView: View {
                         summaryMetrics
                     }
                 }
-                if !report.conversations.isEmpty {
+                if let local, !local.conversations.isEmpty {
                     Divider()
                     DisclosureGroup(L("subagents.conversations")) {
                         VStack(spacing: 0) {
-                            ForEach(report.conversations) { conversation in
+                            ForEach(local.conversations) { conversation in
                                 CodexSubagentConversationView(
                                     conversation: conversation,
-                                    totalTokens: report.tokens,
-                                    totalCost: report.cost
+                                    totalTokens: local.tokens,
+                                    totalCost: local.cost
                                 )
                             }
                         }
@@ -69,9 +73,14 @@ private struct CodexSubagentsView: View {
 
     private var startedMetric: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(L("subagents.started")).font(.caption).foregroundStyle(.secondary)
+            Text(L("subagents.started")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
             Text(report.starts.formatted(.number.locale(Localization.locale)))
                 .font(metricFont)
+            if hasRemote {
+                OverviewShareBar(total: Double(report.starts), amount: Double(report.starts),
+                                 other: remote.reduce(0) { $0 + Double($1.starts) })
+                    .frame(width: 86)
+            }
         }
         .accessibilityElement(children: .combine)
     }
@@ -82,22 +91,25 @@ private struct CodexSubagentsView: View {
                 title: L("usage.tokens"),
                 value: report.tokens.formatted(.number.locale(Localization.locale)),
                 share: tokensShare,
+                otherShare: subagentShare(remote.reduce(0) { $0 + Double($1.tokens) }, of: codexSummary.map { Double($0.tokens) }),
                 partial: false,
-                color: .accentColor
+                color: WorkspaceStyle.localUsage
             )
             shareMetric(
                 title: L("cost.estimate"),
                 value: subagentCostText(report.cost),
                 share: costShare,
+                otherShare: subagentShare(remote.compactMap { $0.cost?.knownEstimatedCostUsd }.reduce(0, +),
+                                          of: codexSummary?.knownEstimatedCostUsd),
                 partial: partialCost,
                 color: WorkspaceStyle.costColor(colorScheme)
             )
         }
     }
 
-    private func shareMetric(title: String, value: String, share: Double?, partial: Bool, color: Color) -> some View {
+    private func shareMetric(title: String, value: String, share: Double?, otherShare: Double?, partial: Bool, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(title).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(value)
                     .font(metricFont)
@@ -106,10 +118,14 @@ private struct CodexSubagentsView: View {
                 Spacer(minLength: 2)
                 Text(subagentShareText(share, partial: partial))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(WorkspaceStyle.subtext)
                     .monospacedDigit()
             }
-            SubagentShareBar(share: share, color: color)
+            if hasRemote {
+                OverviewShareBar(total: 1, amount: share ?? 0, other: otherShare ?? 0)
+            } else {
+                SubagentShareBar(share: share, color: color)
+            }
         }
         .frame(minWidth: 165, maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
@@ -185,7 +201,7 @@ private struct CodexSubagentConversationView: View {
                         Text(L("subagents.main")).fontWeight(.medium)
                         if let turns = conversation.mainTurns {
                             Text(LF("subagents.main_turns", turns.formatted(.number.locale(Localization.locale))))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(WorkspaceStyle.subtext)
                         }
                         Spacer(minLength: 8)
                         if let tokens = conversation.mainTokens {
@@ -203,7 +219,7 @@ private struct CodexSubagentConversationView: View {
                     Text(title).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 8)
                     Text(LF("subagents.started_value", conversation.starts.formatted(.number.locale(Localization.locale))))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(WorkspaceStyle.subtext)
                 }
                 HStack(alignment: .top, spacing: 20) {
                     conversationMetric(
@@ -211,7 +227,7 @@ private struct CodexSubagentConversationView: View {
                         value: conversation.tokens.formatted(.number.locale(Localization.locale)),
                         share: tokensShare,
                         partial: false,
-                        color: .accentColor
+                        color: WorkspaceStyle.localUsage
                     )
                     conversationMetric(
                         title: L("cost.estimate"),
@@ -231,11 +247,11 @@ private struct CodexSubagentConversationView: View {
     private func conversationMetric(title: String, value: String, share: Double?, partial: Bool, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(title).foregroundStyle(.secondary)
+                Text(title).foregroundStyle(WorkspaceStyle.subtext)
                 Text(value).monospacedDigit()
                 Spacer(minLength: 2)
                 Text(subagentShareText(share, partial: partial))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(WorkspaceStyle.subtext)
                     .monospacedDigit()
             }
             .font(.caption)
@@ -252,17 +268,17 @@ private struct CodexSubagentConversationView: View {
             HStack {
                 Text(name).fontWeight(.medium)
                 Spacer()
-                Text("—").foregroundStyle(.secondary)
+                Text("—").foregroundStyle(WorkspaceStyle.subtext)
             }
             .font(.caption)
         } else {
             ForEach(agent.models) { model in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(name).fontWeight(.medium)
-                    Text(model.model).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Text(model.model).foregroundStyle(WorkspaceStyle.subtext).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 8)
                     Text(model.tokens.formatted(.number.locale(Localization.locale))).monospacedDigit()
-                    Text(subagentCostText(model.cost)).monospacedDigit().foregroundStyle(.secondary)
+                    Text(subagentCostText(model.cost)).monospacedDigit().foregroundStyle(WorkspaceStyle.subtext)
                 }
                 .font(.caption)
             }
@@ -272,14 +288,28 @@ private struct CodexSubagentConversationView: View {
 
 struct OverviewView: View {
     let report: UsageReport
+    let localOnly: Bool
     let isActive: Bool
     let openDatePicker: () -> Void
     @Environment(UsageStore.self) private var store
     @Environment(\.colorScheme) private var colorScheme
     @State private var rankingMetric: UsageMetric = .tokens
     @State private var previousRange: (UsageDateRange, String?, String?)?
-    @State private var scrolledAwayFromTop = false
+    @State private var calendarDrillDown: String?
 
+    private var overview: UsageReport { localOnly ? report : (store.combinedOverview ?? report) }
+    private var localAtSync: UsageReport { localOnly ? report : (store.cloudLocalOverview ?? report) }
+    private var remoteReports: [String: UsageReport] { localOnly ? [:] : store.remoteOverviewReports }
+    private var multiDevice: Bool { !remoteReports.isEmpty && store.combinedOverview != nil }
+    private var totalRows: [OverviewDeviceRow] {
+        func row(_ id: String, _ name: String, _ source: UsageReport) -> OverviewDeviceRow {
+            OverviewDeviceRow(id: id, name: name, summary: source.summary, models: source.overviewModelCount)
+        }
+        return [row("total", L("cloud.overview.total"), overview), row("local", store.localDeviceName, localAtSync)]
+            + remoteReports.keys.sorted().compactMap { id in
+                remoteReports[id].map { row("remote:" + id, store.deviceName(id), $0) }
+            }
+    }
     private var reportFilter: UsageFilter { store.reportFilter ?? store.filter }
     private var range: DashboardDateSpan? {
         isActive ? DashboardDateSpan(from: reportFilter.from, to: reportFilter.to) : nil
@@ -294,20 +324,22 @@ struct OverviewView: View {
                         LazyVStack(alignment: .leading, spacing: 20) {
                             if previousRange != nil {
                                 Button { restoreRange() } label: { Label(L("overview.back"), systemImage: "arrow.left") }
-                                    .buttonStyle(.plain).foregroundStyle(Color.accentColor).font(.caption)
+                                    .buttonStyle(.plain).foregroundStyle(WorkspaceStyle.selection).font(.caption)
                             }
                             WorkspacePanel {
                                 VStack(alignment: .leading, spacing: 20) {
-                                    if report.summary.recordCount > 0 {
+                                    if overview.summary.recordCount > 0 {
                                         totals
-                                        TokenMixView(tokens: report.summary.tokenBreakdown, range: range)
+                                        TokenMixView(tokens: overview.summary.tokenBreakdown, range: range)
                                         Divider()
                                     }
-                                    UsageTrendChart(report: report, filter: reportFilter,
-                                                    animateRangeChanges: isActive, openDatePicker: openDatePicker)
+                                    UsageTrendChart(report: overview, localReport: localAtSync,
+                                                    remoteReports: remoteReports,
+                                                    localName: store.localDeviceName, deviceName: store.deviceName,
+                                                    filter: reportFilter, animateRangeChanges: isActive, openDatePicker: openDatePicker)
                                 }
                             }
-                            if report.summary.recordCount > 0 {
+                            if overview.summary.recordCount > 0 {
                                 let layout = geometry.size.width >= 720
                                     ? AnyLayout(HStackLayout(alignment: .top, spacing: 18))
                                     : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
@@ -316,52 +348,61 @@ struct OverviewView: View {
                                         HStack(spacing: 12) {
                                             Picker(L("overview.sort"), selection: $rankingMetric) {
                                                 ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
-                                            }.labelsHidden().pickerStyle(.segmented).fixedSize()
+                                            }.labelsHidden().pickerStyle(.segmented).tint(WorkspaceStyle.selection).fixedSize()
                                             Spacer()
-                                            if rankingMetric.fastAmount(in: report.summary) > 0 {
+                                            if multiDevice { OverviewDeviceLegend() }
+                                            if rankingMetric.fastAmount(in: overview.summary) > 0 {
                                                 HStack(spacing: 5) {
                                                     Capsule().fill(WorkspaceStyle.fastUsage(colorScheme)).frame(width: 10, height: 3)
                                                         .accessibilityHidden(true)
-                                                    Text(L("fast.title")).font(.caption).foregroundStyle(.secondary)
+                                                    Text(L("fast.title")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                                                 }
                                             }
                                         }
                                         Divider()
                                         layout {
-                                            UsageRankingView(groups: report.clients, kind: .tool, metric: rankingMetric, range: range)
-                                            UsageRankingView(groups: report.models, kind: .model, metric: rankingMetric, range: range)
+                                            UsageRankingView(groups: overview.clients, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.clients), by: \.key), kind: .tool, metric: rankingMetric, range: range)
+                                            UsageRankingView(groups: overview.models, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.models), by: \.key), kind: .model, metric: rankingMetric, range: range)
                                         }
                                     }
                                 }
                             }
-                            if let subagents = report.codexSubagents, subagents.hasActivity {
-                                CodexSubagentsView(report: subagents, codexSummary: report.clients.first { $0.key == "codex" }?.summary)
+                            if let subagents = overview.codexSubagents, subagents.hasActivity {
+                                CodexSubagentsView(report: subagents,
+                                                  local: report.codexSubagents,
+                                                  hasRemote: multiDevice,
+                                                  remote: remoteReports.values.compactMap(\.codexSubagents),
+                                                  codexSummary: overview.clients.first { $0.key == "codex" }?.summary)
                             }
-                            if let activity = store.activity, !activity.daily.isEmpty, let calendar = store.activityCalendar {
-                                UsageActivityView(report: activity, activity: calendar) { day in
+                            if let activity = localOnly ? store.activity : (store.combinedActivity ?? store.activity), !activity.daily.isEmpty,
+                               let calendar = localOnly ? store.activityCalendar : (store.combinedActivityCalendar ?? store.activityCalendar) {
+                                let hasRemote = !localOnly && store.combinedActivity != nil && !store.remoteActivityReports.isEmpty
+                                UsageActivityView(report: activity, activity: calendar, showsDeviceBreakdown: hasRemote) { day in
+                                    if reportFilter.from == day, reportFilter.to == day, store.filter == reportFilter {
+                                        proxy.scrollTo("overview-top", anchor: .top)
+                                        return
+                                    }
                                     if previousRange == nil { previousRange = (store.dateRange, store.filter.from, store.filter.to) }
+                                    calendarDrillDown = day
                                     store.dateRange = .custom
                                     var filter = store.filter; filter.from = day; filter.to = day; filter.offset = 0
                                     store.filter = filter
                                 }
                                 UsageHabitsView(report: activity, activity: calendar, horizontal: geometry.size.width >= 760)
-                                UsageHistoryChart(report: activity)
+                                UsageHistoryChart(report: activity, localOnly: localOnly || !hasRemote)
                             }
                         }.padding(.horizontal, 22).padding(.bottom, 22).padding(.top, 4)
                     }
                 }
-                .onScrollGeometryChange(for: Bool.self) {
-                    $0.contentOffset.y + $0.contentInsets.top > 8
-                } action: { _, away in
-                    scrolledAwayFromTop = away
-                }
-                .onChange(of: reportFilter) { old, new in
-                    if scrolledAwayFromTop, old.from != new.from || old.to != new.to {
+                .onChange(of: reportFilter) { _, new in
+                    if let day = calendarDrillDown, new.from == day, new.to == day {
                         proxy.scrollTo("overview-top", anchor: .top)
                     }
+                    calendarDrillDown = nil
                 }
             }
         }
+        .cursorTooltipSurface()
     }
     private func restoreRange() {
         guard let previousRange else { return }
@@ -370,62 +411,127 @@ struct OverviewView: View {
         store.filter = filter; store.updateDateRange(); self.previousRange = nil
     }
     private var totals: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 28) { mainTotals; secondaryTotals }
-                VStack(alignment: .leading, spacing: 18) { mainTotals; secondaryTotals }
-            }
-            if let fastTokens = report.summary.fastTokens, fastTokens > 0 {
-                FastModeMark(title: LF("fast.tokens", compactTokens(fastTokens)), helpText: L("fast.tokens_help"))
+        let fields = totalFields
+        return ViewThatFits(in: .horizontal) {
+            totalsGrid(fields)
+            VStack(alignment: .leading, spacing: 14) {
+                totalsGrid(Array(fields.prefix(2)))
+                totalsGrid(Array(fields.dropFirst(2)))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
-    private var mainTotals: some View {
-        HStack(alignment: .top, spacing: 28) {
-            metric(L("usage.tokens"), compactTokens(report.summary.tokens), amount: report.summary.tokens, large: true)
-                .help(report.summary.tokens.formatted(.number.locale(Localization.locale)))
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 3) {
-                    Text(L(report.summary.costStatus == "partial" ? "cost.known" : "cost.estimate"))
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    WorkspaceInfoPopover(title: L("overview.cost_info")) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(L("overview.cost_help"))
-                            if report.summary.unpricedTokens > 0 {
-                                Text(LF("usage.unpriced", compactTokens(report.summary.unpricedTokens)))
-                            }
-                            if let partialDays = report.summary.partialDays, partialDays > 0 {
-                                Text(LF("usage.partial_days", partialDays))
-                            }
-                        }
-                        .padding(16)
-                        .frame(width: 280, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+
+    private struct TotalField: Identifiable {
+        let id: String
+        let value: String
+        let amount: Double?
+        let local: String?
+        var primary = false
+        var explainsCost = false
+    }
+
+    private var totalFields: [TotalField] {
+        let summary = overview.summary
+        var fields = [
+            TotalField(id: "usage.tokens", value: compactTokens(summary.tokens), amount: Double(summary.tokens),
+                       local: compactTokens(localAtSync.summary.tokens), primary: true),
+            TotalField(id: summary.costStatus == "partial" ? "cost.known" : "cost.estimate",
+                       value: usd(summary.knownEstimatedCostUsd), amount: summary.knownEstimatedCostUsd,
+                       local: usd(localAtSync.summary.knownEstimatedCostUsd), primary: true, explainsCost: true)
+        ]
+        if reportFilter.from == nil || reportFilter.from != reportFilter.to {
+            fields.append(TotalField(id: "overview.active_days", value: summary.activeDays.formatted(),
+                                     amount: Double(summary.activeDays), local: nil))
+        }
+        let count = overview.overviewModelCount
+        fields.append(TotalField(id: "overview.models", value: count.formatted(), amount: Double(count),
+                                 local: localAtSync.overviewModelCount.formatted()))
+        return fields
+    }
+
+    private func totalsGrid(_ fields: [TotalField]) -> some View {
+        Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 5) {
+            GridRow(alignment: .firstTextBaseline) {
+                ForEach(fields) { field in
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text(L(field.id)).font(.subheadline).foregroundStyle(WorkspaceStyle.subtext)
+                        if field.explainsCost { costInfo }
                     }
                 }
-                DashboardRollingValue(text: usd(report.summary.knownEstimatedCostUsd), value: report.summary.knownEstimatedCostUsd,
-                                      range: range, style: .semibold(32))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-            }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            GridRow(alignment: .firstTextBaseline) {
+                ForEach(fields) { field in
+                    DashboardRollingValue(text: field.value, value: field.amount, range: range,
+                                          style: .semibold(field.primary ? 32 : 23), themed: true)
+                        .fixedSize()
+                        .cursorTooltip(enabled: multiDevice && field.local != nil) {
+                            OverviewDeviceReadout(rows: totalRows)
+                        }
+                        .frame(maxWidth: field.primary ? .infinity : nil, alignment: .leading)
+                        .accessibilityLabel(L(field.id) + " " + field.value)
+                }
+            }
+            if multiDevice {
+                GridRow(alignment: .firstTextBaseline) {
+                    ForEach(fields) { field in
+                        if let local = field.local {
+                            if field.id == "overview.models" {
+                                Text(local).font(.caption).monospacedDigit().foregroundStyle(WorkspaceStyle.subtext)
+                                    .cursorTooltip(enabled: multiDevice) { OverviewDeviceReadout(rows: totalRows) }
+                                    .accessibilityLabel(LF("cloud.overview.localValue", local))
+                            } else {
+                                totalDetail(icon: "desktopcomputer", label: L("cloud.overview.local"), value: local, showsDevices: true)
+                                    .accessibilityLabel(LF("cloud.overview.localValue", local))
+                            }
+                        } else { Color.clear.frame(width: 1, height: 1).accessibilityHidden(true) }
+                    }
+                }
+            }
+            if fields.contains(where: { $0.id == "usage.tokens" }),
+               let fast = overview.summary.fastTokens, fast > 0 {
+                GridRow(alignment: .firstTextBaseline) {
+                    totalDetail(icon: "bolt.fill", label: L("fast.title"), value: compactTokens(fast))
+                        .help(L("fast.tokens_help"))
+                        .accessibilityLabel(LF("fast.value_accessibility", compactTokens(fast)))
+                        .accessibilityHint(L("fast.tokens_help"))
+                    ForEach(fields.dropFirst()) { _ in
+                        Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+                    }
+                }
+            }
         }
     }
-    private var secondaryTotals: some View {
-        HStack(spacing: 24) {
-            let filter = reportFilter
-            if filter.from == nil || filter.from != filter.to {
-                metric(L("overview.active_days"), report.summary.activeDays.formatted(), amount: report.summary.activeDays, large: false)
+
+    private func totalDetail(icon: String, label: String, value: String, showsDevices: Bool = false) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).frame(width: 13, alignment: .center)
+            ZStack(alignment: .leading) {
+                Text(L("cloud.overview.local")).hidden().accessibilityHidden(true)
+                Text(L("fast.title")).hidden().accessibilityHidden(true)
+                Text(label)
             }
-            let modelsUsed = Int64(report.models.filter { $0.summary.tokens > 0 }.count)
-            metric(L("overview.models"), modelsUsed.formatted(), amount: modelsUsed, large: false)
-        }.fixedSize(horizontal: true, vertical: false)
+            Text(value).monospacedDigit()
+                .cursorTooltip(enabled: showsDevices && multiDevice) {
+                    OverviewDeviceReadout(rows: totalRows)
+                }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(WorkspaceStyle.subtext)
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
     }
-    private func metric(_ label: String, _ value: String, amount: Int64, large: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.subheadline).foregroundStyle(.secondary)
-            DashboardRollingValue(text: value, value: Double(amount), range: range, style: .semibold(large ? 32 : 23))
-                .lineLimit(1).minimumScaleFactor(0.7)
-        }.frame(maxWidth: large ? .infinity : nil, alignment: .leading).accessibilityElement(children: .combine)
+
+    private var costInfo: some View {
+        WorkspaceInfoPopover(title: L("overview.cost_info")) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L("overview.cost_help"))
+                if overview.summary.unpricedTokens > 0 { Text(LF("usage.unpriced", compactTokens(overview.summary.unpricedTokens))) }
+                if let n = overview.summary.partialDays, n > 0 { Text(LF("usage.partial_days", n)) }
+            }.padding(16).frame(width: 280, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+        }
     }
+
 }
 
 private struct TokenMixView: View {
@@ -433,8 +539,8 @@ private struct TokenMixView: View {
     let range: DashboardDateSpan?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var parts: [(String, Int64, Color)] {
-        [("token.input", tokens.input, .blue), ("token.output", tokens.output, WorkspaceStyle.outputTokens),
-         ("token.cache_read", tokens.cacheRead, .orange), ("token.cache_write", tokens.cacheWrite, .purple),
+        [("token.input", tokens.input, WorkspaceStyle.localUsage), ("token.output", tokens.output, WorkspaceStyle.outputTokens),
+         ("token.cache_read", tokens.cacheRead, WorkspaceStyle.cacheRead), ("token.cache_write", tokens.cacheWrite, WorkspaceStyle.cacheWrite),
          ("token.reasoning", tokens.reasoning, WorkspaceStyle.reasoningTokens)]
     }
     var body: some View {
@@ -454,9 +560,9 @@ private struct TokenMixView: View {
                 ForEach(parts.indices, id: \.self) { i in
                     HStack(spacing: 5) {
                         Circle().fill(parts[i].2).frame(width: 5, height: 5)
-                        Text(L(parts[i].0)).foregroundStyle(.secondary)
+                        Text(L(parts[i].0)).foregroundStyle(WorkspaceStyle.subtext)
                         DashboardRollingValue(text: compactTokens(parts[i].1), value: Double(parts[i].1),
-                                              range: range, style: .caption2)
+                                              range: range, style: .caption2, themed: true)
                     }.font(.caption2).help(total > 0 ? (Double(parts[i].1) / Double(total)).formatted(.percent.precision(.fractionLength(1))) : "0%")
                         .accessibilityElement(children: .combine)
                 }
@@ -484,11 +590,10 @@ private extension UsageMetric {
 
 private struct UsageRankingView: View {
     let groups: [UsageGroup]
+    let remoteGroups: [String: [UsageGroup]]
     let kind: BrandKind
     let metric: UsageMetric
     let range: DashboardDateSpan?
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = false
     private var sorted: [UsageGroup] {
         groups.sorted {
@@ -501,15 +606,15 @@ private struct UsageRankingView: View {
         let total = groups.reduce(0.0) { $0 + (metric.amount(in: $1.summary) ?? 0) }
         VStack(alignment: .leading, spacing: 16) {
             Text(L(kind == .tool ? "usage.by_tool" : "usage.by_model"))
-                .font(.headline).frame(height: 24)
+                .font(.headline).foregroundStyle(WorkspaceStyle.text).frame(height: 24)
             ForEach(expanded ? sorted : Array(sorted.prefix(5))) { group in
                 rankingRow(group, total: total)
             }
             if groups.count > 5 {
                 Button(L(expanded ? "action.show_less" : "action.show_all")) { expanded.toggle() }
-                    .buttonStyle(.plain).font(.caption).foregroundStyle(Color.accentColor)
+                    .buttonStyle(.plain).font(.caption).foregroundStyle(WorkspaceStyle.selection)
             }
-            if groups.isEmpty { Text(L("usage.empty")).foregroundStyle(.secondary).padding(.vertical, 24) }
+            if groups.isEmpty { Text(L("usage.empty")).foregroundStyle(WorkspaceStyle.subtext).padding(.vertical, 24) }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -517,7 +622,9 @@ private struct UsageRankingView: View {
         let summary = group.summary
         let amount = metric.amount(in: summary)
         let share = amount.map { total > 0 ? $0 / total : 0 }
-        let fastShare = total > 0 ? metric.fastAmount(in: summary) / total : 0
+        let remote = remoteGroups[group.key] ?? []
+        let other = remote.reduce(0.0) { $0 + (metric.amount(in: $1.summary) ?? 0) }
+        let otherFast = remote.reduce(0.0) { $0 + metric.fastAmount(in: $1.summary) }
         let fastText = metric.fastReadout(in: summary)
         let costText = L(summary.costStatus == "partial" ? "cost.known" : "cost.estimate") + ": " + usd(summary.knownEstimatedCostUsd)
         return HStack(spacing: 10) {
@@ -525,36 +632,21 @@ private struct UsageRankingView: View {
             VStack(spacing: 7) {
                 HStack {
                     Text(kind == .tool ? clientName(group.key) : group.key).lineLimit(1).truncationMode(.middle)
+                        .foregroundStyle(WorkspaceStyle.text)
                     Spacer(minLength: 8)
                     DashboardRollingValue(text: metric == .tokens ? compactTokens(summary.tokens) : usd(amount),
-                                          value: amount, range: range, style: .callout)
+                                          value: amount, range: range, style: .callout, themed: true)
                 }.font(.callout)
-                rankingBar(share: share ?? 0, fastShare: fastShare)
+                OverviewShareBar(total: total, amount: amount ?? 0, other: other,
+                                 fast: metric.fastAmount(in: summary), otherFast: otherFast, height: 5, range: range)
             }
             DashboardRollingValue(text: share?.formatted(.percent.precision(.fractionLength(0))) ?? "—",
-                                  value: share, range: range, style: .caption2, secondary: true)
-                .foregroundStyle(.secondary).frame(width: 35, alignment: .trailing)
+                                  value: share, range: range, style: .caption2, secondary: true, themed: true)
+                .foregroundStyle(WorkspaceStyle.subtext).frame(width: 35, alignment: .trailing)
         }
         .help([group.key, costText, fastText].compactMap { $0 }.joined(separator: "\n"))
         .accessibilityElement(children: .combine)
         .accessibilityValue(fastText ?? "")
     }
 
-    private func rankingBar(share: Double, fastShare: Double) -> some View {
-        let filled = min(max(share, 0), 1)
-        let highlighted = min(max(fastShare, 0), filled)
-        return GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.accentColor.opacity(0.08))
-                HStack(spacing: 0) {
-                    Rectangle().fill(Color.accentColor.opacity(0.65))
-                        .frame(width: geometry.size.width * (filled - highlighted))
-                    Rectangle().fill(WorkspaceStyle.fastUsage(colorScheme))
-                        .frame(width: geometry.size.width * highlighted)
-                }
-                .clipShape(Capsule())
-                .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: range)
-            }
-        }.frame(height: 3).accessibilityHidden(true)
-    }
 }

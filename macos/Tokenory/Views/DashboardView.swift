@@ -1,5 +1,5 @@
 // [INPUT]: 接收统计报告、筛选状态和记录详情。
-// [OUTPUT]: 提供主窗口导航、统计加载与重试、日期与刷新工具栏、回合页和记录详情。
+// [OUTPUT]: 提供主窗口导航、统计加载提示与重试、日期工具栏、回合页和记录详情。
 // [POS]: 主工作区入口；宽窗口并排检查明细，窄窗口使用详情面板。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -10,17 +10,30 @@ private enum DashboardSection: String, CaseIterable {
     var icon: String { switch self { case .overview: "chart.bar.xaxis"; case .details: "list.bullet.rectangle"; case .turns: "stopwatch"; case .imports: "square.and.arrow.down"; case .sources: "externaldrive" } }
 }
 struct DashboardView: View {
+    private struct ReportProgress {
+        let firstLoad: Bool
+        let shownAt: ContinuousClock.Instant
+    }
+
     @Environment(UsageStore.self) private var store
     @State private var section: DashboardSection = .overview
+    @AppStorage("overviewLocalOnly") private var overviewLocalOnly = false
     @Environment(\.colorScheme) private var scheme
     @State private var selectedRecordID: UsageDetail.ID?
     @State private var datePickerDraft: DateRangeDraft?
     @State private var visited: Set<DashboardSection> = [.overview]
+    @State private var progress: ReportProgress?
+    private var hasVisibleReport: Bool {
+        store.report != nil && (section != .overview || store.reportFilter?.conversation == nil)
+    }
     private var dashboardSelection: UsageFilter? {
         section == .overview || section == .details ? store.reportSelection : nil
     }
+    private var reportIsPending: Bool {
+        dashboardSelection != nil && store.reportLoadError == nil && (!hasVisibleReport || store.loading)
+    }
     private var showsReportProgress: Bool {
-        (section == .overview || section == .details) && store.report != nil && store.loading
+        dashboardSelection != nil && progress?.firstLoad == false && store.reportLoadError == nil
     }
     var body: some View {
         NavigationSplitView {
@@ -33,6 +46,7 @@ struct DashboardView: View {
                     HStack(spacing: 7) {
                         Circle().fill(store.connected ? Color.green : Color.orange).frame(width: 5, height: 5)
                         Text(store.statusText).font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }.padding(16)
                 }
@@ -44,10 +58,17 @@ struct DashboardView: View {
                 ZStack {
                     // Keep the overview mounted so navigation reuses chart layouts and scroll state.
                     VStack(spacing: 0) {
-                        UsageFiltersView(showsSource: false)
+                        UsageFiltersView(showsSource: false, localOnly: overviewLocalOnly)
                             .padding(.horizontal, 22).padding(.vertical, 14)
                         usageReport(allowConversationReport: false) { report in
-                            OverviewView(report: report, isActive: section == .overview, openDatePicker: openDatePicker)
+                            OverviewView(report: report, localOnly: overviewLocalOnly, isActive: section == .overview, openDatePicker: openDatePicker)
+                                #if CLOUD_DEVELOPMENT
+                                .onAppear {
+                                    if ProcessInfo.processInfo.arguments.contains("--cloud-sync-receipt") {
+                                        FileHandle.standardError.write(Data("TOKENORY_OVERVIEW_READY \(Date().timeIntervalSince1970)\n".utf8))
+                                    }
+                                }
+                                #endif
                         }
                     }
                     .opacity(section == .overview ? 1 : 0)
@@ -84,6 +105,9 @@ struct DashboardView: View {
             }.background(WorkspaceStyle.canvas(scheme)).navigationTitle(section.title)
                 .toolbar {
                     ToolbarItemGroup {
+                        if section == .overview && (overviewLocalOnly || !store.cloud.sources.isEmpty) {
+                            OverviewLocalToggle(localOnly: $overviewLocalOnly).fixedSize()
+                        }
                         if section == .overview || section == .details || section == .turns {
                             UsageDatePicker(presentation: $datePickerDraft)
                         }
@@ -106,7 +130,21 @@ struct DashboardView: View {
                     }
                 }
         }
+        .tint(WorkspaceStyle.selection)
         .frame(minWidth: 800, minHeight: 560)
+        .task(id: reportIsPending) {
+            let clock = ContinuousClock()
+            do {
+                if reportIsPending {
+                    guard progress == nil else { return }
+                    try await clock.sleep(for: .milliseconds(300))
+                    progress = ReportProgress(firstLoad: !hasVisibleReport, shownAt: clock.now)
+                } else if let progress {
+                    try await clock.sleep(until: progress.shownAt.advanced(by: .milliseconds(500)))
+                    self.progress = nil
+                }
+            } catch { /* A new loading state replaced this timer. */ }
+        }
         .onChange(of: section, initial: true) { _, next in
             store.recordsAreActive = next == .details
             visited.insert(next)
@@ -158,7 +196,13 @@ struct DashboardView: View {
         allowConversationReport: Bool = true,
         @ViewBuilder content: (UsageReport) -> Content
     ) -> some View {
-        if let report = store.report, allowConversationReport || store.reportFilter?.conversation == nil {
+        if progress?.firstLoad == true, store.reportLoadError == nil {
+            if allowConversationReport {
+                ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                OverviewLoadingPlaceholder()
+            }
+        } else if let report = store.report, allowConversationReport || store.reportFilter?.conversation == nil {
             if let error = store.reportLoadError {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
@@ -186,12 +230,46 @@ struct DashboardView: View {
                 reportRetryButton
             }
         } else {
-            ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity)
+            Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private var reportRetryButton: some View {
         Button(L("action.retry")) { Task { await store.retryReport() } }
+    }
+}
+
+private struct OverviewLoadingPlaceholder: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 20) {
+                    HStack(alignment: .top, spacing: 16) {
+                        metric("Tokens", value: "000.00", primary: true)
+                        metric(L("cost.estimate"), value: "$0,000.00", primary: true)
+                        metric(L("overview.models"), value: "00", primary: false)
+                    }
+                    Capsule().fill(.quaternary).frame(height: 5)
+                    Divider()
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(L("usage.trend")).font(.headline)
+                        RoundedRectangle(cornerRadius: 5).fill(.quaternary).frame(height: 210)
+                    }
+                }
+                .redacted(reason: .placeholder)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 22).padding(.top, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L("usage.loading_stats"))
+    }
+
+    private func metric(_ label: String, value: String, primary: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label).font(.caption)
+            Text(value).font(.system(size: primary ? 32 : 23, weight: .semibold))
+        }.frame(maxWidth: primary ? .infinity : nil, alignment: .leading)
     }
 }
 
