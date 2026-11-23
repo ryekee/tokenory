@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 日期与明细对话筛选、选中的对话名称、请求状态、全年活动、当日用量、回合、价格和采集状态。
+// [OUTPUT]: 按同一次选择发布本机与双机报告、明细对话筛选、请求状态、全年活动、当日用量、回合、价格、采集状态和来源刷新结果。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -25,6 +25,17 @@ final class UsageStore {
 
     static let shared = UsageStore()
     let engine: EngineClient
+    let cloud: DeviceSyncStore
+    var combinedOverview: UsageReport? { cloud.overview(for: reportFilter) }
+    var cloudLocalOverview: UsageReport? { cloud.local(for: reportFilter) }
+    var cloudLocalActivityCalendar: UsageActivity? { cloud.localCalendar }
+    var remoteOverviewReports: [String: UsageReport] { cloud.remote(for: reportFilter) }
+    var combinedActivity: ActivityReport? { cloud.activity }
+    var remoteActivityReports: [String: ActivityReport] { cloud.remoteActivity }
+    var combinedActivityCalendar: UsageActivity? { cloud.calendar }
+    var remoteActivityCalendars: [String: UsageActivity] { cloud.remoteCalendars }
+    var localDeviceName: String { cloud.localName }
+    func deviceName(_ id: String) -> String { cloud.name(id) }
     let dataDirectory: URL
     var today: UsageReport?
     private(set) var todayUsageError: String?
@@ -42,15 +53,19 @@ final class UsageStore {
     var activityCalendar: UsageActivity?
     @ObservationIgnored private var historyCache: [HistorySelection: UsageHistory] = [:]
     private struct HistorySelection: Hashable {
+        let revision: Int64
+        let localOnly: Bool
+        let projectionVersion: Int
         let metric: UsageMetric
         let average: Bool
         let client: String?
     }
-    func history(metric: UsageMetric, average: Bool, client: String?) -> UsageHistory? {
-        guard let activity else { return nil }
-        let key = HistorySelection(metric: metric, average: average, client: client)
+    func history(metric: UsageMetric, average: Bool, client: String?, localOnly: Bool = true) -> UsageHistory? {
+        guard let activity = localOnly ? activity : (combinedActivity ?? activity) else { return nil }
+        let key = HistorySelection(revision: activity.revision, localOnly: localOnly, projectionVersion: localOnly ? 0 : cloud.annualVersion, metric: metric, average: average, client: client)
         if let cached = historyCache[key] { return cached }
-        let data = UsageHistory(report: activity, metric: metric, average: average, client: client, calendarDays: activityCalendar?.days)
+        let data = UsageHistory(report: activity, metric: metric, average: average, client: client, calendarDays: (localOnly ? activityCalendar : (combinedActivityCalendar ?? activityCalendar))?.days)
+        historyCache = historyCache.filter { $0.key.localOnly != localOnly || ($0.key.revision == activity.revision && $0.key.projectionVersion == key.projectionVersion) }
         historyCache[key] = data
         return data
     }
@@ -94,9 +109,11 @@ final class UsageStore {
     private var activityGeneration = 0
 
     init(engine: EngineClient? = nil, directory: URL? = nil) {
-        let directory = directory ?? ProcessInfo.processInfo.environment["TOKENORY_DATA_DIR"].map { URL(fileURLWithPath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/Tokenory")
+        let primaryLedger = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/Tokenory")
+        let directory = directory ?? ProcessInfo.processInfo.environment["TOKENORY_DATA_DIR"].map { URL(fileURLWithPath: $0) } ?? primaryLedger
         dataDirectory = directory
         self.engine = engine ?? EngineClient(helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/tokenory"), directory: directory)
+        cloud = DeviceSyncStore(engine: self.engine, usesDefaultLedger: directory.standardizedFileURL.path == primaryLedger.standardizedFileURL.path)
         updateDateRange()
     }
     private static let dayFormatter: DateFormatter = {
@@ -114,7 +131,7 @@ final class UsageStore {
             }
         }
         Task {
-            do { try await engine.start(); connected = true; error = nil; await refresh() }
+            do { try await engine.start(); connected = true; error = nil; cloud.start(); await refresh() }
             catch { fail(error) }
         }
     }
@@ -217,7 +234,7 @@ final class UsageStore {
         let generation = refreshGeneration
         let localDay = LocalUsageDay(now: now)
         let quickGeneration = beginTodayRefresh(window: localDay)
-        await refreshReport(reportSelection, force: true)
+        await refreshReport(reportSelection, now: now, force: true)
         guard generation == refreshGeneration else { return }
         async let history: Void = refreshActivity(for: filter, now: now, force: true)
         async let quick: Void = loadToday(window: localDay, generation: quickGeneration)
@@ -233,12 +250,20 @@ final class UsageStore {
     }
     func refreshSelection(_ selection: UsageFilter, now: Date = Date(), forceReport: Bool = false) async {
         guard selection == reportSelection else { return }
-        await refreshReport(selection, force: forceReport)
+        await refreshReport(selection, now: now, force: forceReport)
         guard selection == reportSelection, reportFilter == selection else { return }
         await refreshActivity(for: selection, now: now, force: false)
     }
-    private func refreshReport(_ selection: UsageFilter, force: Bool) async {
-        guard force || (requestedReportFilter != selection && reportFilter != selection) else { return }
+    private func refreshReport(_ selection: UsageFilter, now: Date, force: Bool) async {
+        if !force, reportFilter == selection {
+            if let pending = requestedReportFilter, pending != selection {
+                reportGeneration += 1
+                requestedReportFilter = nil
+                loading = false
+            }
+            return
+        }
+        guard force || requestedReportFilter != selection else { return }
         reportGeneration += 1
         let generation = reportGeneration
         requestedReportFilter = selection
@@ -250,19 +275,31 @@ final class UsageStore {
         do {
             let selected = try await engine.request("overview", payload: .encode(selection), as: UsageReport.self)
             guard generation == reportGeneration, selection == reportSelection else { return }
-            report = selected
-            reportFilter = selection
+            if selection.conversation != nil {
+                report = selected
+                reportFilter = selection
+            } else {
+                let year = Self.reportingYear(ending: now)
+                await cloud.select(selection, from: year.from, to: year.to, whileCurrent: {
+                    self.reportGeneration == generation && self.reportSelection == selection
+                }) {
+                    self.report = selected
+                    self.reportFilter = selection
+                }
+            }
         } catch {
             if generation == reportGeneration, selection == reportSelection {
                 reportFailure = (selection, error.localizedDescription)
             }
         }
     }
-    private func refreshActivity(for selection: UsageFilter, now: Date, force: Bool) async {
+    private static func reportingYear(ending now: Date) -> (from: String, to: String) {
         let calendar = Localization.reportingCalendar
         let start = calendar.date(byAdding: .year, value: -1, to: calendar.startOfDay(for: now))!
-        let from = Self.day(calendar.date(byAdding: .day, value: 1, to: start)!)
-        let to = Self.day(now)
+        return (day(calendar.date(byAdding: .day, value: 1, to: start)!), day(now))
+    }
+    private func refreshActivity(for selection: UsageFilter, now: Date, force: Bool) async {
+        let (from, to) = Self.reportingYear(ending: now)
         let annual = annualFilter(for: selection, from: from, to: to)
         guard force || (requestedActivityFilter != annual && activityFilter != annual) else { return }
         activityGeneration += 1
@@ -321,7 +358,7 @@ final class UsageStore {
     func restore(from file: URL) async throws {
         do { try await engine.restore(from: file) }
         catch { start(); throw error }
-        try await engine.start(); error = nil; await refresh(); await loadManagement()
+        try await engine.start(); error = nil; cloud.refresh(localChanged: true); await refresh(); await loadManagement()
     }
     func loadSources() async {
         do {
@@ -374,8 +411,8 @@ final class UsageStore {
             await refreshToday()
             if sources != .null { await loadSources() }
             if let query = requestedTurnQuery { await loadAgentTurns(query, force: true) }
-        case "todayUsageChanged": await refreshToday()
-        case "usageChanged": await refresh()
+        case "todayUsageChanged": cloud.markDirty(); await refreshToday()
+        case "usageChanged": cloud.refresh(localChanged: true); await refresh()
         case "pricesUpdated": await loadManagement()
         case "scanFailed": scanning = false; error = event.message
         case "stopped": connected = false; scanning = false; error = event.message

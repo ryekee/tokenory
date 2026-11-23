@@ -8,7 +8,7 @@
 
 <p align="center">
   原生 macOS 菜单栏应用，汇总多个 AI 编程工具的 Token 用量、费用估算与历史趋势。<br>
-  数据保存在本机，无需注册账号，无需部署服务。
+  账本保存在本机，无需注册 Tokenory 账号或部署服务。
 </p>
 
 <p align="center">
@@ -111,6 +111,20 @@ Tokenory 按 API 参考费率估算美元费用，单独保留来源报告的成
 - **备份与恢复**：在「设置 → 数据」备份或恢复本地 SQLite 账本。恢复前会先备份当前账本。
 - **卸载**：关闭登录时启动，退出后删除 App。账本和设置默认留在本机。
 
+### 在多台 Mac 上汇总用量（开发版）
+
+在使用同一 Apple 账号的每台 Mac 上打开「设置 → iCloud 同步」。首次开启时，Tokenory 会将这台 Mac 的全部有效历史汇总上传至该账号的 CloudKit 私有库。云端保存设备名称、按日期和小时划分的工具、提供方、模型、来源及其用量与费用。原始日志、会话明细和本机路径留在各自的 Mac。
+
+每台 Mac 重传时会替换自己的汇总。**两台 Mac 导入同一份历史，重叠用量会计入两次。** 同一份历史只需在一台 Mac 导入。模型数和活跃天数分别按不同的模型名和账本日期统计。
+
+| 设置中的操作 | 结果 |
+| --- | --- |
+| 关闭 iCloud 同步 | 本机停止上传。其他设备仍可看到上次上传的汇总。 |
+| 删除本机云端数据 | 本机停止上传，并从云端合计中移除这台 Mac 的全部用量。其他 Mac 继续同步。 |
+| 删除全部云端数据 | 清空此 Apple 账号下所有 Mac 的云端用量，各台 Mac 的上传授权一并失效。 |
+
+三个操作都保留各台 Mac 的本地账本。删除需联网完成。此后在哪台 Mac 手动重新开启同步，就会重新上传那台 Mac 的全部历史，包括停传期间新采集的用量。
+
 ## 开发
 
 <details>
@@ -132,7 +146,7 @@ cd tokenory
 TOKENORY_CONFIGURATION=Release ./script/build.sh
 ```
 
-Debug 产物为 `.build/xcode/Build/Products/Debug/Tokenory.app`，Release 产物在同级 `Release` 目录。本机构建使用 ad-hoc 签名。App 已包含 Rust helper，登录启动可在设置中开启。
+Debug 产物为 `.build/xcode/Build/Products/Debug/Tokenory.app`，Release 产物在同级 `Release` 目录。这两种本机构建使用 ad-hoc 签名。要在真机验证 iCloud 同步，使用有 Hiko 团队开发签名与 iCloud 容器权限的 Xcode 账号运行 `TOKENORY_CONFIGURATION=CloudDebug ./script/build.sh`，产物位于同级 `CloudDebug` 目录，使用 CloudKit Development 环境。App 已包含 Rust helper，登录启动可在设置中开启。
 
 ### 验证与维护
 

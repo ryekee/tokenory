@@ -13,11 +13,13 @@ else
   cargo build --manifest-path cli/Cargo.toml -p tokenory
 fi
 xcodegen generate --spec macos/project.yml
-xcodebuild -project macos/Tokenory.xcodeproj -scheme Tokenory -configuration "$CONFIGURATION" -derivedDataPath .build/xcode -destination 'platform=macOS' build
+SIGNING_ARGS=(-destination 'platform=macOS')
+if [[ "$CONFIGURATION" == CloudDebug ]]; then SIGNING_ARGS+=(-allowProvisioningUpdates); fi
+xcodebuild -project macos/Tokenory.xcodeproj -scheme Tokenory -configuration "$CONFIGURATION" -derivedDataPath .build/xcode "${SIGNING_ARGS[@]}" build
 APP_PATH="$ROOT_DIR/.build/xcode/Build/Products/$CONFIGURATION/Tokenory.app"
 # Xcode can skip its outer signature when only the embedded Rust helper changes.
 SIGN_OPTIONS=(--force --sign -)
 if [[ "$CONFIGURATION" == Release ]]; then SIGN_OPTIONS+=(--options runtime); fi
-/usr/bin/codesign "${SIGN_OPTIONS[@]}" "$APP_PATH"
+if [[ "$CONFIGURATION" != CloudDebug ]]; then /usr/bin/codesign "${SIGN_OPTIONS[@]}" "$APP_PATH"; fi
 /usr/bin/codesign --verify --deep --strict "$APP_PATH"
 printf '%s\n' "$APP_PATH"

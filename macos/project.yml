@@ -3,6 +3,10 @@
 # [POS]: 原生构建配置的源文件；排除代理文档资源。
 # [PROTOCOL]: Update this header on change, then check AGENTS.md
 name: Tokenory
+configs:
+  Debug: debug
+  CloudDebug: debug
+  Release: release
 options:
   bundleIdPrefix: ee.ryek
   developmentLanguage: en
@@ -16,6 +20,8 @@ packages:
 settings:
   configs:
     Debug:
+      ENABLE_HARDENED_RUNTIME: NO
+    CloudDebug:
       ENABLE_HARDENED_RUNTIME: NO
   base:
     SWIFT_VERSION: '6.0'
@@ -64,6 +70,13 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ee.ryek.tokenory
         PRODUCT_NAME: Tokenory
+      configs:
+        CloudDebug:
+          DEVELOPMENT_TEAM: JQTFJ8P2T7
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: Apple Development
+          CODE_SIGN_ENTITLEMENTS: TokenoryCloud.entitlements
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG CLOUD_DEVELOPMENT"
     postCompileScripts:
       - name: Embed usage engine
         basedOnDependencyAnalysis: false

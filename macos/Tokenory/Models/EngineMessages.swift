@@ -84,7 +84,7 @@ struct InferenceSpeed: Codable, Equatable, Sendable {
     var isFast: Bool { speed == "fast" && (source == "selected" || source == "reported") }
 }
 
-struct UsageSummary: Decodable, Sendable {
+struct UsageSummary: Codable, Sendable {
     let tokens: Int64; let tokenBreakdown: TokenBreakdown; let knownEstimatedCostUsd: Double?; let unpricedTokens: Int64
     let costStatus: String; let recordCount: Int64; let activeDays: Int64; let partialDays: Int64?; let requests: Int64?
     var fastTokens: Int64? = nil
