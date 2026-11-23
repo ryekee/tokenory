@@ -1,5 +1,5 @@
-// [INPUT]: 接收完整目录、账本已用模型和搜索条件。
-// [OUTPUT]: 展示对齐的范围筛选、搜索和可折叠费率表。
+// [INPUT]: 接收完整目录、账本已用模型、范围和模型选择。
+// [OUTPUT]: 展示可搜索的范围与模型下拉，以及可折叠费率表。
 // [POS]: 设置价格页的只读目录；折叠状态不改变计价数据。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -9,39 +9,58 @@ struct PriceCatalogView: View {
     let usedModels: Set<PriceModelIdentity>
     @AppStorage("priceCatalog.usedOnly") private var usedOnly = false
     @State private var query = ""
+    @State private var selectedModel: PriceModelIdentity?
+    @State private var showingPicker = false
+    @FocusState private var searchFocused: Bool
     @State private var expandedProviders: Set<String> = []
-    @Environment(\.colorScheme) private var scheme
 
     private var filtered: [PriceProviderGroup] {
         return providers.compactMap { provider in
             let groups = provider.groups.compactMap { group -> PriceRateGroup? in
                 let entries = group.entries.filter { entry in
                     (!usedOnly || usedModels.contains(PriceModelIdentity(provider: entry.provider, model: entry.model)))
-                        && (query.isEmpty || provider.title.localizedCaseInsensitiveContains(query)
-                            || entry.model.localizedCaseInsensitiveContains(query))
+                        && (selectedModel == nil || selectedModel == PriceModelIdentity(provider: entry.provider, model: entry.model))
                 }
                 return entries.isEmpty ? nil : PriceRateGroup(entries: entries)
             }
             return groups.isEmpty ? nil : PriceProviderGroup(id: provider.id, groups: groups)
         }
     }
+
+    private struct ModelOption: Identifiable {
+        let id: PriceModelIdentity
+        let provider: String
+        let title: String
+    }
+
+    private var modelOptions: [ModelOption] {
+        let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        var seen = Set<PriceModelIdentity>()
+        return providers.flatMap { provider in
+            provider.groups.flatMap(\.entries).compactMap { entry in
+                let id = PriceModelIdentity(provider: entry.provider, model: entry.model)
+                guard (!usedOnly || usedModels.contains(id)),
+                      search.isEmpty || provider.title.localizedCaseInsensitiveContains(search)
+                        || entry.model.localizedCaseInsensitiveContains(search),
+                      seen.insert(id).inserted else { return nil }
+                return ModelOption(id: id, provider: provider.title, title: modelTitle(entry))
+            }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        }
+    }
+
+    private var selectionTitle: String {
+        guard let selectedModel else { return L(usedOnly ? "price.scope_used" : "price.scope_all") }
+        let provider = providers.first { $0.id == selectedModel.provider }
+        let entry = provider?.groups.lazy.flatMap(\.entries).first { $0.model == selectedModel.model }
+        return "\(provider?.title ?? selectedModel.provider) · \(entry.map(modelTitle) ?? selectedModel.model)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 12) {
-                    Picker(L("price.scope"), selection: $usedOnly) {
-                        Text(L("price.scope_all")).tag(false)
-                        Text(L("price.scope_used")).tag(true)
-                    }.pickerStyle(.segmented).labelsHidden().fixedSize()
-                        .accessibilityIdentifier("price-catalog-scope")
-                    Spacer(minLength: 12)
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                        TextField(L("filter.search_models"), text: $query).textFieldStyle(.plain)
-                    }.padding(.horizontal, 8).frame(width: 200, height: 28)
-                        .background(WorkspaceStyle.canvas(scheme), in: RoundedRectangle(cornerRadius: 7))
-                }
+            HStack(spacing: 12) {
                 Text(L("price.rate_units")).font(.caption).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                catalogPicker
             }
             LazyVStack(alignment: .leading, spacing: 4) {
                 if filtered.isEmpty { Text(L("filter.no_models")).foregroundStyle(.secondary).padding(.vertical, 16) }
@@ -125,12 +144,70 @@ struct PriceCatalogView: View {
                 }
             }
         }
-        .onChange(of: usedOnly) { _, _ in
-            if !query.isEmpty { expandedProviders.formUnion(filtered.map(\.id)) }
+    }
+
+    private var catalogPicker: some View {
+        WorkspaceDropdownTrigger(label: L("price.scope"), value: selectionTitle, width: 240) {
+            query = ""
+            showingPicker = true
         }
-        .onChange(of: query) { _, value in
-            if !value.isEmpty { expandedProviders.formUnion(filtered.map(\.id)) }
+        .accessibilityIdentifier("price-catalog-scope")
+        .popover(isPresented: $showingPicker, arrowEdge: .bottom) {
+            let options = modelOptions
+            VStack(spacing: 0) {
+                WorkspaceDropdownSearchField(prompt: L("filter.search_models"), text: $query, focus: $searchFocused) {
+                    if let first = options.first { select(first.id) }
+                }
+                Divider()
+                VStack(spacing: 2) {
+                    WorkspaceDropdownRow(selected: !usedOnly) {
+                        selectScope(usedOnly: false)
+                    } content: {
+                        Text(L("price.scope_all"))
+                    }
+                    WorkspaceDropdownRow(selected: usedOnly) {
+                        selectScope(usedOnly: true)
+                    } content: {
+                        Text(L("price.scope_used"))
+                    }
+                }.padding(6)
+                Divider()
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(options) { option in
+                            WorkspaceDropdownRow(selected: selectedModel == option.id) {
+                                select(option.id)
+                            } content: {
+                                BrandIcon(name: option.id.model, kind: .model)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(option.title).lineLimit(1).truncationMode(.middle)
+                                    Text(option.provider).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            }
+                            .help("\(option.provider) · \(option.title)")
+                        }
+                        if options.isEmpty {
+                            Text(L("filter.no_models")).font(.caption).foregroundStyle(.secondary).padding(16)
+                        }
+                    }.padding(6)
+                }
+                .frame(maxHeight: 290)
+            }
+            .frame(width: 320)
+            .onAppear { searchFocused = true }
         }
+    }
+
+    private func selectScope(usedOnly: Bool) {
+        self.usedOnly = usedOnly
+        selectedModel = nil
+        showingPicker = false
+    }
+
+    private func select(_ model: PriceModelIdentity) {
+        selectedModel = model
+        expandedProviders.insert(model.provider)
+        showingPicker = false
     }
     private func modelTitle(_ entry: PriceCatalogEntry) -> String {
         entry.provider == "devin" && entry.model == "compactor" ? L("price.compactor_reference") : entry.model

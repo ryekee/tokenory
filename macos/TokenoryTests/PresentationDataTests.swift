@@ -279,12 +279,13 @@ final class PresentationDataTests: XCTestCase {
         ], unallocated: summary(20, cost: nil))
         let report = UsageReport(revision: 1, summary: summary(320, cost: 0.5), daily: [], clients: [], providers: [], models: [], details: [], hourly: hours)
         let now = ISO8601DateFormatter().date(from: "2026-11-05T18:20:00Z")!
-        let trend = UsageTrend(report: report, filter: UsageFilter(from: "2026-11-06", to: "2026-11-06"), now: now)
+        let zone = TimeZone(identifier: "Asia/Shanghai")!
+        let trend = UsageTrend(report: report, filter: UsageFilter(from: "2026-11-06", to: "2026-11-06"), now: now, timeZone: zone)
         XCTAssertTrue(trend.hourly)
         XCTAssertEqual(trend.points.count, 24)
         XCTAssertEqual(trend.unallocatedTokens, 20)
-        XCTAssertEqual(trend.domain.lowerBound, Localization.date("2026-11-06"))
-        XCTAssertEqual(trend.domain.upperBound, Localization.date("2026-11-07"))
+        XCTAssertEqual(trend.domain.lowerBound, Localization.date("2026-11-06", timeZone: zone))
+        XCTAssertEqual(trend.domain.upperBound, Localization.date("2026-11-07", timeZone: zone))
         XCTAssertNil(trend.points[0].cost)
         XCTAssertEqual(trend.points[0].tokens, 100)
         XCTAssertEqual(trend.points[1].cost, 0.5)
@@ -295,6 +296,22 @@ final class PresentationDataTests: XCTestCase {
         XCTAssertTrue(trend.points[23].isFuture)
         XCTAssertGreaterThanOrEqual(trend.tokenMaximum, 200)
         XCTAssertGreaterThanOrEqual(trend.costMaximum, 0.5)
+    }
+    func testHourlyPlotKeepsBothRepeatedHoursOnFallBack() {
+        let day = "2026-11-01"
+        let zone = TimeZone(identifier: "America/New_York")!
+        let hours = HourlyUsage(buckets: [
+            UsageGroup(key: "2026-11-01T01:00:00-04:00", summary: summary(100, cost: 1)),
+            UsageGroup(key: "2026-11-01T01:00:00-05:00", summary: summary(200, cost: 2))
+        ], unallocated: summary(0, cost: 0))
+        let report = UsageReport(revision: 1, summary: summary(300, cost: 3), daily: [], clients: [],
+                                 providers: [], models: [], details: [], hourly: hours)
+        let end = Localization.date("2026-11-02", timeZone: zone)!
+        let trend = UsageTrend(report: report, filter: UsageFilter(from: day, to: day), now: end, timeZone: zone)
+        XCTAssertEqual(trend.points.count, 25)
+        XCTAssertEqual(trend.points[1].tokens, 100)
+        XCTAssertEqual(trend.points[2].tokens, 200)
+        XCTAssertEqual(trend.domain.upperBound, end)
     }
     func testCostLinesBreakAtUnknownPricesAndMissingDates() {
         let days = [

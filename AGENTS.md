@@ -14,7 +14,7 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 - `local-data/design-assets/`：本地设计原型、草图和审阅记录。
 - `local-data/dev-assets/`：本地开发笔记、决策、验收记录和工具配置副本。编译结果存放在忽略的 `.build/` 和 Cargo `target/`。
 - `codex/upstream-sync`：本地分支，跟踪 `upstream/main`。审阅 `cli/tokens-core/` 的增量，测试通过后合入。
-- 原生 HUD：`Views/MechanicalHUDView.swift`、`Services/HUDController.swift`；界面和交互约定见 `DESIGN.md`。
+- 原生 HUD：`Views/MechanicalHUDView.swift`、`Services/HUDController.swift`；处理双击、三击、闲置自动隐藏和用量唤醒。界面和交互约定见 `DESIGN.md`。
 
 ## 入口和约束
 - `macos/project.yml`：XcodeGen 项目源。不要手改生成的 Xcode 项目。
@@ -23,6 +23,7 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 - `script/generate_brand_icons.py`：由 `assets/brand/` 下的字形和供应商品牌素材生成原生资源。
 - `cargo test --manifest-path cli/Cargo.toml -p tokenory`：账本测试。
 - `xcodebuild test -project macos/Tokenory.xcodeproj -scheme Tokenory -derivedDataPath .build/xcode -destination 'platform=macOS'`：原生测试。
+- 新记录按系统时区归档，已有归档日期及导入日期保留。多 Mac 汇总沿用共同交换时区。
 - 价格更新自动回填待计价记录并备份；已有金额重估先预览并备份。
 - 源成本、标准费率估算和订阅扣费保持独立。
 - 修改模块时更新文件契约、模块地图和对应使用说明。

@@ -15,12 +15,10 @@ struct LocalUsageDay {
     init(now: Date, timeZone: TimeZone = .autoupdatingCurrent) {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
-        start = calendar.startOfDay(for: now)
-        end = calendar.date(byAdding: .day, value: 1, to: start)!
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = timeZone; formatter.dateFormat = "yyyy-MM-dd"
-        day = formatter.string(from: now)
+        let bounds = calendar.dateInterval(of: .day, for: now)!
+        start = bounds.start
+        end = bounds.end
+        day = Localization.dayKey(now, timeZone: timeZone)
         self.timeZone = timeZone.identifier
     }
 }

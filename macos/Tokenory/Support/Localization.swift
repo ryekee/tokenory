@@ -20,7 +20,7 @@ enum Localization {
     static var reportingCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = locale
-        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        calendar.timeZone = .autoupdatingCurrent
         return calendar
     }
     static var locale: Locale { Locale(identifier: identifier) }
@@ -32,14 +32,16 @@ enum Localization {
     static func format(_ key: String, _ arguments: [CVarArg], language: String? = nil) -> String {
         String(format: string(key, language: language), locale: Locale(identifier: language ?? identifier), arguments: arguments)
     }
-    private static let dayParser: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-    static func date(_ day: String) -> Date? { dayParser.date(from: day) }
+    private static func dayStyle(_ zone: TimeZone) -> Date.ISO8601FormatStyle {
+        Date.ISO8601FormatStyle(timeZone: zone).year().month().day().dateSeparator(.dash)
+    }
+    static func date(_ day: String) -> Date? { date(day, timeZone: .autoupdatingCurrent) }
+    static func date(_ day: String, timeZone: TimeZone) -> Date? {
+        try? dayStyle(timeZone).parse(day)
+    }
+    static func dayKey(_ date: Date, timeZone: TimeZone = .autoupdatingCurrent) -> String {
+        dayStyle(timeZone).format(date)
+    }
     static func day(_ value: String) -> String { day(value, compact: false) }
 
     static func day(_ value: String, compact: Bool, language: String = Localization.identifier) -> String {
@@ -62,7 +64,7 @@ enum Localization {
     }
     static func dateRange(_ from: String, _ to: String) -> String {
         guard let start = date(from), let end = date(to) else { return "\(from) / \(to)" }
-        let formatter = DateIntervalFormatter(); formatter.locale = locale; formatter.timeZone = TimeZone(identifier: "Asia/Shanghai"); formatter.dateStyle = .medium; formatter.timeStyle = .none
+        let formatter = DateIntervalFormatter(); formatter.locale = locale; formatter.timeZone = reportingCalendar.timeZone; formatter.dateStyle = .medium; formatter.timeStyle = .none
         return formatter.string(from: start, to: end)
     }
 }

@@ -1,5 +1,5 @@
 // [INPUT]: Multi-agent completed main-turn analytics and support capabilities from the Rust worker.
-// [OUTPUT]: Validated client identities, estimated durations, whole-range summaries and calendar-based speed distributions.
+// [OUTPUT]: Validated turns, searchable projects, titles and IDs, whole-range summaries and speed distributions.
 // [POS]: Turn analytics presentation boundary; independent of priced usage pagination.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -27,10 +27,13 @@ struct TurnReport: Decodable, Sendable {
     let turns: [AgentTurn]
     let clients: [String]
     let capabilities: [TurnCapability]
+    let conversationTitles: [String: [String: String]]?
 
-    init(revision: Int64, models: [String], turns: [AgentTurn], clients: [String] = [], capabilities: [TurnCapability] = []) {
+    init(revision: Int64, models: [String], turns: [AgentTurn], clients: [String] = [], capabilities: [TurnCapability] = [],
+         conversationTitles: [String: [String: String]]? = nil) {
         self.revision = revision; self.models = models; self.turns = turns
         self.clients = clients; self.capabilities = capabilities
+        self.conversationTitles = conversationTitles
     }
 }
 
@@ -247,6 +250,7 @@ struct TurnSpeedTimeline: Sendable {
 }
 
 struct TurnPresentation: Sendable {
+    private let conversationTitles: [String: [String: String]]
     let revision: Int64
     let models: [String]
     let clients: [String]
@@ -262,6 +266,7 @@ struct TurnPresentation: Sendable {
     let ttftCoverage: Int
 
     init(report: TurnReport, query: TurnQuery? = nil) {
+        conversationTitles = report.conversationTitles ?? [:]
         clients = report.clients
         capabilities = report.capabilities
         containsEstimates = report.turns.contains { $0.durationEstimated }
@@ -284,8 +289,26 @@ struct TurnPresentation: Sendable {
         reasoningShare = knownGenerated > 0 ? reasoning / knownGenerated : nil
     }
 
-    func sorted(by order: TurnSort, in bucket: TurnSpeedBucket? = nil) -> [AgentTurn] {
-        let points = bucket?.turns ?? points
+    func title(for turn: AgentTurn) -> String? {
+        conversationTitles[turn.client]?[turn.sessionId]
+    }
+
+    func matches(_ turn: AgentTurn, search: String) -> Bool {
+        search.isEmpty || turn.project.localizedCaseInsensitiveContains(search)
+            || matchingSubtitle(for: turn, search: search) != nil
+    }
+
+    func matchingSubtitle(for turn: AgentTurn, search: String) -> String? {
+        guard !search.isEmpty else { return nil }
+        if let title = title(for: turn), title.localizedCaseInsensitiveContains(search) { return title }
+        if turn.turnId.localizedCaseInsensitiveContains(search) { return turn.turnId }
+        return turn.id.localizedCaseInsensitiveContains(search) ? turn.id : nil
+    }
+
+    func sorted(by order: TurnSort, in bucket: TurnSpeedBucket? = nil, search: String = "") -> [AgentTurn] {
+        let source = bucket?.turns ?? points
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let points = query.isEmpty ? source : source.filter { matches($0, search: query) }
         switch order {
         case .oldest: return points
         case .newest: return points.reversed()

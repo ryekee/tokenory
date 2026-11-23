@@ -1,3 +1,4 @@
+use chrono::TimeZone;
 use serde_json::json;
 use tokenory::{db::{put_record, Database}, queries::{activity, conversations, report, ConversationId, ConversationQuery, Filter}, usage::UsageRecord};
 
@@ -193,14 +194,18 @@ fn activity_uses_effective_rows_and_preserves_unknown_costs() {
 fn activity_hourly_patterns_combine_days_and_exclude_daily_imports() {
     let root = tempfile::tempdir().unwrap();
     let mut db = Database::open(root.path()).unwrap();
-    for (key, date, time, tokens, granularity) in [
-        ("a", "2026-11-01", "2026-11-01T01:00:00Z", 10, "event"),
-        ("b", "2026-11-02", "2026-11-02T01:30:00Z", 20, "event"),
-        ("c", "2026-11-02", "2026-11-02T15:59:00Z", 40, "event"),
-        ("daily", "2026-11-02", "2026-11-02T01:00:00Z", 100, "day"),
-        ("mismatch", "2026-11-02", "2026-11-01T01:00:00Z", 200, "event"),
+    let zone = tokenory::config::Config::system_timezone();
+    let time = |day, hour, minute| {
+        zone.with_ymd_and_hms(2026, 11, day, hour, minute, 0)
+            .earliest().unwrap().timestamp_millis()
+    };
+    for (key, date, timestamp, tokens, granularity) in [
+        ("a", "2026-11-01", time(1, 9, 0), 10, "event"),
+        ("b", "2026-11-02", time(2, 9, 30), 20, "event"),
+        ("c", "2026-11-02", time(2, 23, 59), 40, "event"),
+        ("daily", "2026-11-02", time(2, 9, 0), 100, "day"),
+        ("mismatch", "2026-11-02", time(1, 9, 0), 200, "event"),
     ] {
-        let timestamp = chrono::DateTime::parse_from_rfc3339(time).unwrap().timestamp_millis();
         let row: UsageRecord = serde_json::from_value(json!({
             "key": key, "date": date, "client": "codex", "provider": "test", "model": "m",
             "timestampMs": timestamp, "metadata": {"granularity": granularity},

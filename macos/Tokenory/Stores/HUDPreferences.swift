@@ -1,9 +1,23 @@
 // [INPUT]: UserDefaults and HUD/Settings controls.
-// [OUTPUT]: Shared persistent visibility, screen placement, metric, mute and volume.
+// [OUTPUT]: Shared persistent visibility, optional idle hiding, triple-click action, placement, metric and audio settings.
 // [POS]: Main-actor preferences boundary for the mechanical HUD.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
 import Observation
+
+enum HUDDismissal: String, CaseIterable {
+    case disable, seconds30, minute1, minutes5, ignore
+
+    var label: String { L("hud.dismiss." + rawValue) }
+    var duration: Duration? {
+        switch self {
+        case .disable, .ignore: nil
+        case .seconds30: .seconds(30)
+        case .minute1: .seconds(60)
+        case .minutes5: .seconds(300)
+        }
+    }
+}
 
 enum HUDPlacement: String, CaseIterable {
     case topLeft, topCenter, topRight, bottomLeft, bottomCenter, bottomRight
@@ -32,6 +46,8 @@ final class HUDPreferences {
     static let shared = HUDPreferences()
     @ObservationIgnored private let defaults: UserDefaults
     var enabled: Bool { didSet { defaults.set(enabled, forKey: "hud.enabled") } }
+    var autoHideWhenIdle: Bool { didSet { defaults.set(autoHideWhenIdle, forKey: "hud.autoHideWhenIdle") } }
+    var dismissal: HUDDismissal { didSet { defaults.set(dismissal.rawValue, forKey: "hud.dismissal") } }
     var placement: HUDPlacement { didSet { defaults.set(placement.rawValue, forKey: "hud.placement") } }
     var metric: HUDMetric { didSet { defaults.set(metric.rawValue, forKey: "hud.metric") } }
     var soundEnabled: Bool { didSet { defaults.set(soundEnabled, forKey: "hud.soundEnabled") } }
@@ -40,6 +56,8 @@ final class HUDPreferences {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         enabled = defaults.bool(forKey: "hud.enabled")
+        autoHideWhenIdle = defaults.bool(forKey: "hud.autoHideWhenIdle")
+        dismissal = HUDDismissal(rawValue: defaults.string(forKey: "hud.dismissal") ?? "") ?? .disable
         placement = HUDPlacement(rawValue: defaults.string(forKey: "hud.placement") ?? "") ?? .bottomRight
         metric = HUDMetric(rawValue: defaults.string(forKey: "hud.metric") ?? "") ?? .tokens
         soundEnabled = defaults.bool(forKey: "hud.soundEnabled")

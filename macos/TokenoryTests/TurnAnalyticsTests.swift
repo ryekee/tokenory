@@ -1,5 +1,5 @@
 // [INPUT]: Typed turn fixtures and IPC-shaped JSON.
-// [OUTPUT]: Verifies summary definitions, missing values and calendar-based speed distributions.
+// [OUTPUT]: Verifies summary definitions, title and ID search, missing values and calendar-based speed distributions.
 // [POS]: Native turn analytics contract; no synthetic observations in gaps.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import XCTest
@@ -35,6 +35,28 @@ final class TurnAnalyticsTests: XCTestCase {
         XCTAssertEqual(data.sorted(by: .duration).map(\.id), ["late", "middle", "early"])
         XCTAssertEqual(data.nearest(to: Date(timeIntervalSince1970: 100_001))?.id, "late")
         XCTAssertEqual(data.points.count, 3)
+    }
+    func testListSearchIncludesProjectTitleAndTurnIDWithinTheSelectedBucket() throws {
+        let day = try XCTUnwrap(Localization.date("2026-11-18"))
+        let midnight = Int64(day.timeIntervalSince1970 * 1000)
+        let rows: [AgentTurn] = (0..<12).map { index in
+            let start = midnight + Int64(index) * 3_600_000
+            return AgentTurn(id: "row-\(index)", sessionId: index == 0 ? "named" : "other", turnId: "turn-\(index)",
+                      project: index == 0 ? "Tokenory" : "Other", model: "m", effort: nil,
+                      startMs: start, endMs: start + 1_000,
+                      durationMs: 1000, ttftMs: nil, generatedTokens: 100, reasoningTokens: nil,
+                      requests: 1, toolCalls: 0, toolWaitMs: nil)
+        }
+        let report = TurnReport(revision: 1, models: [], turns: rows, conversationTitles: [
+            "codex": ["named": "Review sync"], "antigravity": ["other": "Review sync"]
+        ])
+        let data = TurnPresentation(report: report, query: TurnQuery(from: "2026-11-18", to: "2026-11-18"))
+        XCTAssertEqual(data.sorted(by: .newest, search: " review SYNC ").map(\.id), ["row-0"])
+        XCTAssertEqual(data.sorted(by: .newest, search: "TOKENORY").map(\.id), ["row-0"])
+        XCTAssertEqual(data.sorted(by: .newest, search: "turn-11").map(\.id), ["row-11"])
+        let bucket = try XCTUnwrap(data.speedTimeline?.buckets.last)
+        XCTAssertTrue(data.sorted(by: .newest, in: bucket, search: "sync").isEmpty)
+        XCTAssertEqual(data.sorted(by: .newest, in: bucket, search: "").map(\.id), ["row-11"])
     }
     func testEmptyAndZeroGenerationDoNotInventValues() {
         let empty = TurnPresentation(report: TurnReport(revision: 1, models: [], turns: []))
@@ -108,7 +130,7 @@ final class TurnAnalyticsTests: XCTestCase {
         XCTAssertEqual(timeline.points(in: monday..<end).map(\.id), ["next-day"])
     }
 
-    func testLongAndUnboundedRangesUseBeijingMondayWeeks() throws {
+    func testLongAndUnboundedRangesUseLocalMondayWeeks() throws {
         let firstMonday = try XCTUnwrap(Localization.date("2026-11-09"))
         let sunday = try XCTUnwrap(Localization.date("2026-11-15"))
         let monday = try XCTUnwrap(Localization.date("2026-11-16"))

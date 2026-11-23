@@ -158,21 +158,29 @@ final class UsageStoreTests: XCTestCase {
         try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
         let settings = EngineSettings(homeDir: home.path, intervalSeconds: 60, timezone: "Asia/Shanghai", extraScanPaths: [:])
         try JSONEncoder().encode(settings).write(to: data.appending(path: "settings.json"))
-        let row = #"{"type":"assistant","timestamp":"2026-11-05T01:00:00Z","message":{"id":"msg_test","role":"assistant","model":"deepseek-flash","usage":{"input_tokens":1000,"output_tokens":0}}}"# + "\n"
+        let day = Localization.date("2026-11-05")!
+        let nextDay = Localization.date("2026-11-06")!
+        let turnDay = Localization.date("2026-11-14")!
+        let nextTurnDay = Localization.date("2026-11-15")!
+        let usageTime = day.addingTimeInterval(9 * 3600)
+        let iso = ISO8601DateFormatter()
+        let row = #"{"type":"assistant","timestamp":"\#(iso.string(from: usageTime))","message":{"id":"msg_test","role":"assistant","model":"deepseek-flash","usage":{"input_tokens":1000,"output_tokens":0}}}"# + "\n"
         try Data(row.utf8).write(to: logs.appending(path: "session.jsonl"))
         let codexLogs = home.appending(path: ".codex/sessions")
         try FileManager.default.createDirectory(at: codexLogs, withIntermediateDirectories: true)
+        let index = codexLogs.deletingLastPathComponent().appending(path: "session_index.jsonl")
+        try Data(#"{"id":"s","thread_name":"Review sync"}"#.utf8).write(to: index)
         let codex = """
         {"type":"session_meta","payload":{"id":"s","cwd":"/test/project","source":"cli"}}
         {"type":"event_msg","payload":{"type":"task_started","turn_id":"t"}}
         {"type":"turn_context","payload":{"turn_id":"t","model":"model-a","effort":"medium"}}
         {"type":"token_usage_record","payload":{"turn_id":"t","response_id":"r","usage":{"output_tokens":100,"reasoning_output_tokens":20},"turn_token_usage":{"output_tokens":100,"reasoning_output_tokens":20}}}
-        {"type":"event_msg","timestamp":"2026-11-14T00:00:10Z","payload":{"type":"task_complete","turn_id":"t","duration_ms":10000,"time_to_first_token_ms":200}}
+        {"type":"event_msg","timestamp":"\(iso.string(from: turnDay.addingTimeInterval(3600 + 10)))","payload":{"type":"task_complete","turn_id":"t","duration_ms":10000,"time_to_first_token_ms":200}}
         """
         try Data(codex.utf8).write(to: codexLogs.appending(path: "rollout-turn-test.jsonl"))
         let claudeTurn = """
-        {"type":"user","uuid":"u","sessionId":"claude-test","cwd":"/test/project","timestamp":"2026-11-14T00:00:00Z","message":{"role":"user","content":"test"}}
-        {"type":"assistant","sessionId":"claude-test","timestamp":"2026-11-14T00:00:10Z","message":{"id":"claude-response","role":"assistant","model":"deepseek-flash","content":[],"stop_reason":"end_turn","usage":{"input_tokens":0,"output_tokens":0}}}
+        {"type":"user","uuid":"u","sessionId":"claude-test","cwd":"/test/project","timestamp":"\(iso.string(from: turnDay.addingTimeInterval(3600)))","message":{"role":"user","content":"test"}}
+        {"type":"assistant","sessionId":"claude-test","timestamp":"\(iso.string(from: turnDay.addingTimeInterval(3600 + 10)))","message":{"id":"claude-response","role":"assistant","model":"deepseek-flash","content":[],"stop_reason":"end_turn","usage":{"input_tokens":0,"output_tokens":0}}}
         """
         try Data(claudeTurn.utf8).write(to: logs.appending(path: "turn-session.jsonl"))
         let engine = EngineClient(helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/tokenory"), directory: data)
@@ -193,6 +201,7 @@ final class UsageStoreTests: XCTestCase {
             await store.loadAgentTurns(turnQuery)
             XCTAssertNil(store.turnsError)
             XCTAssertEqual(store.turnAnalytics?.points.count, 1)
+            XCTAssertEqual(store.turnAnalytics?.sorted(by: .newest, search: "review SYNC").first?.turnId, "t")
             XCTAssertEqual(store.turnAnalytics?.averageSpeed, 10)
             XCTAssertEqual(store.turnAnalytics?.averageTTFTSeconds, 0.2)
             await store.loadAgentTurns(TurnQuery(from: "2026-11-14", to: "2026-11-14", model: "missing", client: "codex"))
@@ -208,13 +217,13 @@ final class UsageStoreTests: XCTestCase {
             XCTAssertTrue(store.turnAnalytics?.capabilities.contains { $0.client == "claude" && $0.supported } == true)
             // Menu speed uses the whole reporting day, even when the page selects one agent/model.
             store.turnClient = "codex"; store.turnModel = "missing"
-            await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-14T01:00:00Z")!)
+            await store.refreshToday(now: turnDay.addingTimeInterval(2 * 3600))
             XCTAssertEqual(store.todayTurns?.averageSpeed, 5)
             XCTAssertEqual(store.todayTurns?.points.count, 2)
             XCTAssertTrue(store.todayTurns?.containsEstimates == true)
             XCTAssertNil(store.todaySpeedError)
             XCTAssertEqual(store.turnAnalytics?.points.map(\.client), ["claude"])
-            await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-14T16:00:00Z")!)
+            await store.refreshToday(now: nextTurnDay)
             XCTAssertNil(store.todayTurns?.averageSpeed)
             XCTAssertTrue(store.todayTurns?.points.isEmpty == true)
             store.turnClient = nil; store.turnModel = nil
@@ -241,18 +250,18 @@ final class UsageStoreTests: XCTestCase {
             XCTAssertEqual(store.clients.first { $0.id == "paseo" }?.collectsAs, ["claude", "codex"])
             XCTAssertEqual(store.clients.first { $0.id == "orca" }?.collectsAs, ["micode"])
             XCTAssertTrue(store.clients.first { $0.id == "gemini" }?.supportsExtraPaths == true)
-            await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-05T01:00:00Z")!)
+            await store.refreshToday(now: usageTime)
             XCTAssertEqual(store.today?.summary.tokens, 1000)
-            await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
+            await store.refreshToday(now: nextDay)
             XCTAssertEqual(store.today?.summary.tokens, 0)
             store.dateRange = .today
-            await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-05T01:00:00Z")!)
+            await store.refresh(now: usageTime)
             XCTAssertEqual(store.report?.summary.tokens, 1000)
-            await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
+            await store.refreshToday(now: nextDay)
             XCTAssertEqual(store.filter.from, "2026-11-06")
             XCTAssertEqual(store.report?.summary.tokens, 0)
             store.dateRange = .week
-            await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
+            await store.refresh(now: nextDay)
             XCTAssertEqual(store.filter.from, "2026-10-31")
             XCTAssertEqual(store.activity?.from, "2025-11-07")
             XCTAssertEqual(store.activity?.to, "2026-11-06")
@@ -262,18 +271,18 @@ final class UsageStoreTests: XCTestCase {
             XCTAssertEqual(store.history(metric: .tokens, average: true, client: nil)?.total, 1000)
             XCTAssertEqual(store.activity?.modelDays.reduce(0) { $0 + $1.summary.tokens }, 1000)
             store.filter.model = "not-a-model"
-            await store.refreshSelection(store.filter, now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
+            await store.refreshSelection(store.filter, now: nextDay)
             XCTAssertTrue(store.activity?.modelDays.isEmpty == true)
             store.filter.model = nil
-            await store.refreshSelection(store.filter, now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
+            await store.refreshSelection(store.filter, now: nextDay)
             XCTAssertEqual(store.report?.summary.tokens, 1000)
             XCTAssertEqual(store.history(metric: .tokens, average: true, client: nil)?.total, 1000)
             store.dateRange = .month
-            await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-05T16:00:00Z")!)
+            await store.refresh(now: nextDay)
             XCTAssertEqual(store.filter.from, "2026-10-08")
             store.dateRange = .custom
             store.filter.from = "2026-11-05"; store.filter.to = "2026-11-05"
-            await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-06T16:00:00Z")!)
+            await store.refreshToday(now: Localization.date("2026-11-07")!)
             XCTAssertEqual(store.filter.to, "2026-11-05")
             let previousReportFilter = store.reportFilter
             store.filter.from = "2026-02-30"; await store.refresh()
@@ -436,13 +445,14 @@ final class UsageStoreTests: XCTestCase {
         let store = UsageStore(engine: engine, directory: root)
         store.dateRange = .all
         try await engine.start()
-        let old = Task { await store.refresh(now: ISO8601DateFormatter().date(from: "2026-11-14T15:59:00Z")!) }
+        let midnight = Localization.date("2026-11-15")!
+        let old = Task { await store.refresh(now: midnight.addingTimeInterval(-60)) }
         for _ in 0..<100 {
             if FileManager.default.fileExists(atPath: root.appending(path: "waiting").path) { break }
             try await Task.sleep(for: .milliseconds(20))
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: root.appending(path: "waiting").path))
-        await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-14T16:01:00Z")!)
+        await store.refreshToday(now: midnight.addingTimeInterval(60))
         XCTAssertEqual(store.today?.summary.tokens, 200)
         XCTAssertEqual(store.todayTurns?.averageSpeed, 200)
         try Data().write(to: root.appending(path: "release"))
@@ -452,7 +462,7 @@ final class UsageStoreTests: XCTestCase {
         await engine.stop()
         XCTAssertEqual(store.todayDay, "2026-11-15")
         XCTAssertNil(store.todayUsageError)
-        await store.refreshToday(now: ISO8601DateFormatter().date(from: "2026-11-14T16:02:00Z")!)
+        await store.refreshToday(now: midnight.addingTimeInterval(120))
         XCTAssertNotNil(store.todayUsageError)
         XCTAssertEqual(store.todayDay, "2026-11-15")
         try FileManager.default.removeItem(at: root)

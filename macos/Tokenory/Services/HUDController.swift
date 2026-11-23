@@ -1,5 +1,5 @@
 // [INPUT]: HUD preferences and the shared usage store.
-// [OUTPUT]: Compact nonactivating panel that follows the pointer display and stays out of other apps' full-screen Spaces.
+// [OUTPUT]: Nonactivating panel with optional idle hiding, configurable triple-click behavior, and pointer display tracking.
 // [POS]: App lifecycle owner; a HUD never changes the app's Dock activation policy.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -9,18 +9,37 @@ import SwiftUI
 
 @MainActor
 final class HUDController {
+    private enum Visibility { case disabled, visible, idle, snoozed }
+
+    private struct Activity: Equatable {
+        let day: String?
+        let zone: String?
+        let tokens: TokenBreakdown
+        let records: Int64
+        let requests: Int64?
+    }
+
     static let shared = HUDController()
     private(set) var panel: NSPanel?
     private let preferences: HUDPreferences
     private let store: UsageStore
+    private let idleTimeout: Duration
+    private let openStatistics: (() -> Void)?
+    private var visibility = Visibility.disabled
+    private var autoHideWasEnabled = false
+    private var lastActivity: Activity?
+    private var visibilityTask: Task<Void, Never>?
     private var appliedPlacement: HUDPlacement?
     private var observing = false
     private var screenTask: Task<Void, Never>?
     private var activeScreenFrame: CGRect?
     private var screenObserver: NSObjectProtocol?
 
-    init(preferences: HUDPreferences = .shared, store: UsageStore = .shared) {
+    init(preferences: HUDPreferences = .shared, store: UsageStore = .shared,
+         idleTimeout: Duration = .seconds(30), openStatistics: (() -> Void)? = nil) {
         self.preferences = preferences; self.store = store
+        self.idleTimeout = idleTimeout
+        self.openStatistics = openStatistics
     }
 
     static let fontRegistered: Bool = {
@@ -35,28 +54,76 @@ final class HUDController {
         screenObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.placeOnScreen() }
         }
-        observePreferences()
-        screenTask = Task { [weak self] in
-            while !Task.isCancelled {
-                self?.followActiveScreen()
-                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+        observeHUD()
+    }
+
+    private func observeHUD() {
+        guard observing else { return }
+        withObservationTracking {
+            let autoHide = preferences.autoHideWhenIdle
+            let autoHideChanged = autoHideWasEnabled != autoHide
+            autoHideWasEnabled = autoHide
+            let hasNewUsage = autoHide && observeNewUsage()
+            if !autoHide { lastActivity = nil }
+
+            if !preferences.enabled {
+                if visibility != .disabled { setVisibility(.disabled) }
+            } else if visibility != .snoozed && (visibility == .disabled || autoHideChanged || hasNewUsage) {
+                showHUD()
             }
+            let placement = preferences.placement
+            if visibility == .visible, appliedPlacement != placement { placeOnScreen() }
+            HUDSound.shared.update(preferences: preferences)
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.observeHUD() }
         }
     }
 
-    private func observePreferences() {
-        guard observing else { return }
-        withObservationTracking {
-            if preferences.enabled {
-                if panel?.isVisible != true { show() }
-            } else if panel?.isVisible == true { hide() }
-            let placement = preferences.placement
-            if preferences.enabled, appliedPlacement != placement {
-                placeOnScreen()
+    private func observeNewUsage() -> Bool {
+        guard let summary = store.today?.summary else { return false }
+        let activity = Activity(day: store.todayDay, zone: store.todayTimeZone, tokens: summary.tokenBreakdown,
+                                records: summary.recordCount, requests: summary.requests)
+        let previous = lastActivity
+        lastActivity = activity
+        if let previous, previous.day == activity.day, previous.zone == activity.zone {
+            return activity != previous
+        }
+        return activity.records > 0 && (previous == nil || previous?.zone == activity.zone)
+    }
+
+    func dismissFromHUD() {
+        let dismissal = preferences.dismissal
+        guard visibility == .visible, preferences.enabled, dismissal != .ignore else { return }
+        if let duration = dismissal.duration {
+            setVisibility(.snoozed, timeout: duration)
+        } else {
+            preferences.enabled = false
+            setVisibility(.disabled)
+        }
+    }
+
+    private func showHUD() {
+        setVisibility(.visible, timeout: preferences.autoHideWhenIdle ? idleTimeout : nil)
+    }
+
+    private func setVisibility(_ next: Visibility, timeout: Duration? = nil) {
+        visibilityTask?.cancel()
+        visibilityTask = nil
+        visibility = next
+        if next == .visible {
+            if panel?.isVisible != true { show() }
+        } else {
+            hide()
+        }
+        guard let timeout else { return }
+        visibilityTask = Task { [weak self] in
+            do { try await Task.sleep(for: timeout) } catch { return }
+            guard !Task.isCancelled, let self, preferences.enabled else { return }
+            if next == .snoozed {
+                showHUD()
+            } else if preferences.autoHideWhenIdle {
+                setVisibility(.idle)
             }
-            HUDSound.shared.update(preferences: preferences)
-        } onChange: { [weak self] in
-            Task { @MainActor in self?.observePreferences() }
         }
     }
 
@@ -91,14 +158,24 @@ final class HUDController {
         if panel.contentView == nil {
             panel.contentView = NSHostingView(rootView: MechanicalHUDView(canPlaySound: { [weak panel] in
                 panel?.isOnActiveSpace == true
-            })
+            }, dismiss: { [weak self] in
+                self?.dismissFromHUD()
+            }, openStatistics: openStatistics)
                 .environment(store).environment(preferences).focusEffectDisabled())
         }
         placeOnScreen()
         panel.orderFrontRegardless()
+        screenTask?.cancel()
+        screenTask = Task { [weak self] in
+            while !Task.isCancelled {
+                self?.followActiveScreen()
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            }
+        }
     }
 
     private func hide() {
+        screenTask?.cancel(); screenTask = nil
         panel?.orderOut(nil)
         // Release the SwiftUI task as well as hiding the window; no hidden rolling or sound.
         panel?.contentView = nil
@@ -107,8 +184,8 @@ final class HUDController {
 
     func stop() {
         observing = false
-        screenTask?.cancel(); screenTask = nil
-        hide()
+        setVisibility(.disabled)
+        lastActivity = nil
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
     }

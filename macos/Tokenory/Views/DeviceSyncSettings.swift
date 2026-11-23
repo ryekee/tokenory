@@ -1,9 +1,12 @@
 // [INPUT]: Private-library state and deliberate user actions.
-// [OUTPUT]: Publish, pause and withdraw usage, or explain why sync is unavailable for this ledger.
+// [OUTPUT]: iCloud sync and storage cards with live relative status and a Delete Data action with two-step confirmation.
+// [POS]: iCloud settings section.
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 struct DeviceSyncSettings: View {
     @Environment(UsageStore.self) private var store
+    @State private var choosingDeletionScope = false
     @State private var deletion: Scope?
     private enum Scope: Identifiable {
         case device, all
@@ -25,47 +28,85 @@ struct DeviceSyncSettings: View {
     }
 
     private func syncControls(_ sync: DeviceSyncStore) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Label(sync.localName, systemImage: "desktopcomputer").font(.headline)
-                Spacer()
-                Toggle(L("settings.cloud"), isOn: Binding(get: { sync.enabled }, set: { on in
-                    Task { if on { await sync.enable() } else { await sync.stop() } }
-                })).toggleStyle(.switch).labelsHidden().disabled(sync.managing)
-            }
-            Text(L("cloud.scope")).foregroundStyle(.secondary)
-            HStack {
-                if sync.busy || sync.managing { ProgressView().controlSize(.small) }
-                if let date = sync.lastContact {
-                    Text(LF("cloud.last", date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: Localization.locale))))
-                        .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 14) {
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label(sync.localName, systemImage: "desktopcomputer").font(.headline)
+                            Text(L("cloud.scope"))
+                                .font(.callout).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                        SettingsSwitch(label: L("settings.cloud"), isOn: Binding(get: { sync.enabled }, set: { on in
+                            Task { if on { await sync.enable() } else { await sync.stop() } }
+                        })).disabled(sync.managing)
+                    }
+                    HStack {
+                        if sync.busy || sync.managing { ProgressView().controlSize(.small) }
+                        if let date = sync.lastContact {
+                            TimelineView(.periodic(from: .now, by: 30)) { context in
+                                Text(LF("cloud.last", relativeSyncTime(date, now: context.date)))
+                                    .font(.callout).foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        if sync.enabled {
+                            Button(L("cloud.refresh")) { sync.refresh(localChanged: true) }
+                                .settingsActionForeground().disabled(sync.busy || sync.managing)
+                        }
+                    }
+                    if sync.pausing { Text(L("cloud.pausing")).font(.callout).foregroundStyle(.secondary) }
+                    if let message = sync.message { Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
+                    if let notice = sync.compatibilityNotice { Text(notice).font(.callout).foregroundStyle(.secondary) }
                 }
-                Spacer()
-                if sync.enabled { Button(L("cloud.refresh")) { sync.refresh(localChanged: true) }.disabled(sync.busy || sync.managing) }
             }
-            if sync.pausing { Text(L("cloud.pausing")).foregroundStyle(.secondary) }
-            if let message = sync.message { Text(message).foregroundStyle(.secondary).textSelection(.enabled) }
-            if let notice = sync.compatibilityNotice { Text(notice).foregroundStyle(.secondary) }
-            Divider()
-            Text(L("cloud.storage")).font(.headline)
-            Text(L("cloud.pauseNote")).foregroundStyle(.secondary)
-            HStack {
-                Button(Scope.device.title) { deletion = .device }
-                Button(Scope.all.title) { deletion = .all }
-            }.disabled(sync.managing)
-            if sync.hasUnconfirmedDeviceDeletion {
-                Button(L("cloud.checkDeviceDeletion")) { Task { await sync.confirmPreviousDeletion(all: false) } }
-                    .disabled(sync.managing)
-            }
-            if sync.hasUnconfirmedAllDeletion {
-                Button(L("cloud.checkAllDeletion")) { Task { await sync.confirmPreviousDeletion(all: true) } }
-                    .disabled(sync.managing)
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(L("cloud.storage")).font(.headline)
+                            Text(L("cloud.pauseNote"))
+                                .font(.callout).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                        VStack(alignment: .trailing, spacing: 8) {
+                            Button(L("cloud.delete_data")) { choosingDeletionScope = true }
+                                .settingsActionForeground()
+                            if sync.hasUnconfirmedDeviceDeletion {
+                                Button(L("cloud.checkDeviceDeletion")) { Task { await sync.confirmPreviousDeletion(all: false) } }
+                                    .settingsActionForeground()
+                            }
+                            if sync.hasUnconfirmedAllDeletion {
+                                Button(L("cloud.checkAllDeletion")) { Task { await sync.confirmPreviousDeletion(all: true) } }
+                                    .settingsActionForeground()
+                            }
+                        }
+                        .disabled(sync.managing)
+                    }
+                }
             }
         }
-        .alert(item: $deletion) { scope in
-            Alert(title: Text(scope.title), message: Text(scope.detail),
-                  primaryButton: .destructive(Text(scope.title)) { Task { await sync.delete(all: scope == .all) } },
-                  secondaryButton: .cancel(Text(L("action.cancel"))))
+        .confirmationDialog(L("cloud.choose_delete_scope"), isPresented: $choosingDeletionScope, titleVisibility: .visible) {
+            Button(Scope.device.title, role: .destructive) { deletion = .device }
+            Button(Scope.all.title, role: .destructive) { deletion = .all }
+            Button(L("action.cancel"), role: .cancel) {}.keyboardShortcut(.defaultAction)
         }
+        .alert(deletion?.title ?? "", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }),
+               presenting: deletion) { scope in
+            Button(L("action.cancel"), role: .cancel) {}.keyboardShortcut(.defaultAction)
+            Button(scope.title, role: .destructive) { Task { await sync.delete(all: scope == .all) } }
+        } message: { scope in
+            Text(scope.detail)
+        }
+    }
+
+    private func relativeSyncTime(_ date: Date, now: Date) -> String {
+        if now.timeIntervalSince(date) < 1 { return L("cloud.just_now") }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Localization.locale
+        return formatter.localizedString(for: date, relativeTo: now)
     }
 }

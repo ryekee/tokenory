@@ -1,5 +1,5 @@
 // [INPUT]: 接收用量存储、更新服务及系统登录项状态。
-// [OUTPUT]: 提供通用、HUD、价格、采集、iCloud、数据与关于设置。数据页包含导入和恢复，关于页管理更新。
+// [OUTPUT]: 提供各项设置、费率刷新后的重算预览、采集保存状态和备份管理菜单。
 // [POS]: 设置窗口入口；价格目录交给 PriceCatalogView 展示。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -51,6 +51,11 @@ private struct SettingsOperationStatus {
         return false
     }
 
+    var isSucceeded: Bool {
+        if case .succeeded = phase { return true }
+        return false
+    }
+
     var message: String {
         let keys = operation.messageKeys
         switch phase {
@@ -59,6 +64,11 @@ private struct SettingsOperationStatus {
         case .failed: return L(keys.failed)
         }
     }
+}
+
+private struct PriceReview {
+    let estimate: RepricePreview
+    let usesSavedRates: Bool
 }
 
 struct SettingsView: View {
@@ -83,7 +93,7 @@ struct SettingsView: View {
     @State private var ledgerStatus: SettingsOperationStatus?
     @State private var importBusy = false
     @State private var restoreGeneration = 0
-    @State private var preview: RepricePreview?
+    @State private var priceReview: PriceReview?
     @State private var pendingRestore: URL?
 
     private var busy: Bool {
@@ -138,13 +148,23 @@ struct SettingsView: View {
             .task(id: tab) {
                 if tab == .collection && !defaultPathsLoaded { await loadDefaultScanPaths() }
             }
-            .sheet(isPresented: Binding(get: { preview != nil }, set: { if !$0 { preview = nil } })) {
-                if let p = preview {
+            .sheet(isPresented: Binding(get: { priceReview != nil }, set: { if !$0 { priceReview = nil } })) {
+                if let priceReview {
+                    let estimate = priceReview.estimate
                     VStack(alignment: .leading, spacing: 18) {
                         Text(L("price.preview")).font(.title2)
-                        Text(LF("price.preview_summary", p.records, usd(p.before), usd(p.after))).font(.headline)
-                        Text(LF("price.preview_unpriced", compactTokens(p.unpricedTokens)))
-                        HStack { Button(L("action.cancel")) { preview = nil }; Spacer(); Button(L("price.apply")) { applyReprice(p) }.buttonStyle(.borderedProminent).disabled(busy) }
+                        if priceReview.usesSavedRates {
+                            Text(L("price.refresh_fallback")).font(.callout).foregroundStyle(.secondary)
+                        }
+                        Text(LF("price.preview_summary", estimate.records, usd(estimate.before), usd(estimate.after))).font(.headline)
+                        Text(LF("price.preview_unpriced", compactTokens(estimate.unpricedTokens)))
+                        HStack {
+                            Button(L("action.cancel")) { self.priceReview = nil }
+                                .settingsActionForeground().keyboardShortcut(.cancelAction)
+                            Spacer()
+                            Button(L("price.apply")) { applyReprice(estimate) }
+                                .buttonStyle(.borderedProminent).disabled(busy)
+                        }
                     }.padding(24).frame(width: 500)
                 }
             }
@@ -161,18 +181,16 @@ struct SettingsView: View {
             }
     }
     private var generalSettings: some View {
-        let pickerWidth = WorkspaceDropdownTrigger.fittingWidth(for: AppLanguage.allCases.map(\.title))
+        let pickerWidth = WorkspaceDropdownTrigger.fittingWidth(for: AppLanguage.allCases.map(\.title) + AppAppearance.allCases.map(\.title))
         return WorkspacePanel {
             VStack(spacing: 16) {
                 HStack {
                     Text(L("appearance.title"))
                     Spacer()
-                    Picker(L("appearance.title"), selection: $appearance) {
-                        ForEach(AppAppearance.allCases, id: \.self) { value in
-                            Text(value.title).tag(value)
-                        }
-                    }
-                    .labelsHidden().pickerStyle(.segmented).fixedSize()
+                    WorkspaceDropdown(
+                        label: L("appearance.title"), selection: $appearance,
+                        options: AppAppearance.allCases, width: pickerWidth, title: { $0.title }
+                    )
                 }
                 Divider()
                 HStack {
@@ -194,11 +212,11 @@ struct SettingsView: View {
                 HStack {
                     Text(L("settings.login"))
                     Spacer()
-                    Toggle(L("settings.login"), isOn: Binding(get: { login.enabled }, set: { value in do { try login.setEnabled(value) } catch { store.fail(error) } }))
-                        .labelsHidden().toggleStyle(.switch).controlSize(.small).fixedSize().frame(width: 180, alignment: .trailing)
+                    SettingsSwitch(label: L("settings.login"), isOn: Binding(get: { login.enabled }, set: { value in do { try login.setEnabled(value) } catch { store.fail(error) } }))
                 }
                 if login.status == .requiresApproval {
                     Button(L("settings.open_login")) { SMAppService.openSystemSettingsLoginItems() }
+                        .settingsActionForeground()
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
@@ -219,7 +237,8 @@ struct SettingsView: View {
                         Text(LF("update.current", updates.currentVersion)).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button(L("update.check")) { updates.check() }.disabled(!updates.canCheckForUpdates)
+                    Button(L("update.check")) { updates.check() }
+                        .settingsActionForeground().disabled(!updates.canCheckForUpdates)
                 }
             }
             WorkspacePanel {
@@ -227,10 +246,10 @@ struct SettingsView: View {
                     HStack {
                         Text(L("update.automatic"))
                         Spacer()
-                        Toggle(L("update.automatic"), isOn: Binding(
+                        SettingsSwitch(label: L("update.automatic"), isOn: Binding(
                             get: { updates.automaticallyChecksForUpdates },
                             set: { updates.setAutomaticChecks($0) }
-                        )).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        ))
                     }
                     if updates.automaticallyChecksForUpdates {
                         Divider()
@@ -254,14 +273,18 @@ struct SettingsView: View {
     private var priceSettings: some View {
         VStack(alignment: .leading, spacing: 14) {
             WorkspacePanel {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(L("price.automatic")).font(.headline)
-                    Text(L("price.explanation")).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        Button(L("price.refresh")) { refreshPrices() }.disabled(busy)
-                        Button(L("price.reestimate")) { reprice() }.disabled(busy || store.prices["current"]["id"].string == nil)
+                HStack(alignment: .top, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(L("price.automatic")).font(.headline)
+                        Text(L("price.explanation")).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: 8) {
                         if pricingBusy { ProgressView().controlSize(.small) }
-                    }.padding(.top, 2)
+                        Button(L("price.refresh"), action: refreshPricesAndPreview)
+                            .settingsActionForeground().disabled(busy)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
                 }
             }
             WorkspacePanel {
@@ -305,7 +328,7 @@ struct SettingsView: View {
                     HStack {
                         Text(L("settings.timezone"))
                         Spacer()
-                        Text(store.settings?.timezone ?? "Asia/Shanghai").foregroundStyle(.secondary)
+                        Text(store.systemTimeZone.identifier).foregroundStyle(.secondary)
                     }
                     Text(L("settings.timezone_note")).font(.caption).foregroundStyle(.secondary)
                 }
@@ -314,71 +337,105 @@ struct SettingsView: View {
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 12) {
                     let clients = store.clients.filter(\.supportsExtraPaths)
-                    HStack(spacing: 10) {
-                        Text(L("field.tool"))
-                        WorkspaceDropdown(
-                            label: L("field.tool"), selection: $selectedClient, options: clients.map(\.id), width: 156,
-                            title: { id in clients.first(where: { $0.id == id })?.name ?? clientName(id) },
-                            brand: { ($0, .tool) }
-                        ).disabled(clients.isEmpty)
+                    Group {
+                        HStack(spacing: 10) {
+                            Text(L("field.tool"))
+                            WorkspaceDropdown(
+                                label: L("field.tool"), selection: $selectedClient, options: clients.map(\.id), width: 156,
+                                title: { id in clients.first(where: { $0.id == id })?.name ?? clientName(id) },
+                                brand: { ($0, .tool) }
+                            ).disabled(clients.isEmpty)
+                        }
+                        pathEditor(text: Binding(
+                            get: { scanPaths[selectedClient] ?? "" },
+                            set: { scanPaths[selectedClient] = $0 }
+                        ))
+                        Text(L("settings.paths_note")).font(.caption).foregroundStyle(.secondary)
+                        if let conflict = duplicateScanPathClient {
+                            Text(LF("settings.duplicate_path", clientName(conflict)))
+                                .font(.caption).foregroundStyle(.red)
+                        }
                     }
-                    pathEditor(L("settings.scan_paths"), text: Binding(
-                        get: { scanPaths[selectedClient] ?? "" },
-                        set: { scanPaths[selectedClient] = $0 }
-                    ))
-                    Text(L("settings.paths_note")).font(.caption).foregroundStyle(.secondary)
-                    if let conflict = duplicateScanPathClient {
-                        Text(LF("settings.duplicate_path", clientName(conflict)))
-                            .font(.caption).foregroundStyle(.red)
-                    }
+                    .disabled(collectionStatus?.isPending == true)
+                    collectionSaveControl
                 }
             }
-            .disabled(collectionStatus?.isPending == true)
-            VStack(alignment: .trailing, spacing: 8) {
-                Button(L("settings.save"), action: saveSettings)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(busy || store.settings == nil || !defaultPathsLoaded || duplicateScanPathClient != nil)
-                if let collectionStatus { operationFeedback(collectionStatus) }
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
-    private func pathEditor(_ title: String, text: Binding<String>) -> some View {
-        let defaults = defaultScanPaths[selectedClient] ?? []
-        return VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.callout).fontWeight(.medium)
-            VStack(alignment: .leading, spacing: 0) {
-                if defaultPathsFailed {
-                    HStack {
-                        Text(L("settings.default_paths_failed")).foregroundStyle(.secondary)
-                        Button(L("action.retry")) { Task { await loadDefaultScanPaths() } }
-                    }.font(.caption).padding(8)
-                } else if defaultPathsLoaded {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(defaults, id: \.self) { path in
-                                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                    Image(systemName: "lock.fill").font(.system(size: 10)).accessibilityHidden(true)
-                                    Text(path).font(.system(size: 12, design: .monospaced))
-                                        .lineLimit(1).truncationMode(.middle).textSelection(.enabled).help(path)
-                                }
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+
+    private var collectionSaveControl: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            Button(action: saveSettings) {
+                ZStack {
+                    // Keep the button width stable while the status changes.
+                    ForEach(["settings.save", "settings.saving", "settings.saved", "action.retry"], id: \.self) { key in
+                        Label(L(key), systemImage: "checkmark").hidden()
+                    }
+                    if let status = collectionStatus {
+                        switch status.phase {
+                        case .pending:
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text(status.message)
                             }
-                        }.padding(8)
-                    }.frame(height: min(CGFloat(max(defaults.count, 1)) * 19 + 16, 110))
-                    Divider().padding(.horizontal, 8)
-                } else {
-                    ProgressView().controlSize(.small).padding(8)
+                        case .succeeded:
+                            Label(status.message, systemImage: "checkmark")
+                        case .failed:
+                            Text(L("action.retry"))
+                        }
+                    } else {
+                        Text(L("settings.save"))
+                    }
                 }
-                TextEditor(text: text)
-                    .font(.system(size: 12, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .padding(8).frame(height: 70)
-                    .accessibilityLabel(L("settings.extra_paths"))
             }
-            .background(WorkspaceStyle.canvas(scheme), in: RoundedRectangle(cornerRadius: WorkspaceStyle.fieldRadius))
+            .buttonStyle(.borderedProminent)
+            .disabled(busy || collectionStatus?.isSucceeded == true || store.settings == nil || !defaultPathsLoaded || duplicateScanPathClient != nil)
+            if case .failed(let detail)? = collectionStatus?.phase {
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(L("settings.save_failed"))
+                    DisclosureGroup(L("error.details")) {
+                        Text(detail).font(.caption).textSelection(.enabled)
+                    }
+                }
+                .font(.callout)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+    private func pathEditor(text: Binding<String>) -> some View {
+        let defaults = defaultScanPaths[selectedClient] ?? []
+        return VStack(alignment: .leading, spacing: 0) {
+            if defaultPathsFailed {
+                HStack {
+                    Text(L("settings.default_paths_failed")).foregroundStyle(.secondary)
+                    Button(L("action.retry")) { Task { await loadDefaultScanPaths() } }
+                        .settingsActionForeground()
+                }.font(.caption).padding(8)
+            } else if defaultPathsLoaded {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(defaults, id: \.self) { path in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Image(systemName: "lock.fill").font(.system(size: 10)).accessibilityHidden(true)
+                                Text(path).font(.system(size: 12, design: .monospaced))
+                                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled).help(path)
+                            }
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }.padding(8)
+                }.frame(height: min(CGFloat(max(defaults.count, 1)) * 19 + 16, 110))
+                Divider().padding(.horizontal, 8)
+            } else {
+                ProgressView().controlSize(.small).padding(8)
+            }
+            TextEditor(text: text)
+                .font(.system(size: 12, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .padding(8).frame(height: 70)
+                .accessibilityLabel(L("settings.extra_paths"))
+        }
+        .background(WorkspaceStyle.canvas(scheme), in: RoundedRectangle(cornerRadius: WorkspaceStyle.fieldRadius))
     }
 
     private func loadDefaultScanPaths() async {
@@ -447,13 +504,21 @@ struct SettingsView: View {
             }
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(L("data.backups")).font(.headline)
-                    Text(L("data.backup_note")).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        Button(L("data.backup"), action: backup)
-                        Button(L("data.restore"), action: chooseRestore)
+                    HStack(alignment: .top, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(L("data.backups")).font(.headline)
+                            Text(L("data.backup_note")).font(.callout).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Menu(L("data.backup_management")) {
+                            Button(L("data.backup"), action: backup)
+                            Button(L("data.restore"), action: chooseRestore)
+                        }
+                        .settingsActionForeground()
+                        .fixedSize()
+                        .disabled(busy)
                     }
-                    .disabled(busy)
                     if let ledgerStatus { operationFeedback(ledgerStatus) }
                 }
             }
@@ -466,6 +531,7 @@ struct SettingsView: View {
                     }
                     Spacer()
                     Button(L("data.finder")) { NSWorkspace.shared.open(store.dataDirectory) }
+                        .settingsActionForeground()
                 }
             }
         }
@@ -483,7 +549,7 @@ struct SettingsView: View {
                 HStack(spacing: 8) {
                     Label(status.message, systemImage: "exclamationmark.circle")
                     Button(L("action.retry")) { retry(status.operation) }
-                        .disabled(busy)
+                        .settingsActionForeground().disabled(busy)
                 }
                 DisclosureGroup(L("error.details")) {
                     Text(detail).font(.caption).textSelection(.enabled)
@@ -502,7 +568,7 @@ struct SettingsView: View {
     }
 
     private func clearSavedCollectionStatus() {
-        if case .succeeded? = collectionStatus?.phase { collectionStatus = nil }
+        if collectionStatus?.isSucceeded == true { collectionStatus = nil }
     }
 
     private func setOperationStatus(_ phase: SettingsOperationStatus.Phase, for operation: SettingsOperation) {
@@ -527,17 +593,51 @@ struct SettingsView: View {
         }
     }
 
-    private func refreshPrices() {
+    private func refreshPricesAndPreview() {
+        guard !busy else { return }
         pricingBusy = true
-        Task { defer { pricingBusy = false }; do { _ = try await store.perform("refreshPrices"); priceNotice = L("price.refreshed"); await store.loadManagement() } catch { store.fail(error) } }
-    }
-    private func reprice() {
-        guard let id = store.prices["current"]["id"].string else { return }; pricingBusy = true
-        Task { defer { pricingBusy = false }; do { preview = try await store.perform("repricePreview", payload: .object(["snapshotId": .string(id), "filter": .object([:])])).decode(RepricePreview.self) } catch { store.fail(error) } }
+        priceNotice = nil
+        Task {
+            defer { pricingBusy = false }
+            do {
+                struct RefreshedPrice: Decodable { let id: String }
+                let snapshotId: String
+                var refreshError: Error?
+                do {
+                    snapshotId = try await store.perform("refreshPrices").decode(RefreshedPrice.self).id
+                    priceNotice = L("price.refreshed")
+                    await store.loadManagement()
+                } catch {
+                    guard let savedId = store.prices["current"]["id"].string else { throw error }
+                    snapshotId = savedId
+                    refreshError = error
+                }
+                let payload: JSONValue = .object(["snapshotId": .string(snapshotId), "filter": .object([:])])
+                let estimate = try await store.perform("repricePreview", payload: payload).decode(RepricePreview.self)
+                if estimate.records > 0 {
+                    priceReview = PriceReview(estimate: estimate, usesSavedRates: refreshError != nil)
+                } else if let refreshError {
+                    store.fail(refreshError)
+                }
+            } catch { store.fail(error) }
+        }
     }
     private func applyReprice(_ p: RepricePreview) {
+        guard !busy else { return }
         pricingBusy = true
-        Task { defer { pricingBusy = false }; do { _ = try await store.perform("repriceApply", payload: .object(["id": .string(p.id)])); preview = nil; priceNotice = L("price.applied"); await store.refresh(); await store.loadManagement() } catch { store.fail(error) } }
+        Task {
+            defer { pricingBusy = false }
+            do {
+                _ = try await store.perform("repriceApply", payload: .object(["id": .string(p.id)]))
+                priceReview = nil
+                priceNotice = L("price.applied")
+                await store.refresh()
+                await store.loadManagement()
+            } catch {
+                priceReview = nil
+                store.fail(error)
+            }
+        }
     }
     private func saveSettings() {
         guard var settings = store.settings else { return }

@@ -82,6 +82,7 @@ async fn stream_update_partial_write_and_deleted_log_preserve_history() {
     };
     let config = Config {
         home_dir: home.path().into(),
+        timezone: "Asia/Shanghai".into(),
         ..Default::default()
     };
     let mut cache = DiagnosticCache::default();

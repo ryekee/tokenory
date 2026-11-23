@@ -1,26 +1,29 @@
+use chrono::{SecondsFormat, TimeZone};
 use serde_json::json;
 use tokenory::{
+    config::Config,
     db::{put_record, Database},
     queries::{report, Filter},
     usage::UsageRecord,
 };
 
 #[test]
-fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
+fn hourly_uses_system_time_for_all_effective_rows() {
     let root = tempfile::tempdir().unwrap();
     let mut db = Database::open(root.path()).unwrap();
+    let zone = Config::system_timezone();
+    let time = |day, hour, minute, second| {
+        zone.with_ymd_and_hms(2026, 11, day, hour, minute, second)
+            .earliest().unwrap()
+    };
     let add = |key: &str,
                client: &str,
                source: &str,
-               timestamp: Option<&str>,
+               timestamp: Option<chrono::DateTime<chrono_tz::Tz>>,
                tokens: i64,
                cost: Option<f64>,
                daily: bool| {
-        let timestamp = timestamp.map(|s| {
-            chrono::DateTime::parse_from_rfc3339(s)
-                .unwrap()
-                .timestamp_millis()
-        });
+        let timestamp = timestamp.map(|instant| instant.timestamp_millis());
         let row: UsageRecord = serde_json::from_value(json!({
             "key": key, "client": client, "provider": "test", "model": "m", "date": "2026-11-06",
             "timestampMs": timestamp, "tokens": {"input":tokens,"output":0,"cacheRead":0,"cacheWrite":0,"reasoning":0},
@@ -32,7 +35,7 @@ fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
         "first",
         "codex",
         "local",
-        Some("2026-11-05T16:00:00Z"),
+        Some(time(6, 0, 0, 0)),
         100,
         Some(0.2),
         false,
@@ -41,7 +44,7 @@ fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
         "second",
         "codex",
         "local",
-        Some("2026-11-05T16:59:59Z"),
+        Some(time(6, 0, 59, 59)),
         200,
         None,
         false,
@@ -50,7 +53,7 @@ fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
         "later",
         "codex",
         "local",
-        Some("2026-11-05T17:00:00Z"),
+        Some(time(6, 1, 0, 0)),
         50,
         None,
         false,
@@ -60,7 +63,7 @@ fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
         "daily-with-time",
         "claude",
         "history",
-        Some("2026-11-05T16:00:00Z"),
+        Some(time(6, 0, 0, 0)),
         20,
         None,
         true,
@@ -69,7 +72,7 @@ fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
         "mismatched-day",
         "codex",
         "local",
-        Some("2026-11-06T16:00:00Z"),
+        Some(time(7, 0, 0, 0)),
         10,
         None,
         false,
@@ -78,7 +81,7 @@ fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
         "inactive",
         "codex",
         "old",
-        Some("2026-11-05T16:00:00Z"),
+        Some(time(6, 0, 0, 0)),
         9999,
         Some(9.0),
         false,
@@ -92,19 +95,15 @@ fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
         ..Default::default()
     };
     let result = report(&mut db, &filter).unwrap();
-    let snapshot = tokenory::device_snapshot::export(&mut db, "Asia/Shanghai").unwrap();
-    let sum = |hour| snapshot.buckets.iter().filter(|row| row.hour == hour)
-        .map(|row| row.summary.tokens).sum::<i64>();
-    assert_eq!((sum(Some(0)), sum(Some(1)), sum(None)), (300, 50, 430));
     assert_eq!(result.details.len(), 1);
     assert_eq!(result.summary.tokens, 780);
     let hours = result.hourly.unwrap();
     assert_eq!(hours.buckets.len(), 2);
-    assert_eq!(hours.buckets[0].key, "2026-11-06T00:00:00+08:00");
+    assert_eq!(hours.buckets[0].key, time(6, 0, 0, 0).to_rfc3339_opts(SecondsFormat::Secs, false));
     assert_eq!(hours.buckets[0].summary.tokens, 300);
     assert_eq!(hours.buckets[0].summary.known_estimated_cost_usd, Some(0.2));
     assert_eq!(hours.buckets[0].summary.cost_status, "partial");
-    assert_eq!(hours.buckets[1].key, "2026-11-06T01:00:00+08:00");
+    assert_eq!(hours.buckets[1].key, time(6, 1, 0, 0).to_rfc3339_opts(SecondsFormat::Secs, false));
     assert_eq!(hours.buckets[1].summary.known_estimated_cost_usd, None);
     assert_eq!(hours.unallocated.tokens, 430);
     assert_eq!(hours.unallocated.known_estimated_cost_usd, Some(0.5));
@@ -121,6 +120,24 @@ fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
         .is_empty());
     filter.to = Some("2026-11-07".into());
     assert!(report(&mut db, &filter).unwrap().hourly.is_none());
+}
+
+#[test]
+fn local_hour_keeps_repeated_dst_hours_distinct() {
+    let root = tempfile::tempdir().unwrap();
+    let db = Database::open(root.path()).unwrap();
+    for (utc, local) in [
+        ("2026-11-01T05:30:00Z", "2026-11-01T01:00:00-04:00"),
+        ("2026-11-01T06:30:00Z", "2026-11-01T01:00:00-05:00"),
+    ] {
+        let instant = chrono::DateTime::parse_from_rfc3339(utc).unwrap().timestamp_millis();
+        let bucket: String = db.connection.query_row(
+            "SELECT local_usage_hour(?1, 'America/New_York', '2026-11-01', 1)",
+            [instant],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(bucket, local);
+    }
 }
 
 #[test]

@@ -2044,6 +2044,7 @@ dependencies = [
  "clap",
  "dirs",
  "fs2",
+ "iana-time-zone",
  "notify",
  "predicates",
  "reqwest",
