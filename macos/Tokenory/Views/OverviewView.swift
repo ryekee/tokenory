@@ -306,8 +306,8 @@ struct OverviewView: View {
             OverviewDeviceRow(id: id, name: name, summary: source.summary, models: source.overviewModelCount)
         }
         return [row("total", L("cloud.overview.total"), overview), row("local", store.localDeviceName, localAtSync)]
-            + remoteReports.keys.sorted().compactMap { id in
-                remoteReports[id].map { row("remote:" + id, store.deviceName(id), $0) }
+            + remoteReports.map { id, report in
+                row("remote:" + id, store.deviceName(id), report)
             }
     }
     private var reportFilter: UsageFilter { store.reportFilter ?? store.filter }

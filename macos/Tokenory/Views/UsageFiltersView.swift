@@ -1,5 +1,5 @@
 // [INPUT]: Shared usage filters and the Records conversation selection.
-// [OUTPUT]: Single-row dimension controls with neutral light-mode labels and a title-aware conversation picker.
+// [OUTPUT]: Single-row dimension controls ranked by scoped ledger Tokens for tools/providers and by name for models, plus a title-aware conversation picker.
 // [POS]: Filter toolbar; the conversation lookup runs only while its popover is open.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -42,33 +42,39 @@ struct UsageFiltersView: View {
         Group {
             WorkspaceDropdown(
                 label: L("field.tool"), selection: dimension(\.client),
-                options: [""] + available(store.catalog?.clients, store.cloud.remoteCatalog?.clients), width: 104, flexibleWidth: true,
+                options: [""] + rankedFilterKeys(local: store.catalog?.clients, remote: store.cloud.remoteCatalog?.clients),
+                width: 104, flexibleWidth: true,
                 title: { $0.isEmpty ? L("filter.tools") : clientName($0) },
                 brand: { $0.isEmpty ? nil : ($0, .tool) }
             )
             WorkspaceDropdown(
                 label: L("field.provider"), selection: dimension(\.provider),
-                options: [""] + available(store.catalog?.providers, store.cloud.remoteCatalog?.providers), width: 104, flexibleWidth: true,
+                options: [""] + rankedFilterKeys(local: store.catalog?.providers, remote: store.cloud.remoteCatalog?.providers),
+                width: 104, flexibleWidth: true,
                 title: { $0.isEmpty ? L("filter.providers") : $0 },
                 brand: { $0.isEmpty ? nil : ($0, .provider) }
             )
             WorkspaceModelDropdown(
-                selection: dimension(\.model), models: available(store.catalog?.models, store.cloud.remoteCatalog?.models),
+                selection: dimension(\.model), models: availableModels,
                 width: 140, flexibleWidth: true
             )
         }
     }
 
-    private func available(_ local: [UsageGroup]?, _ remote: [UsageGroup]?) -> [String] {
-        let keys = rankedKeys(local)
-        guard !localOnly else { return keys }
-        let localKeys = Set(keys)
-        return keys + rankedKeys(remote).filter { !localKeys.contains($0) }
+    private var availableModels: [String] {
+        let local = store.catalog?.models.map(\.key) ?? []
+        guard !localOnly, let remote = store.cloud.remoteCatalog else { return local }
+        return Array(Set(local + remote.models.map(\.key)))
     }
 
-    private func rankedKeys(_ groups: [UsageGroup]?) -> [String] {
-        (groups ?? []).sorted { left, right in
-            if left.summary.tokens != right.summary.tokens { return left.summary.tokens > right.summary.tokens }
+    func rankedFilterKeys(local: [UsageGroup]?, remote: [UsageGroup]?) -> [String] {
+        let groups = (local ?? []) + (localOnly ? [] : (remote ?? []))
+        var tokensByKey: [String: Int64] = [:]
+        for group in groups {
+            tokensByKey[group.key, default: 0] += group.summary.tokens
+        }
+        return tokensByKey.sorted { left, right in
+            if left.value != right.value { return left.value > right.value }
             return left.key < right.key
         }.map(\.key)
     }

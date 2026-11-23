@@ -121,6 +121,35 @@ final class PresentationDataTests: XCTestCase {
     }
 
     @MainActor
+    func testFilterRanksKeysByTokensAcrossTheSelectedMacs() {
+        let local = [UsageGroup(key: "local", summary: summary(20, cost: nil)),
+                     UsageGroup(key: "shared", summary: summary(10, cost: nil)),
+                     UsageGroup(key: "another-local", summary: summary(10, cost: nil))]
+        let remote = [UsageGroup(key: "remote", summary: summary(40, cost: nil)),
+                      UsageGroup(key: "shared", summary: summary(40, cost: nil)),
+                      UsageGroup(key: "another-remote", summary: summary(20, cost: nil))]
+
+        let allMacs = UsageFiltersView(showsSource: false, localOnly: false)
+        let thisMac = UsageFiltersView(showsSource: true, localOnly: true)
+        XCTAssertEqual(allMacs.rankedFilterKeys(local: local, remote: remote),
+                       ["shared", "remote", "another-remote", "local", "another-local"])
+        XCTAssertEqual(thisMac.rankedFilterKeys(local: local, remote: remote),
+                       ["local", "another-local", "shared"])
+    }
+
+    @MainActor
+    func testOverviewDeviceReadoutOrdersOtherMacsByNameThenID() {
+        let rows = [OverviewDeviceRow(id: "total", name: "Total", summary: nil),
+                    OverviewDeviceRow(id: "local", name: "This Mac", summary: nil),
+                    OverviewDeviceRow(id: "remote:c", name: "Studio", summary: nil),
+                    OverviewDeviceRow(id: "remote:a", name: "Studio", summary: nil),
+                    OverviewDeviceRow(id: "remote:b", name: "Air", summary: nil)]
+
+        XCTAssertEqual(OverviewDeviceReadout(rows: rows).rows.map(\.id),
+                       ["total", "local", "remote:b", "remote:a", "remote:c"])
+    }
+
+    @MainActor
     func testStackedDeviceChartSegmentsShareOneBaseline() throws {
         let marks = DashboardChartMarks(
             bars: [.init(frame: CGRect(x: 10, y: 70, width: 14, height: 30), emphasized: true),

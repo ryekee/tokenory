@@ -203,8 +203,8 @@ private struct ActivityTooltip: View {
         let local = summary(store.cloudLocalActivityCalendar ?? store.activityCalendar)
         return [OverviewDeviceRow(id: "total", name: L("cloud.overview.total"), summary: day.summary),
                 OverviewDeviceRow(id: "local", name: store.localDeviceName, summary: local)]
-            + store.remoteActivityCalendars.keys.sorted().map { id in
-                OverviewDeviceRow(id: "remote:" + id, name: store.deviceName(id), summary: summary(store.remoteActivityCalendars[id]))
+            + store.remoteActivityCalendars.map { id, calendar in
+                OverviewDeviceRow(id: "remote:" + id, name: store.deviceName(id), summary: summary(calendar))
             }
     }
 
