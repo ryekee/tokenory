@@ -1,5 +1,5 @@
 // [INPUT]: 使用真实计价、导入和 SQLite 接口。
-// [OUTPUT]: 验证价格匹配、原生请求时间、订阅等价估算、免费路由、仅回填待计价与历史重估。
+// [OUTPUT]: 验证价格匹配、原生请求时间、订阅等价估算、长上下文计价依据、免费路由、待计价回填与历史重估。
 // [POS]: 隔离测试账本，验证计价规则的外部行为。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use tokenory::{
@@ -722,19 +722,38 @@ fn unknown_providers_use_labeled_first_party_references_without_changing_identit
 
 #[test]
 fn archived_mimo_reference_uses_full_request_tier_but_not_daily_total() {
-    let mut r = record();
-    r.provider = "xiaomi".into();
-    r.model = "mimo-v2-pro".into();
-    r.tokens = Tokens {
-        input: 250_000,
-        cache_read: 10_000,
-        output: 1000,
-        ..Default::default()
-    };
     let p = PriceSnapshot::bundled_reference();
-    assert!((estimate("local", &r, &p).cost.unwrap() - 0.51).abs() < 1e-12);
-    r.metadata = serde_json::json!({"granularity":"day"});
-    assert!((estimate("local", &r, &p).cost.unwrap() - 0.255).abs() < 1e-12);
+    for provider in ["xiaomi", "xiaomi-tp"] {
+        let mut r = record();
+        r.client = "openclaw".into();
+        r.provider = provider.into();
+        r.model = "mimo-v2-pro".into();
+        r.tokens = Tokens {
+            input: 250_000,
+            cache_read: 10_000,
+            output: 1000,
+            ..Default::default()
+        };
+        let time = r.timestamp_ms.unwrap();
+        r.key = format!(r#"snapshot:["openclaw","s",["event","openclaw:e1:{time}:250000:1000"]]"#);
+        r.metadata = serde_json::json!({"granularity":"sourceRecord","collectionMode":"sessionSnapshot"});
+        let event = estimate("local", &r, &p);
+        assert!((event.cost.unwrap() - 0.51).abs() < 1e-12, "{provider}");
+        assert!(
+            event.basis.contains("; long context true; event usage"),
+            "{provider}: {}",
+            event.basis
+        );
+
+        r.metadata = serde_json::json!({"granularity":"day"});
+        let daily = estimate("local", &r, &p);
+        assert!((daily.cost.unwrap() - 0.255).abs() < 1e-12, "{provider}");
+        assert!(
+            daily.basis.contains("; long context false; aggregate at base rates"),
+            "{provider}: {}",
+            daily.basis
+        );
+    }
 }
 
 #[test]

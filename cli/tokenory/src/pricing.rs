@@ -1,5 +1,5 @@
 // [INPUT]: 读取 UsageRecord、官方费率和 SQLite 账本。
-// [OUTPUT]: 提供价格快照、逐请求及订阅等价估算、可备份的首次补价与重估。
+// [OUTPUT]: 提供价格快照、逐请求及订阅等价估算，记录是否应用长上下文费率；支持首次补价与重估备份。
 // [POS]: 在采集与查询之间保存可追溯的计价依据；GPT-6.2 Ultrafast 按快照日期选择优惠价。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -381,7 +381,9 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
         e.rates.clone()
     };
     let official_mimo = e.source == MIMO_V2_PRO_SOURCE;
-    if official_mimo && !aggregate && t.input + t.cache_read + t.cache_write > 256_000 {
+    let mimo_long_context =
+        official_mimo && !aggregate && t.input + t.cache_read + t.cache_write > 256_000;
+    if mimo_long_context {
         rates.input_cost_per_token = rates.input_cost_per_token.map(|v| v * 2.);
         rates.output_cost_per_token = rates.output_cost_per_token.map(|v| v * 2.);
         rates.cache_read_input_token_cost = rates.cache_read_input_token_cost.map(|v| v * 2.);
@@ -474,7 +476,7 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
             period,
             e.assumption,
             speed_factor,
-            long_context,
+            long_context || mimo_long_context,
             if aggregate {
                 "aggregate at base rates; no request tier reconstruction"
             } else {
