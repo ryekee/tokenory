@@ -1,8 +1,73 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import Tokenory
 
 final class PresentationDataTests: XCTestCase {
+    @MainActor func testWorkspacePaletteMatchesApprovedLightAndDarkRoles() {
+        let roles: [(ColorScheme, [UInt32])] = [
+            (.light, [0xF6F8FA, 0xFFFFFF, 0x231B32, 0x60566E, 0x008CE0, 0x00A677,
+                      0xE10067, 0xBF8A00, 0x5260BD, 0xC31978, 0x716B80, 0x2E579E]),
+            (.dark, [0x100E18, 0x20182C, 0xFFFFFF, 0xC5C3C8, 0x00B0FF, 0x69F0AE,
+                     0xFF4081, 0xFFEA00, 0x5C6BC0, 0xF50057, 0xA19EA6, 0xFF4081])
+        ]
+        let filterLabel = WorkspaceStyle.lightFilterLabel.resolve(in: EnvironmentValues())
+        XCTAssertEqual(filterLabel.red, 89 / 255, accuracy: 0.001)
+        XCTAssertEqual(filterLabel.green, 99 / 255, accuracy: 0.001)
+        XCTAssertEqual(filterLabel.blue, 110 / 255, accuracy: 0.001)
+        for (scheme, expected) in roles {
+            var environment = EnvironmentValues()
+            environment.colorScheme = scheme
+            let colors = [WorkspaceStyle.canvas(scheme), WorkspaceStyle.surface(scheme),
+                          WorkspaceStyle.text, WorkspaceStyle.subtext, WorkspaceStyle.localUsage,
+                          WorkspaceStyle.otherDevices(scheme), WorkspaceStyle.costColor(scheme),
+                          WorkspaceStyle.fastUsage(scheme), WorkspaceStyle.cacheRead,
+                          WorkspaceStyle.cacheWrite, WorkspaceStyle.reasoningTokens, WorkspaceStyle.selection]
+            for (color, rgb) in zip(colors, expected) {
+                let resolved = color.resolve(in: environment)
+                let actual = UInt32((resolved.red * 255).rounded()) << 16
+                    | UInt32((resolved.green * 255).rounded()) << 8 | UInt32((resolved.blue * 255).rounded())
+                XCTAssertEqual(actual, rgb, "Color in \(scheme)")
+            }
+        }
+    }
+
+    @MainActor func testInactivePanelDropdownUsesTheNativeButtonBackground() throws {
+        let dropdown = WorkspaceDropdownTrigger(label: "Tool", value: "All tools", width: 126) {}
+        let view = HStack(spacing: 0) {
+            WorkspacePanel { dropdown }.frame(width: 200)
+            dropdown.padding(18).frame(width: 200, alignment: .leading).background(Color.white)
+        }
+        .environment(\.colorScheme, .light)
+        .environment(\.controlActiveState, .inactive)
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 64),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.appearance = NSAppearance(named: .aqua)
+        window.contentViewController = NSHostingController(rootView: view)
+        window.setContentSize(NSSize(width: 400, height: 64))
+        window.orderBack(nil)
+        let content = try XCTUnwrap(window.contentView)
+        content.layoutSubtreeIfNeeded()
+        content.displayIfNeeded()
+        let bitmap = try XCTUnwrap(content.bitmapImageRepForCachingDisplay(in: content.bounds))
+        content.cacheDisplay(in: content.bounds, to: bitmap)
+
+        // Sample the empty face between the title and chevron, at the same point in both buttons.
+        func face(at x: Int) throws -> NSColor {
+            try XCTUnwrap(bitmap.colorAt(x: x * bitmap.pixelsWide / 400, y: bitmap.pixelsHigh / 2)?
+                .usingColorSpace(.sRGB))
+        }
+        let panel = try face(at: 115), native = try face(at: 315)
+        XCTAssertEqual(panel.alphaComponent, native.alphaComponent, accuracy: 0.01)
+        for (actual, expected) in [(panel.redComponent, native.redComponent),
+                                   (panel.greenComponent, native.greenComponent),
+                                   (panel.blueComponent, native.blueComponent)] {
+            XCTAssertEqual(actual, expected, accuracy: 0.06)
+        }
+    }
+
     func testOdometerMovesHigherWheelsInTheCarryIntervalOnly() {
         let beforeCarry = OdometerPosition.between(from: 98, to: 102, progress: 0.125)
         let carry = OdometerPosition.between(from: 98, to: 102, progress: 0.375)

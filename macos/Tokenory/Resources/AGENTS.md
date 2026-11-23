@@ -4,7 +4,7 @@
 Localizable.xcstrings: 手工维护中英文 UI 文案。
 Fonts/: HUD 使用 Saira Extra Condensed SemiBold 及 SIL Open Font License；程序启动时注册字体。
 LobeHub-Icons-LICENSE.txt: 图标生成器复制的 LobeHub 许可证。
-Assets.xcassets/: 生成的品牌素材、应用图标及颜色。
+Assets.xcassets/: 生成的品牌素材、应用图标，以及独立维护的 Tokyo Neon 深浅选中颜色。
 AppIcon.icon/: Icon Composer 应用图标源。
 
 

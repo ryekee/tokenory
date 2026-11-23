@@ -213,6 +213,7 @@ struct DashboardRollingValue: View {
     let range: DashboardDateSpan?
     let style: Style
     var secondary = false
+    var themed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var roll: Roll?
 
@@ -233,7 +234,7 @@ struct DashboardRollingValue: View {
         }
             .overlay(alignment: .leading) {
                 if let roll {
-                    Playback(roll: roll, font: style.drumFont, color: secondary ? .secondaryLabelColor : .labelColor) {
+                    Playback(roll: roll, font: style.drumFont, color: playbackColor) {
                         if self.roll?.id == roll.id { self.roll = nil }
                     }
                     .id(roll.id)
@@ -256,6 +257,12 @@ struct DashboardRollingValue: View {
 
     private func styledText(_ string: String) -> some View {
         Text(string).font(style.font).monospacedDigit()
+            .foregroundColor(themed ? (secondary ? WorkspaceStyle.subtext : WorkspaceStyle.text) : nil)
+    }
+
+    private var playbackColor: NSColor {
+        if themed { return NSColor(secondary ? WorkspaceStyle.subtext : WorkspaceStyle.text) }
+        return secondary ? .secondaryLabelColor : .labelColor
     }
 
     private struct Roll {

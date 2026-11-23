@@ -160,7 +160,7 @@ struct TurnSpeedChart: View {
     }
 
     private func draw(_ context: GraphicsContext, proxy: ChartProxy, timeline: TurnSpeedTimeline) {
-        let accent = Color.accentColor
+        let accent = WorkspaceStyle.localUsage
         let surface = WorkspaceStyle.surface(scheme)
         let highlightedBucket: Date?
         if case .bucket(let start, _) = hovered { highlightedBucket = start } else { highlightedBucket = selectedBucketStart }

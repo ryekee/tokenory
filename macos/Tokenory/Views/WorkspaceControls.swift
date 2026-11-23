@@ -1,6 +1,6 @@
 // [INPUT]: 接收导航项、选项、说明和折叠内容。
 // [OUTPUT]: 提供统一导航、下拉选择、悬停、折叠和点击说明控件。
-// [POS]: 共享控件保持同一前缘，展开间距由组件统一控制。
+// [POS]: 共享控件保持同一前缘。深色下拉按钮提亮底色，保留原生交互反馈。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
 import SwiftUI
@@ -13,7 +13,7 @@ struct WorkspaceInfoPopover<Content: View>: View {
     var body: some View {
         Button { showing.toggle() } label: {
             Image(systemName: "info.circle")
-                .foregroundStyle(showing ? Color.accentColor : Color.secondary)
+                .foregroundStyle(showing ? WorkspaceStyle.selection : Color.secondary)
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }
@@ -23,7 +23,14 @@ struct WorkspaceInfoPopover<Content: View>: View {
     }
 }
 
+extension EnvironmentValues {
+    @Entry var dropdownLabelColor: Color? = nil
+}
+
 struct WorkspaceDropdownTrigger: View {
+    @Environment(\.dropdownLabelColor) private var labelColor
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.isEnabled) private var isEnabled
     private static let labelSpacing: CGFloat = 8
     private static let chevronSize: CGFloat = 9
 
@@ -34,6 +41,11 @@ struct WorkspaceDropdownTrigger: View {
     var help: String? = nil
     var flexibleWidth = false
     let action: () -> Void
+
+    private var effectiveLabelColor: Color? {
+        guard scheme == .dark else { return labelColor }
+        return WorkspaceStyle.darkDropdownLabel.opacity(isEnabled ? 1 : 0.5)
+    }
 
     static func fittingWidth(for titles: [String], includesChevron: Bool = true) -> CGFloat {
         let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
@@ -49,15 +61,21 @@ struct WorkspaceDropdownTrigger: View {
             HStack(spacing: Self.labelSpacing) {
                 if let brand { BrandIcon(name: brand.name, kind: brand.kind) }
                 Text(value)
+                    .foregroundColor(effectiveLabelColor)
                     .lineLimit(1).truncationMode(.tail)
                     .minimumScaleFactor(flexibleWidth ? 0.9 : 1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.down")
                     .font(.system(size: Self.chevronSize, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(effectiveLabelColor?.opacity(0.78) ?? Color.secondary)
             }.frame(minWidth: flexibleWidth ? 0 : width, idealWidth: width, maxWidth: width)
         }
         .buttonStyle(.bordered)
+        .background {
+            if scheme == .dark {
+                RoundedRectangle(cornerRadius: 6).fill(WorkspaceStyle.darkDropdownUnderlay)
+            }
+        }
         .accessibilityLabel(label)
         .accessibilityValue(value)
         .help(help ?? value)
@@ -90,7 +108,7 @@ struct WorkspaceDropdownRow<Content: View>: View {
                 content
                 Spacer(minLength: 4)
                 Image(systemName: "checkmark")
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(WorkspaceStyle.selection)
                     .opacity(selected ? 1 : 0)
                     .accessibilityHidden(true)
             }
@@ -99,7 +117,7 @@ struct WorkspaceDropdownRow<Content: View>: View {
             .background {
                 if selected || focused {
                     RoundedRectangle(cornerRadius: WorkspaceStyle.fieldRadius)
-                        .fill(Color.accentColor.opacity(focused ? 0.16 : 0.1))
+                        .fill(WorkspaceStyle.selection.opacity(focused ? 0.16 : 0.1))
                 }
             }
             .contentShape(Rectangle())
@@ -229,11 +247,11 @@ struct WorkspaceTabs<ID: Hashable>: View {
                         Text(item.title).fontWeight(selection == item.id ? .semibold : .regular)
                         Spacer(minLength: 0)
                     }
-                    .foregroundStyle(selection == item.id ? Color.accentColor : Color.primary)
+                    .foregroundStyle(selection == item.id ? WorkspaceStyle.selection : Color.primary)
                     .padding(.horizontal, 12).frame(height: 36).contentShape(Rectangle())
                     .background {
                         if selection == item.id {
-                            RoundedRectangle(cornerRadius: 8).fill(Color.accentColor.opacity(0.13))
+                            RoundedRectangle(cornerRadius: 8).fill(WorkspaceStyle.selection.opacity(0.13))
                                 .matchedGeometryEffect(id: "selected-tab", in: indicator)
                         }
                     }

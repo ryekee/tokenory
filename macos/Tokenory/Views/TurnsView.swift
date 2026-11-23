@@ -1,6 +1,6 @@
 // [INPUT]: Lazy multi-agent turn report, shared date range and local client/model selection.
 // [OUTPUT]: Turn analytics, selected-turn conversation titles, and distinct empty and retry states.
-// [POS]: Native speed-analysis page; list pagination never limits summaries or chart data.
+// [POS]: Native speed analysis. The fixed header meets the scrolling rows at a shared divider.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
@@ -9,7 +9,7 @@ struct TurnsView: View {
     let openDatePicker: () -> Void
     @Environment(UsageStore.self) private var store
     @State private var selectedID: String?
-    @State private var order: TurnSort = .duration
+    @State private var order: TurnSort = .newest
     @State private var page = 0
     private var query: TurnQuery {
         TurnQuery(from: store.filter.from, to: store.filter.to, model: store.turnModel, client: store.turnClient)
@@ -244,16 +244,18 @@ private struct TurnsContent: View {
         let start = min(page * pageSize, sorted.count)
         let visible = Array(sorted.dropFirst(start).prefix(pageSize))
         return WorkspacePanel {
-            VStack(spacing: 12) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) { listTitle(count: sorted.count); Spacer(); sortPicker }
-                    VStack(alignment: .leading, spacing: 8) { listTitle(count: sorted.count); sortPicker }
+            VStack(spacing: 0) {
+                VStack(spacing: 12) {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) { listTitle(count: sorted.count); Spacer(); sortPicker }
+                        VStack(alignment: .leading, spacing: 8) { listTitle(count: sorted.count); sortPicker }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    rowColumns {
+                        Text(L("turns.project")); Text(L("turns.duration")); Text(L("token.reasoning")); Text("tokens/s")
+                    }.font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 5)
+                    Divider()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                rowColumns {
-                    Text(L("turns.project")); Text(L("turns.duration")); Text(L("token.reasoning")); Text("tokens/s")
-                }.font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 5)
-                Divider()
                 ScrollViewReader { scroll in
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -275,7 +277,7 @@ private struct TurnsContent: View {
                                         Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.number(turn.speed))
                                     }.font(.callout).monospacedDigit().padding(.vertical, 9).padding(.horizontal, 5)
                                         .contentShape(Rectangle())
-                                        .background(selected?.id == turn.id ? Color.accentColor.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                                        .background(selected?.id == turn.id ? WorkspaceStyle.selection.opacity(0.1) : .clear)
                                 }.buttonStyle(WorkspaceHoverStyle()).id(turn.id)
                                     .accessibilityElement(children: .combine)
                                     .accessibilityAddTraits(selected?.id == turn.id ? [.isSelected] : [])
@@ -295,6 +297,7 @@ private struct TurnsContent: View {
                         Spacer()
                         Button { page += 1 } label: { Image(systemName: "chevron.right") }.disabled(page == pageCount - 1).help(L("action.next"))
                     }
+                    .padding(.top, 12)
                 }
             }
         }
