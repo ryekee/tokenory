@@ -1,5 +1,5 @@
 // [INPUT]: 接收原生应用的 JSON 请求，读取采集和价格数据。
-// [OUTPUT]: 输出协议响应、对话目录和本地标题、多客户端回合查询、扫描状态和账本更新事件。
+// [OUTPUT]: 输出协议响应、每日各工具有效来源用量、对话目录和本地标题、多客户端回合查询、扫描状态和账本更新事件。
 // [POS]: 单写者 worker 合并日志事件与活跃文件检查，协调全量/增量采集、计价和查询。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -228,6 +228,7 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
             &payload(v)?,
         )?)?),
         "activity" => Ok(serde_json::to_value(queries::activity(db, &payload(v)?)?)?),
+        "dailySourceUsage" => Ok(serde_json::to_value(queries::daily_source_usage(db)?)?),
         "deviceUsageSnapshot" => Ok(serde_json::to_value(crate::device_snapshot::export(
             db, &config.timezone,
         )?)?),
@@ -250,6 +251,7 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
         "sources" => sources(db),
         "prices" => prices(db),
         "settings" => Ok(serde_json::to_value(&config)?),
+        "defaultScanPaths" => Ok(serde_json::to_value(crate::config::default_scan_paths(&config.home_dir))?),
         "priceSnapshot" => {
             let p: Id = payload(v)?;
             Ok(serde_json::to_value(pricing::load_snapshot(
@@ -302,6 +304,7 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
         "updateSettings" => {
             let value: Config = payload(v)?;
             value.validate()?;
+            value.validate_new_paths(config)?;
             ensure!(
                 value.timezone == config.timezone
                     || db.connection.query_row(

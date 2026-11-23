@@ -1,13 +1,13 @@
 // [INPUT]: 接收统计报告、筛选状态和记录详情。
-// [OUTPUT]: 提供主窗口导航、统计加载提示与重试、日期工具栏、回合页和记录详情。
+// [OUTPUT]: 提供主窗口导航、侧栏设置入口、统计加载提示与重试、日期工具栏、回合页和记录详情。
 // [POS]: 主工作区入口；宽窗口并排检查明细，窄窗口使用详情面板。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 private enum DashboardSection: String, CaseIterable {
-    case overview, details, turns, imports, sources
+    case overview, details, turns
     var title: String { L("nav." + rawValue) }
-    var icon: String { switch self { case .overview: "chart.bar.xaxis"; case .details: "list.bullet.rectangle"; case .turns: "stopwatch"; case .imports: "square.and.arrow.down"; case .sources: "externaldrive" } }
+    var icon: String { switch self { case .overview: "chart.bar.xaxis"; case .details: "list.bullet.rectangle"; case .turns: "stopwatch" } }
 }
 struct DashboardView: View {
     private struct ReportProgress {
@@ -48,6 +48,15 @@ struct DashboardView: View {
                         Text(store.statusText).font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
+                        SettingsLink {
+                            Image(systemName: "gearshape")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 24, height: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(WorkspaceHoverStyle())
+                        .accessibilityLabel(L("settings.title"))
+                        .help(L("settings.title"))
                     }.padding(16)
                 }
         } detail: {
@@ -75,20 +84,12 @@ struct DashboardView: View {
                     .allowsHitTesting(section == .overview)
                     .disabled(section != .overview)
                     .accessibilityHidden(section != .overview)
-                    if section == .imports { ImportView() }
                     if section == .turns || visited.contains(.turns) {
                         TurnsView(isActive: section == .turns, openDatePicker: openDatePicker)
                             .opacity(section == .turns ? 1 : 0)
                             .allowsHitTesting(section == .turns)
                             .disabled(section != .turns)
                             .accessibilityHidden(section != .turns)
-                    }
-                    if section == .sources || visited.contains(.sources) {
-                        SourcesView()
-                            .opacity(section == .sources ? 1 : 0)
-                            .allowsHitTesting(section == .sources)
-                            .disabled(section != .sources)
-                            .accessibilityHidden(section != .sources)
                     }
                     if section == .details || visited.contains(.details) {
                         VStack(spacing: 0) {

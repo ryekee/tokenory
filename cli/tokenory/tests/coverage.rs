@@ -2,13 +2,21 @@ use serde_json::json;
 use tokenory::{
     db::Database,
     import::{apply_import, preview_import, preview_records, undo_import, ApplyOptions},
-    queries::{report, Filter},
+    queries::{daily_source_usage, report, Filter},
 };
 #[test]
 fn overlapping_sources_require_a_choice_and_are_never_added() {
     let t = tempfile::tempdir().unwrap();
     let mut db = Database::open(t.path()).unwrap();
-    let data=serde_json::to_vec(&json!([{"date":"2026-04-08","app_type":"claude","provider_id":"a","model":"m","request_count":1,"input_tokens":100,"output_tokens":0,"cache_read_tokens":0,"cache_creation_tokens":0,"total_cost_usd":"0","input_token_semantics":0}])).unwrap();
+    let rollups = [("first", 60), ("second", 40)].map(|(model, input)| {
+        json!({
+            "date": "2026-04-08", "app_type": "claude", "provider_id": "a", "model": model,
+            "request_count": 1, "input_tokens": input, "output_tokens": 0,
+            "cache_read_tokens": 0, "cache_creation_tokens": 0,
+            "total_cost_usd": "0", "input_token_semantics": 0
+        })
+    });
+    let data = serde_json::to_vec(&rollups).unwrap();
     let p = preview_import(&mut db, "cc-switch", &data, Some("Asia/Shanghai".into())).unwrap();
     apply_import(&mut db, &p.id, &ApplyOptions::default()).unwrap();
     let mut row = report(&mut db, &Filter::default()).unwrap().details[0]
@@ -38,10 +46,18 @@ fn overlapping_sources_require_a_choice_and_are_never_added() {
         report(&mut db, &Filter::default()).unwrap().summary.tokens,
         60
     );
+    assert_eq!(
+        serde_json::to_value(daily_source_usage(&db).unwrap()).unwrap(),
+        json!([{"date":"2026-04-08","client":"claude","source":"test-other","tokens":60}])
+    );
     undo_import(&mut db, &b.batch_id).unwrap();
     assert_eq!(
         report(&mut db, &Filter::default()).unwrap().summary.tokens,
         100
+    );
+    assert_eq!(
+        serde_json::to_value(daily_source_usage(&db).unwrap()).unwrap(),
+        json!([{"date":"2026-04-08","client":"claude","source":"cc-switch","tokens":100}])
     );
 }
 #[test]

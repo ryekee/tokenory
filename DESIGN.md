@@ -15,7 +15,7 @@ Native macOS utility for checking AI usage and USD cost estimates. Preserve the 
 - The HUD speaker button directly toggles sound; adjust volume in Settings. HUD has no context menu. Persist independent sound enablement and volume. Default sound off and volume 35%. Hiding the HUD cancels animation and sound. The website demo and its licensed font are maintained in `site/`.
 
 - The app icon is a front-facing orange counter with dark drums turning from 648 to 649. In `AppIcon.icon`, the default and dark appearances both use the orange enamel as the tile fill. The window follows the macOS mask at a constant inward distance (82 units on the 928-unit case), including at the corners. The 18 pt menu bar icon shows the last two drums in an orange case with a blue units digit. Render it in its original colors.
-- Use system typography, semantic foreground/background colors and native controls. Use Tokyo Neon for the dark statistics workspace and the Tokenory-designed Tokyo Neon Light for the light workspace.
+- Use system typography, semantic foreground/background colors and native controls. Use Tokyo Neon for the dark statistics workspace and the Tokenory-designed Tokyo Neon Light for the light workspace. Follow the appearance selected in General settings.
 - Overview: compact filters and a toolbar range calendar; adjacent token/cost totals, secondary active-day/model counts, a token mix strip and a combined Tokens and cost chart. Tool and model rankings share a token/cost sort. Annual activity and model history follow below.
 - Dates use a temporal axis; values use locale-aware formatting. Never compress every date into a categorical label.
 - All UI copy lives in the String Catalog with stable semantic keys, complete sentences, placeholders and plural variants. English and Simplified Chinese ship together.
@@ -26,6 +26,7 @@ Native macOS utility for checking AI usage and USD cost estimates. Preserve the 
 
 Implement the workspace composition and interaction patterns with SwiftUI and Swift Charts.
 
+- Place a gear at the trailing edge of the sidebar status row. It opens the same Settings window as the menu bar.
 - Align to visible control edges: fixed-width containers must not hide the actual edges of segmented controls. Avoid duplicate spacing between parent and child layouts.
 - Dropdowns use the same single downward chevron and anchored option popover as the model chooser. Show the active value in the trigger and mark the choice in the list. Keep search for longer lists and preserve single-click segmented controls.
 - Use solid canvas and panel fills. The light canvas is cool off-white (#F6F8FA) with white panels (#FFFFFF). The dark canvas is near-black violet (#100E18) with plum panels (#20182C). Panels use a 12 pt radius and 18 pt padding. Fields use an 8 pt radius. Preserve native sidebar materials. Apply theme ink to text and chart marks. Keep native button feedback in active and inactive windows. In dark mode, lift dropdowns above the panel with a lighter backing and use a muted gray label.
@@ -37,9 +38,10 @@ Implement the workspace composition and interaction patterns with SwiftUI and Sw
 - With at least 936 pt of space inside the Records content margins, display the selected record beside the table. Keep the selected row visible and let the detail scroll separately. Use a sheet with less space.
 - In Records, zero matches replace pagination with a clear-filters or date-picker action. Clearing dimensions keeps the current dates.
 - In Records, the Conversation picker searches effective records within the current date and dimension filters. Use the saved Codex title as the row and selection label when available. For untitled conversations, use the tool and latest activity as the label, with the model and a short session ID for reference. Selecting a conversation resets pagination and leaves the Overview scope intact.
-- The main window supports an 800 pt minimum width. Below a 720 pt detail width, distribution panels stack. In Overview and Records, the filter bar fits one row and contracts dropdowns as the window narrows.
-- Settings uses vertical category buttons, a single content heading and a stable content-sized window. Control edges align to the trailing column. The language and update interval dropdowns share a width that fits every localized value and matches the update button when its width is sufficient. Disclosure headers are full-width buttons. Pricing groups by provider and identical complete pricing rules, with a model/provider search.
+- The main window supports an 800 pt minimum width. Below a 720 pt detail width, distribution panels stack. In Overview and Records, the filter bar fits one row and contracts dropdowns as the window narrows. In light appearance, the closed tool, provider and model selectors use gray text (#59636E) with a lighter gray chevron.
+- Settings uses vertical category buttons, a single content heading and a stable content-sized window. Control edges align to the trailing column. General contains appearance, language, currency and login settings. Appearance defaults to System and also offers Light and Dark. Apply the choice immediately across windows and remember it on relaunch. Use the same app accent for native switches, segmented controls and custom selections. About shows the app icon, installed version and Sparkle controls. Size each dropdown for its localized options. Disclosure headers are full-width buttons. Pricing groups by provider and identical complete pricing rules, with a model/provider search.
 - After a user chooses a backup file, confirm the file name and ledger replacement in a native dialog. Cancel is the default action.
+- Offer 30, 60 and 120 seconds for the scan interval. Show a previously saved custom interval until the user chooses a preset.
 - Show the progress and outcome of collection save, backup and restore beside those controls. Offer Retry and expandable details on failure.
 - Tab selection slides for 200 ms; disclosures reveal for 200 ms; pagination selection moves for 180 ms. Respect Reduce Motion. Chart pointer feedback is immediate; background collection does not animate values.
 - Keep the menubar's compact summary and Liquid Glass presentation independent from workspace styling. Its three columns read Tokens / Cost / Speed (Tokens / 费用 / 速度), with today’s duration-weighted turn speed to the right of cost. This query ignores dashboard filters; missing speed is — and estimates carry ≈.
@@ -48,6 +50,10 @@ Implement the workspace composition and interaction patterns with SwiftUI and Sw
 - Per the user's explicit preference, suppress the visual focus halo on app surfaces while preserving native keyboard controls and accessibility labels.
 
 For future components, reuse `WorkspacePanel` for a complete data or settings group, not each field. Keep captions only when they affect interpretation. Use native controls for focus, keyboard handling and accessibility.
+
+- Place Sources in Settings, alongside Collection and iCloud Sync. Group sources by device. Show each local tool once and disclose its scan diagnostics and ledger sources together. Put the supported-tool catalog after the devices.
+- Show the collection scanner’s default paths as read-only rows beside editable additions for the selected tool.
+- Group historical import, backup, restore and the local database location in Data. Keep previews and source conflicts beside the file chooser. Keep prior imports in a disclosure. Confirm undo and restore with the affected batch or file.
 
 ## Overview and trends
 
@@ -107,7 +113,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 - If a report request fails, offer Retry for the current selection. Keep any previous results visible and identify their date range. A first-load failure replaces the loading indicator.
 - An empty Speed report shows one state with a date or filter action. In Overview, hide empty totals and rankings and show one state for the selected dates. Show the annual panels when their scope has records. Use inline text for a missing hourly breakdown or an empty management section.
 - Cache annual presentation data per refresh; isolate hover observation to readouts. Lazy-load overview sections and reuse cached history on navigation.
-- Keep details and sources mounted after first visit. Sources requests do not fetch price catalogs; already loaded source data refreshes after scans. Keep overview, details and sources responsive when entering and switching pages.
+- Keep Records mounted after its first visit. Settings → Sources uses the settings scroll view and reloads independently when opened. Scans refresh cached source data.
 
 ## Review checklist
 
@@ -116,7 +122,7 @@ This checklist is a design requirement, not a record of completed acceptance.
 - In a real window, inspect English and Simplified Chinese in light and dark appearances, at wide and narrow widths. Check visible-edge alignment, wrapping and the coding-pattern layout.
 - Check calendar hover feedback and click-through, shared filter scope, one-click metric switches and provider disclosures.
 - Check the 30-day averages with no-activity dates and unknown costs: zero activity appears as zero, unknown cost stays a gap only in its own series, and no erroneous gaps appear.
-- Switch among overview, details and sources; inspect loading, preserved state and responsiveness. Check calendar hover responsiveness.
+- Switch among Overview, Records, Speed and Settings → Sources; inspect loading, preserved state and responsiveness. Check calendar hover responsiveness.
 - When a layout defect is found, use appropriate existing skills to inspect the whole app and fix the same class of issue.
 
 ## Agent turns

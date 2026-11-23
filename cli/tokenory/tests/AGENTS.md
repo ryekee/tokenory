@@ -11,11 +11,11 @@ turn_analytics.rs: 验证多客户端完成边界、分支排除、分列推理�
 codex_turns.rs: 验证回合去重、用量对账、未知值、工具阻塞区间、扫描缓存、查询及迁移恢复；所选推理速度归属于回合开头的线程和模型。
 codex_subagents.rs: 验证实际采集和入账中的启动去重、嵌套父会话、主代理开始回合、模型筛选、覆盖选择、费用缺失和既有总览口径。
 collection.rs: 验证采集和入账，覆盖 Devin CLI 重扫去重及原价格依据。
-coverage.rs: 验证 coverage 的账本接口和行为。
+coverage.rs: 验证 coverage 的账本接口和行为，包括更换和撤销选中来源后的逐日用量。快照的小时、子代理、隐私和 worker 入口回归分别位于 hourly.rs、codex_subagents.rs 与 ipc.rs。
 history_import.rs: 验证 history_import 的账本接口和行为。
 hourly.rs: 验证 hourly 的账本接口和行为。
 identity.rs: 验证 identity 的账本接口和行为。
-ipc.rs: 验证 worker 请求与响应。快照的小时、子代理、隐私和 worker 入口回归分别位于 hourly.rs、codex_subagents.rs 与 ipc.rs。
+ipc.rs: 验证 ipc 的账本接口和行为。
 migration.rs: 验证 migration 的账本接口和行为。
 pricing.rs: 验证 pricing 的账本接口和行为，覆盖 GPT-6.2 费率、长上下文、速度及优惠截止边界、远程费率覆盖、OpenClaw 时间依据、MiMo 订阅与免费路由、旧库的首次补价和离线回退。
 

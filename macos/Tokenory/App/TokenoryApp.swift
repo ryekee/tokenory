@@ -9,14 +9,17 @@ func openDashboard(using openWindow: OpenWindowAction) {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        guard ProcessInfo.processInfo.environment["TOKENORY_TESTING"] != "1" else { return }
+    func applicationWillFinishLaunching(_ notification: Notification) {
         #if DEBUG
-        // Inspect light/dark native surfaces without changing the user's system appearance.
         if ProcessInfo.processInfo.arguments.contains("--light-appearance") {
-            NSApp.appearance = NSAppearance(named: .aqua)
+            UserDefaults.standard.register(defaults: [AppAppearance.defaultsKey: AppAppearance.light.rawValue])
         }
         #endif
+        let preference = UserDefaults.standard.string(forKey: AppAppearance.defaultsKey) ?? ""
+        (AppAppearance(rawValue: preference) ?? .system).apply()
+    }
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard ProcessInfo.processInfo.environment["TOKENORY_TESTING"] != "1" else { return }
         NotificationCenter.default.addObserver(self, selector: #selector(workspaceOpened(_:)), name: NSWindow.didBecomeMainNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(workspaceClosed(_:)), name: NSWindow.willCloseNotification, object: nil)
         UsageStore.shared.start()
@@ -57,13 +60,13 @@ struct TokenoryApp: App {
     @State private var store = UsageStore.shared
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
     var body: some Scene {
-        MenuBarExtra { MenuBarView().environment(store).environment(\.locale, Localization.locale).focusEffectDisabled().id(language) } label: {
+        MenuBarExtra { MenuBarView().environment(store).environment(\.locale, Localization.locale).tint(WorkspaceStyle.selection).focusEffectDisabled().id(language) } label: {
             Image("MenuBarIcon")
                 .renderingMode(.original)
                 .accessibilityLabel("Tokenory")
         }.menuBarExtraStyle(.window)
         Window("Tokenory", id: "dashboard") { DashboardView().environment(store).environment(\.locale, Localization.locale).environment(\.timeZone, TimeZone(identifier: "Asia/Shanghai")!).focusEffectDisabled().id(language) }.defaultSize(width: 1060, height: 740).defaultLaunchBehavior(ProcessInfo.processInfo.arguments.contains("--show-dashboard") ? .presented : .suppressed).commands { DashboardCommands() }
-        Settings { SettingsView().environment(store).environment(\.locale, Localization.locale).focusEffectDisabled() }.windowResizability(.contentSize)
+        Settings { SettingsView().environment(store).environment(\.locale, Localization.locale).tint(WorkspaceStyle.selection).focusEffectDisabled() }.windowResizability(.contentSize)
     }
 }
 

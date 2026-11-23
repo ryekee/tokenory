@@ -1,6 +1,7 @@
 //! Parallel file scanner for session directories
 //!
-//! Uses walkdir with rayon for parallel directory traversal.
+//! Uses walkdir with rayon for parallel directory traversal. Default roots can
+//! also be listed without walking session trees or including configured extras.
 
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashSet};
@@ -1759,7 +1760,7 @@ pub(crate) fn merge_user_opencode_db_paths(discovered: &mut Vec<PathBuf>, extra_
     }
 }
 
-fn discover_copilot_vscode_sessions(home_dir: &str, use_env_roots: bool) -> Vec<PathBuf> {
+fn copilot_vscode_session_roots(home_dir: &str, use_env_roots: bool) -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = Vec::new();
 
     roots.push(PathBuf::from(format!(
@@ -1777,6 +1778,12 @@ fn discover_copilot_vscode_sessions(home_dir: &str, use_env_roots: bool) -> Vec<
         }
     }
     roots.push(PathBuf::from(home_dir).join("AppData/Roaming/Code/User/workspaceStorage"));
+
+    roots
+}
+
+fn discover_copilot_vscode_sessions(home_dir: &str, use_env_roots: bool) -> Vec<PathBuf> {
+    let roots = copilot_vscode_session_roots(home_dir, use_env_roots);
 
     let mut files: Vec<PathBuf> = Vec::new();
     let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
@@ -1830,7 +1837,31 @@ pub fn scan_all_clients_with_scanner_settings(
     use_env_roots: bool,
     scanner_settings: &ScannerSettings,
 ) -> ScanResult {
-    scan_all_clients_with_env_strategy_inner(home_dir, clients, use_env_roots, scanner_settings)
+    scan_all_clients_with_env_strategy_inner(
+        home_dir,
+        clients,
+        use_env_roots,
+        scanner_settings,
+        None,
+    )
+}
+
+/// Return the directory tasks selected by the same discovery rules as a scan.
+/// This stops before walking session trees and excludes user-supplied roots.
+pub fn default_scan_roots(
+    home_dir: &str,
+    clients: &[String],
+    use_env_roots: bool,
+) -> Vec<(ClientId, PathBuf)> {
+    let mut roots = Vec::new();
+    scan_all_clients_with_env_strategy_inner(
+        home_dir,
+        clients,
+        use_env_roots,
+        &ScannerSettings::default(),
+        Some(&mut roots),
+    );
+    roots
 }
 
 /// Scan all session client directories in parallel
@@ -1894,6 +1925,7 @@ fn scan_all_clients_with_env_strategy_inner(
     clients: &[String],
     use_env_roots: bool,
     scanner_settings: &ScannerSettings,
+    capture_roots: Option<&mut Vec<(ClientId, PathBuf)>>,
 ) -> ScanResult {
     let mut result = ScanResult::default();
 
@@ -1952,6 +1984,7 @@ fn scan_all_clients_with_env_strategy_inner(
     // per-agent SQLite transcript databases once the roots are settled.
     let mut openclaw_agent_roots: Vec<PathBuf> = Vec::new();
     let mut antigravity_db_roots: Vec<PathBuf> = Vec::new();
+    let mut database_roots: Vec<(ClientId, PathBuf)> = Vec::new();
 
     for client_id in &enabled {
         if matches!(
@@ -2177,7 +2210,10 @@ fn scan_all_clients_with_env_strategy_inner(
         // opencode/packages/opencode/src/storage/db.ts for the source of
         // the naming rule.
         let opencode_data_dir = PathBuf::from(join_native(&xdg_data, "opencode"));
-        result.opencode_dbs = discover_opencode_dbs(&opencode_data_dir);
+        database_roots.push((ClientId::OpenCode, opencode_data_dir.clone()));
+        if capture_roots.is_none() {
+            result.opencode_dbs = discover_opencode_dbs(&opencode_data_dir);
+        }
 
         // Merge user-configured `scanner.opencodeDbPaths` here, INSIDE the
         // `enabled.contains(&ClientId::OpenCode)` guard, so a request like
@@ -2227,7 +2263,11 @@ fn scan_all_clients_with_env_strategy_inner(
             "{}/Library/Application Support/orca/mimocode-hooks/shared/data",
             home_dir
         ));
-        result.micode_dbs = discover_micode_dbs_in_dirs([micode_data_dir, orca_data_dir]);
+        database_roots.push((ClientId::MiMoCode, micode_data_dir.clone()));
+        database_roots.push((ClientId::MiMoCode, orca_data_dir.clone()));
+        if capture_roots.is_none() {
+            result.micode_dbs = discover_micode_dbs_in_dirs([micode_data_dir, orca_data_dir]);
+        }
     }
 
     if enabled.contains(&ClientId::Kimi) {
@@ -2468,7 +2508,15 @@ fn scan_all_clients_with_env_strategy_inner(
             .data()
             .resolve_path_with_env_strategy(home_dir, use_env_roots);
         devin_cli_roots.push(PathBuf::from(devin_db_path));
-        result.devin_dbs = discover_devin_cli_dbs(devin_cli_roots);
+        database_roots.extend(
+            devin_cli_roots
+                .iter()
+                .cloned()
+                .map(|path| (ClientId::DevinCli, path)),
+        );
+        if capture_roots.is_none() {
+            result.devin_dbs = discover_devin_cli_dbs(devin_cli_roots);
+        }
     }
 
     if enabled.contains(&ClientId::Hermes) {
@@ -2479,6 +2527,10 @@ fn scan_all_clients_with_env_strategy_inner(
         // (see `discover_hermes_profile_state_dbs`).
         let mut extra_dbs: Vec<PathBuf> = Vec::new();
         for hermes_home in hermes_home_candidates(home_dir, use_env_roots) {
+            database_roots.push((ClientId::Hermes, hermes_home.clone()));
+            if capture_roots.is_some() {
+                continue;
+            }
             let default_db = hermes_home.join("state.db");
             if default_db.is_file() {
                 if result.hermes_db.is_none() {
@@ -2579,7 +2631,7 @@ fn scan_all_clients_with_env_strategy_inner(
         }
     }
 
-    if enabled.contains(&ClientId::Crush) {
+    if enabled.contains(&ClientId::Crush) && capture_roots.is_none() {
         result.crush_dbs = discover_crush_dbs(home_dir, use_env_roots);
     }
 
@@ -2590,7 +2642,7 @@ fn scan_all_clients_with_env_strategy_inner(
         }
     }
 
-    if enabled.contains(&ClientId::OpenClaw) {
+    if enabled.contains(&ClientId::OpenClaw) && capture_roots.is_none() {
         // Every agents root registered above (default, legacy rebrands, extra
         // roots) can hold per-agent SQLite transcript stores. Dedup by
         // canonical path so a configured root that aliases the default one
@@ -2616,8 +2668,17 @@ fn scan_all_clients_with_env_strategy_inner(
         for subdir in ["antigravity/conversations", "antigravity-ide/conversations"] {
             antigravity_db_roots.push(PathBuf::from(join_native(&gemini_home, subdir)));
         }
+        database_roots.extend(
+            antigravity_db_roots
+                .iter()
+                .cloned()
+                .map(|path| (ClientId::Antigravity, path)),
+        );
         let mut seen_antigravity_dbs: HashSet<PathBuf> = HashSet::new();
         for root in &antigravity_db_roots {
+            if capture_roots.is_some() {
+                break;
+            }
             if !root.exists() {
                 continue;
             }
@@ -2850,6 +2911,29 @@ fn scan_all_clients_with_env_strategy_inner(
                 push_unique_scan_task(&mut tasks, &mut seen_scan_roots, ClientId::Gjc, root);
             }
         }
+    }
+
+    if let Some(roots) = capture_roots {
+        roots.extend(tasks.iter().map(|(id, path, _)| (*id, PathBuf::from(path))));
+        roots.extend(database_roots);
+        if enabled.contains(&ClientId::Copilot) {
+            roots.push((
+                ClientId::Copilot,
+                PathBuf::from(join_native(home_dir, ".copilot/data.db")),
+            ));
+            roots.extend(
+                copilot_vscode_session_roots(home_dir, use_env_roots)
+                    .into_iter()
+                    .map(|path| (ClientId::Copilot, path)),
+            );
+        }
+        if let Some(path) = &result.zed_db {
+            roots.push((ClientId::Zed, path.clone()));
+        }
+        if let Some(path) = &result.kiro_db {
+            roots.push((ClientId::Kiro, path.clone()));
+        }
+        return result;
     }
 
     // #1153: bound scan parallelism to avoid futex storms on machines with

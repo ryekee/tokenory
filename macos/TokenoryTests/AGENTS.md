@@ -12,10 +12,13 @@ PresentationDataTests.swift: 验证深浅主题的 sRGB 色值、卡片内下拉
 UpdateCheckerTests.swift: 验证更新检查状态及应用语言对应的清单。
 UsageStoreTests.swift: 真实 Codex 文件追加经 worker 更新当日用量并连续追加当前滚动；验证今日速度独立筛选、跨日旧响应不覆盖、完整来源能力目录；验证日期切换保留上一份报告且复用全年活动、按天数移动日期范围、今日上限及恢复滚动预设。
 
-UsageStore 的统计回归覆盖首次请求失败、筛选失败保留旧报告和重试。
+UsageStore 的统计回归覆盖首次请求失败、筛选失败保留旧报告和重试。来源刷新失败时保留缓存，错误在来源页展示；worker 重启后重试会清除该错误。
 对话筛选回归覆盖明细隔离、分页重置和清除筛选时保留日期。
 
 TurnAnalyticsTests.swift: 验证速度加权、估算标记、可选 Fast 证据、协议校验、小时／日／周分组、周边界、四分位、离群点和稀疏点。
+
 CursorTooltipTests.swift: 校验读数位置、翻侧避让和固定尺寸。在带工具栏的原生分栏窗口采样浮层实际像素，核验可见性与鼠标穿透。
+
+SourcesPresentationTests.swift: 检查本机按工具归组后能保留多来源覆盖、空采集和部分错误。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md
