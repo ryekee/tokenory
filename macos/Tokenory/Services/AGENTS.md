@@ -1,7 +1,7 @@
 # macos/Tokenory/Services/
 > L2 | Parent: ../../../AGENTS.md
 
-EngineClient.swift: Rust worker 生命周期、IPC 请求、事件和非主线程的类型化报告解码。
+EngineClient.swift: Rust worker 生命周期、IPC 请求和事件。按请求 ID 拼接有序快照分块，校验结束计数，在取消、超时或 worker 结束时释放请求。
 DeviceCloudSync.swift: 当前用户私有 CloudKit 的设备汇总、发布顺序、资产校验缓存、设备与账号级撤回。
 DeviceCloudErrors.xcstrings: 依照应用所选中英文显示同步与账号错误。
 LoginItemService.swift: 系统登录启动状态与操作。

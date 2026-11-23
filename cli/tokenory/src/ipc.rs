@@ -1,5 +1,5 @@
 // [INPUT]: 接收原生应用的 JSON 请求，读取采集和价格数据。
-// [OUTPUT]: 输出协议响应、每日各工具有效来源用量、对话目录和本地标题、多客户端回合查询、扫描状态和账本更新事件。
+// [OUTPUT]: 输出协议响应、分块设备快照、每日各工具有效来源用量、对话目录和本地标题、多客户端回合查询、扫描状态和账本更新事件。
 // [POS]: 单写者 worker 合并日志事件与活跃文件检查，协调全量/增量采集、计价和查询。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -49,6 +49,50 @@ fn reply(id: &str, r: Result<Value>) -> Result<()> {
         }
     })
 }
+
+const SNAPSHOT_CHUNK_BYTES: usize = 1024 * 1024;
+const MAX_REPLY_BYTES: usize = 64 * 1024 * 1024;
+
+fn reply_snapshot(db: &mut Database, timezone: &str, id: &str, stream: bool) -> Result<()> {
+    let snapshot = match crate::device_snapshot::export(db, timezone)
+        .and_then(|snapshot| Ok(serde_json::to_string(&snapshot)?))
+    {
+        Ok(snapshot) => snapshot,
+        Err(error) => return reply(id, Err(error)),
+    };
+    if !stream {
+        let prefix = format!(
+            r#"{{"version":1,"id":{},"result":"#,
+            serde_json::to_string(id)?
+        );
+        if prefix.len() + snapshot.len() + 2 > MAX_REPLY_BYTES {
+            return send(json!({
+                "version":1,"id":id,"error":{"code":"snapshotTooLarge",
+                "message":"The device snapshot requires a streamed request."}
+            }));
+        }
+        let mut out = io::stdout().lock();
+        writeln!(out, "{prefix}{snapshot}}}")?;
+        out.flush()?;
+        return Ok(());
+    }
+
+    let mut start = 0;
+    let mut chunks = 0;
+    while start < snapshot.len() {
+        let mut end = (start + SNAPSHOT_CHUNK_BYTES).min(snapshot.len());
+        while !snapshot.is_char_boundary(end) {
+            end -= 1;
+        }
+        send(json!({
+            "version":1,"id":id,"snapshotChunk":{"index":chunks,"json":&snapshot[start..end]}
+        }))?;
+        chunks += 1;
+        start = end;
+    }
+    reply(id, Ok(json!({"chunks":chunks})))
+}
+
 fn payload<T: DeserializeOwned>(v: Value) -> Result<T> {
     Ok(serde_json::from_value(v)?)
 }
@@ -229,9 +273,6 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
         )?)?),
         "activity" => Ok(serde_json::to_value(queries::activity(db, &payload(v)?)?)?),
         "dailySourceUsage" => Ok(serde_json::to_value(queries::daily_source_usage(db)?)?),
-        "deviceUsageSnapshot" => Ok(serde_json::to_value(crate::device_snapshot::export(
-            db, &config.timezone,
-        )?)?),
         "daily" => Ok(serde_json::to_value(
             queries::report(db, &payload(v)?)?.daily,
         )?),
@@ -390,6 +431,7 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
            "shutdown"=>{reply(&r.id,Ok(json!({"stopped":true})))?;break;},
            "scan"=>{let started=scan.is_none();if started {scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent), None));send(json!({"version":1,"event":"scanStarted"}))?;}reply(&r.id,Ok(json!({"started":started})))?;},
            "status"=>reply(&r.id,Ok(json!({"scanning":scan.is_some(),"lastScan":last_scan,"dataDirectory":db.directory,"revision":before,"refreshingPrices":price_task.is_some()})))?,
+           "deviceUsageSnapshot"=>reply_snapshot(db,&config.timezone,&r.id,r.payload["stream"].as_bool() == Some(true))?,
            "refreshPrices"=>{
             if price_task.is_some(){reply(&r.id,Err(anyhow!("price refresh already running")))?;}else{price_task=Some(tokio::spawn(fetch_prices(r.id)));}
            },

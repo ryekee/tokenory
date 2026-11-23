@@ -1,3 +1,7 @@
+// [INPUT]: 临时账本、配置和真正的 worker 进程。
+// [OUTPUT]: 校验普通请求、错误、退出、进程锁和完整多帧快照。
+// [POS]: Rust worker 的进程级 IPC 回归。
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 use serde_json::{json, Value};
 use std::{
     io::{BufRead, BufReader, Write},
@@ -5,6 +9,95 @@ use std::{
     sync::mpsc,
     time::Duration,
 };
+use tokenory::{
+    db::{put_record, Database},
+    usage::UsageRecord,
+};
+
+#[test]
+fn worker_streams_a_complete_snapshot_and_stays_available() {
+    let data = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    tokenory::config::Config {
+        home_dir: home.path().into(),
+        ..Default::default()
+    }
+    .save(data.path())
+    .unwrap();
+    let model = format!("model\"{}\\end", "程".repeat(400_000));
+    {
+        let db = Database::open(data.path()).unwrap();
+        let record: UsageRecord = serde_json::from_value(json!({
+            "key":"private-row", "client":"codex", "provider":"test", "model":model,
+            "date":"2026-11-06", "tokens":{"input":7,"output":0,"cacheRead":0,"cacheWrite":0,"reasoning":0}
+        }))
+        .unwrap();
+        put_record(&db.connection, "local", "", &record).unwrap();
+        db.connection
+            .execute(
+                "INSERT INTO coverage_choices VALUES ('2026-11-06','codex','local','')",
+                [],
+            )
+            .unwrap();
+    }
+    let mut input = Vec::new();
+    for (id, operation, payload) in [
+        ("snapshot", "deviceUsageSnapshot", json!({"stream":true})),
+        ("status", "status", json!({})),
+    ] {
+        writeln!(
+            input,
+            "{}",
+            json!({"version":1,"id":id,"operation":operation,"payload":payload})
+        )
+        .unwrap();
+    }
+    let response = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("tokenory"))
+        .args([
+            "--data-dir",
+            data.path().to_str().unwrap(),
+            "worker",
+            "--stdio",
+        ])
+        .write_stdin(input)
+        .timeout(Duration::from_secs(15))
+        .assert()
+        .success();
+    let mut assembled = String::new();
+    let mut chunks = 0;
+    let mut completed = false;
+    let mut worker_still_available = false;
+    for line in BufReader::new(response.get_output().stdout.as_slice()).lines() {
+        let line = line.unwrap();
+        assert!(line.len() < 64 * 1024 * 1024);
+        let message: Value = serde_json::from_str(&line).unwrap();
+        match message["id"].as_str() {
+            Some("snapshot") if message["snapshotChunk"].is_object() => {
+                assert!(!completed, "received a chunk after completion");
+                assert_eq!(message["snapshotChunk"]["index"], chunks);
+                assembled.push_str(message["snapshotChunk"]["json"].as_str().unwrap());
+                chunks += 1;
+            }
+            Some("snapshot") => {
+                assert!(chunks > 1, "the fixture must span several worker messages");
+                assert_eq!(message["result"]["chunks"], chunks);
+                completed = true;
+            }
+            Some("status") => worker_still_available = message["result"].is_object(),
+            _ => {}
+        }
+    }
+    assert!(completed);
+    let snapshot: Value = serde_json::from_str(&assembled).unwrap();
+    assert_eq!(snapshot["buckets"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        snapshot["buckets"][0]["model"].as_str(),
+        Some(model.as_str())
+    );
+    assert_eq!(snapshot["buckets"][0]["summary"]["tokens"], 7);
+    assert!(worker_still_available);
+}
+
 #[test]
 fn worker_queries_errors_writer_lock_and_eof_are_real_process_behaviors() {
     let data = tempfile::tempdir().unwrap();
