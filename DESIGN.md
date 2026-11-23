@@ -84,7 +84,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 
 - Use the fixed upstream YlGnBu light and dark ramps; do not offer a palette control. The calendar is Monday-first and uses Beijing reporting dates.
 - Hover immediately shows the date and data in the shared chart readout style, with the same smooth response as other charts. Clicking a date opens that day, with a return action.
-- The calendar and stacked model chart cover the last 12 months, independently of the upper date range. Global dimensions still apply; the history tool picker further narrows its own chart.
+- The calendar and stacked model chart cover the last 12 months, independently of the upper date range. Global dimensions still apply; the history tool picker further narrows its own chart. Device snapshots use Beijing reporting dates for timestamped events. Day-level imports retain their source dates.
 
 ## Coding patterns
 

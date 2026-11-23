@@ -15,12 +15,16 @@ private actor FakeDeviceCloud: DeviceCloudTransport {
     var downloads = 0
     var suspendNextWrite = false
     var dropAcknowledgement = false
+    var conflictsRemaining = 0
+    var rejectWrites = false
     var suspendedWrite: CheckedContinuation<Void, Never>?
 
     func setAccount(_ new: String) { account = new }
     func setOnline(_ value: Bool) { online = value }
     func gateNextWrite() { suspendNextWrite = true }
     func dropNextAcknowledgement() { dropAcknowledgement = true }
+    func conflictNextCommits(_ count: Int) { conflictsRemaining = count }
+    func setRejectWrites(_ value: Bool) { rejectWrites = value }
     func isWaiting() -> Bool { suspendedWrite != nil }
     func releaseWrite() { suspendedWrite?.resume(); suspendedWrite = nil }
     func accountID() throws -> String {
@@ -34,6 +38,11 @@ private actor FakeDeviceCloud: DeviceCloudTransport {
     }
     func commit(account: String, previous: DeviceCloudHead, next: DeviceCloudManifest,
                 write: DeviceCloudWrite?, removing: UUID?) async throws {
+        if conflictsRemaining > 0 {
+            conflictsRemaining -= 1
+            throw DeviceCloudError.conflict
+        }
+        if write != nil, rejectWrites { throw DeviceCloudError.invalidData }
         if write != nil, suspendNextWrite {
             suspendNextWrite = false
             await withCheckedContinuation { suspendedWrite = $0 }
@@ -62,8 +71,20 @@ private actor FakeDeviceCloud: DeviceCloudTransport {
 final class DeviceCloudSyncTests: XCTestCase {
     private actor LocalLedger {
         var snapshot: DeviceUsageSnapshot
+        private var holdRead = false
+        private var blockedRead: CheckedContinuation<Void, Never>?
         init(_ snapshot: DeviceUsageSnapshot) { self.snapshot = snapshot }
         func replace(with value: DeviceUsageSnapshot) { snapshot = value }
+        func gateNextRead() { holdRead = true }
+        func isReading() -> Bool { blockedRead != nil }
+        func resumeRead() { blockedRead?.resume(); blockedRead = nil }
+        func read() async -> DeviceUsageSnapshot {
+            if holdRead {
+                holdRead = false
+                await withCheckedContinuation { blockedRead = $0 }
+            }
+            return snapshot
+        }
     }
 
     private func snapshot(tokens: Int64) -> DeviceUsageSnapshot {
@@ -261,9 +282,212 @@ final class DeviceCloudSyncTests: XCTestCase {
         catch DeviceCloudError.unconfirmedDeletion { }
         try await b.enable()
         try await b.publish(Data([2]), revision: 1)
-        try await a.deleteAll()
+        try await a.confirmPreviousDeletion(all: true)
         let remaining = try await a.snapshots()
         XCTAssertEqual(remaining.map(\.deviceID), [b.deviceID])
+    }
+
+    func testNewDeleteClearsDataSeenAfterAnUnconfirmedDelete() async throws {
+        let cloud = FakeDeviceCloud(), (a, b) = devices(cloud)
+        try await a.enable()
+        try await a.publish(Data([1]), revision: 1)
+        await cloud.dropNextAcknowledgement()
+        do { try await a.deleteAll(); XCTFail("Expected a missing acknowledgement") }
+        catch DeviceCloudError.unconfirmedDeletion { }
+        try await b.enable()
+        try await b.publish(Data([2]), revision: 2)
+        let observed = try await a.snapshots()
+        XCTAssertEqual(observed.map(\.data), [Data([2])])
+        try await a.deleteAll()
+        let remaining = try await b.snapshots()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testRejectedDeleteDoesNotAffectANewDelete() async throws {
+        let cloud = FakeDeviceCloud(), (a, b) = devices(cloud)
+        try await a.enable()
+        try await a.publish(Data([1]), revision: 1)
+        await cloud.conflictNextCommits(4)
+        do { try await a.deleteAll(); XCTFail("Expected the previous delete to fail") }
+        catch DeviceCloudError.conflict { }
+        try await b.deleteAll()
+        try await b.enable()
+        try await b.publish(Data([2]), revision: 2)
+        try await a.deleteAll()
+        let remaining = try await b.snapshots()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testStoreReadsPeerUpdatesAfterAWriteFailsAndKeepsRevocationVisible() async throws {
+        let cloud = FakeDeviceCloud(), (local, peer) = devices(cloud)
+        try await local.enable()
+        try await peer.enable()
+        func publish(_ count: Int64) async throws {
+            let data = try JSONEncoder().encode(snapshot(tokens: count))
+            try await peer.publish(data, revision: count)
+        }
+        try await publish(2)
+        let ledger = LocalLedger(snapshot(tokens: 1))
+        let store = DeviceSyncStore(service: local) { await ledger.snapshot }
+        store.refresh()
+        try await waitForStore { !store.busy }
+        XCTAssertEqual(store.sources.first?.clients.first?.summary.tokens, 2)
+        try await publish(4)
+        await cloud.setRejectWrites(true)
+        await ledger.replace(with: snapshot(tokens: 3))
+        store.refresh(localChanged: true)
+        try await waitForStore { !store.busy }
+        XCTAssertEqual(store.sources.first?.clients.first?.summary.tokens, 4)
+        XCTAssertNotNil(store.message)
+        try await peer.deleteAll()
+        for _ in 0..<2 {
+            store.refresh()
+            try await waitForStore { !store.busy }
+            XCTAssertFalse(store.enabled)
+            XCTAssertEqual(store.message, DeviceCloudError.revoked.localizedDescription)
+        }
+    }
+
+    func testReadOnlyRefreshReportsRemoteRevocation() async throws {
+        let cloud = FakeDeviceCloud(), (local, peer) = devices(cloud)
+        try await local.enable()
+        let localSnapshot = snapshot(tokens: 1)
+        let store = DeviceSyncStore(service: local) { localSnapshot }
+        store.refresh()
+        try await waitForStore { !store.busy }
+        try await peer.deleteAll()
+        store.refresh()
+        try await waitForStore { !store.busy }
+        XCTAssertFalse(store.enabled)
+        XCTAssertEqual(store.message, DeviceCloudError.revoked.localizedDescription)
+        let reopenedStore = DeviceSyncStore(service: local) { localSnapshot }
+        XCTAssertEqual(reopenedStore.message, DeviceCloudError.revoked.localizedDescription)
+    }
+
+    func testSubagentDetailsMatchTheLocalSnapshotRevision() async throws {
+        let cloud = FakeDeviceCloud(), (local, peer) = devices(cloud)
+        try await local.enable()
+        try await peer.enable()
+        try await peer.publish(JSONEncoder().encode(snapshot(tokens: 2)), revision: 2)
+        let localSnapshot = snapshot(tokens: 1)
+        let store = DeviceSyncStore(service: local) { localSnapshot }
+        store.refresh()
+        try await waitForStore { !store.busy }
+        let filter = UsageFilter()
+        await store.select(filter, from: "2026-01-01", to: "2026-11-23")
+
+        func report(_ revision: Int64) -> UsageReport {
+            UsageReport(revision: revision, summary: localSnapshot.buckets[0].summary, daily: [], clients: [],
+                        providers: [], models: [], details: [], hourly: nil,
+                        codexSubagents: .init(starts: 1, tokens: 1, conversations: []))
+        }
+        XCTAssertEqual(store.matchingSubagentDetails(in: report(1), for: filter)?.starts, 1)
+        XCTAssertNil(store.matchingSubagentDetails(in: report(3), for: filter))
+    }
+
+    func testFailedManagementDoesNotConsumeThePendingLocalRefresh() async throws {
+        let cloud = FakeDeviceCloud(), (local, peer) = devices(cloud)
+        try await local.enable()
+        try await peer.enable()
+        try await peer.publish(JSONEncoder().encode(snapshot(tokens: 2)), revision: 2)
+        let ledger = LocalLedger(snapshot(tokens: 1))
+        let store = DeviceSyncStore(service: local) { await ledger.read() }
+        store.refresh()
+        try await waitForStore { !store.busy }
+        let filter = UsageFilter()
+        await store.select(filter, from: "2026-01-01", to: "2026-11-23")
+        XCTAssertEqual(store.local(for: filter)?.summary.tokens, 1)
+
+        await ledger.replace(with: snapshot(tokens: 3))
+        await ledger.gateNextRead()
+        store.refresh(localChanged: true)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while !(await ledger.isReading()), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let reading = await ledger.isReading()
+        XCTAssertTrue(reading)
+        await cloud.setOnline(false)
+        await store.delete(all: false)
+        XCTAssertNotNil(store.managementError)
+        await ledger.resumeRead()
+        try await waitForStore { !store.busy }
+        await cloud.setOnline(true)
+        store.refresh()
+        try await waitForStore { !store.busy && store.local(for: filter)?.summary.tokens == 3 }
+    }
+
+    func testPauseWaitsForACommittedUploadBeforeDisplayingOff() async throws {
+        let cloud = FakeDeviceCloud(), (local, peer) = devices(cloud)
+        try await local.enable()
+        try await peer.enable()
+        let ledger = LocalLedger(snapshot(tokens: 1))
+        let store = DeviceSyncStore(service: local) { await ledger.snapshot }
+        store.refresh()
+        try await waitForStore { !store.busy }
+        await ledger.replace(with: snapshot(tokens: 3))
+        await cloud.gateNextWrite()
+        store.refresh(localChanged: true)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while !(await cloud.isWaiting()), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let waiting = await cloud.isWaiting()
+        XCTAssertTrue(waiting)
+        let pause = Task { await store.stop() }
+        try await waitForStore { store.pausing }
+        XCTAssertTrue(store.enabled)
+        let stillPublished = try await peer.snapshots()
+        XCTAssertEqual(stillPublished.first?.revision, 1)
+        await cloud.releaseWrite()
+        await pause.value
+        XCTAssertFalse(store.enabled)
+        XCTAssertFalse(store.pausing)
+        let final = try await peer.snapshots()
+        XCTAssertEqual(final.first?.revision, 3)
+    }
+
+    func testStoreSkipsIncompatibleSnapshotsAndRefreshesCompatiblePeers() async throws {
+        let cloud = FakeDeviceCloud(), (local, peer) = devices(cloud)
+        let suite = "ee.ryek.tokenory.sync-tests." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let other = DeviceCloudSync(backend: cloud, preferences: .init(defaults: defaults, host: "other"))
+        try await local.enable()
+        try await peer.enable()
+        try await other.enable()
+        try await peer.publish(JSONEncoder().encode(snapshot(tokens: 2)), revision: 2)
+        let ourSnapshot = snapshot(tokens: 1)
+        let store = DeviceSyncStore(service: local) { ourSnapshot }
+        for (version, timezone, count) in [(2, "Asia/Shanghai", Int64(5)), (1, "America/Los_Angeles", 6)] {
+            let incompatible = DeviceUsageSnapshot(schemaVersion: version, revision: count, timezone: timezone,
+                                                   buckets: [], subagentStarts: [])
+            try await other.publish(JSONEncoder().encode(incompatible), revision: count)
+            try await peer.publish(JSONEncoder().encode(snapshot(tokens: count)), revision: count)
+            store.refresh()
+            try await waitForStore { !store.busy }
+            XCTAssertEqual(store.sources.map(\.id), [peer.deviceID])
+            XCTAssertEqual(store.sources.first?.clients.first?.summary.tokens, count)
+            XCTAssertNotNil(store.compatibilityNotice)
+        }
+    }
+
+    func testStoreDoesNotRedownloadItsOwnPublishedAsset() async throws {
+        let cloud = FakeDeviceCloud(), (local, peer) = devices(cloud)
+        try await local.enable()
+        try await peer.enable()
+        try await peer.publish(JSONEncoder().encode(snapshot(tokens: 2)), revision: 2)
+        let ledger = LocalLedger(snapshot(tokens: 1))
+        let store = DeviceSyncStore(service: local) { await ledger.snapshot }
+        store.refresh()
+        try await waitForStore { !store.busy }
+        let firstDownloads = await cloud.downloads
+        XCTAssertEqual(firstDownloads, 1)
+        await ledger.replace(with: snapshot(tokens: 3))
+        store.refresh(localChanged: true)
+        try await waitForStore { !store.busy }
+        let finalDownloads = await cloud.downloads
+        XCTAssertEqual(finalDownloads, firstDownloads)
     }
 
     func testSigningEnvironmentsKeepIndependentPreferences() async throws {

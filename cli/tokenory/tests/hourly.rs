@@ -122,3 +122,57 @@ fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
     filter.to = Some("2026-11-07".into());
     assert!(report(&mut db, &filter).unwrap().hourly.is_none());
 }
+
+#[test]
+fn device_snapshots_share_a_reporting_day_across_ledger_timezones() {
+    let instant = chrono::DateTime::parse_from_rfc3339("2026-11-22T16:30:00Z")
+        .unwrap()
+        .timestamp_millis();
+    for (timezone, archived_day) in [
+        ("America/Los_Angeles", "2026-11-22"),
+        ("Asia/Shanghai", "2026-11-23"),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = Database::open(root.path()).unwrap();
+        for (key, source, day, granularity, tokens) in [
+            ("request", "local", archived_day, "event", 50),
+            ("import", "tokens-ci", "2026-11-22", "day", 70),
+            ("approximate", "local", "2026-11-21", "sourceRecord", 30),
+        ] {
+            let client = if source == "local" { "codex" } else { "claude" };
+            let row: UsageRecord = serde_json::from_value(json!({
+                "key":key, "client":client,
+                "provider":"openai", "model":"model", "date":day,
+                "sessionId":"agent", "timezone":timezone, "timestampMs":instant,
+                "tokens":{"input":tokens,"output":0,"cacheRead":0,"cacheWrite":0,"reasoning":0},
+                "metadata":{"granularity":granularity}
+            })).unwrap();
+            put_record(&db.connection, source, "", &row).unwrap();
+            db.connection.execute(
+                "INSERT INTO coverage_choices VALUES (?1, ?2, ?3, '')",
+                rusqlite::params![day, client, source],
+            ).unwrap();
+        }
+        db.connection.execute(
+            "INSERT INTO codex_activity_threads(id,parent_id,depth,name,provider,started_ms,date)
+             VALUES ('agent','parent',1,NULL,'openai',?1,?2)",
+            rusqlite::params![instant, archived_day],
+        ).unwrap();
+        let original = report(&mut db, &Filter::default()).unwrap();
+        let snapshot = tokenory::device_snapshot::export(&mut db, timezone).unwrap();
+        assert_eq!(snapshot.timezone, "Asia/Shanghai");
+        let event = snapshot.buckets.iter().find(|row| row.summary.tokens == 50).unwrap();
+        assert_eq!((event.date.as_str(), event.hour), ("2026-11-23", Some(0)));
+        assert!(event.is_subagent);
+        let imported = snapshot.buckets.iter().find(|row| row.source == "tokens-ci").unwrap();
+        assert_eq!((imported.date.as_str(), imported.hour), ("2026-11-22", None));
+        let unallocated = snapshot.buckets.iter().find(|row| row.summary.tokens == 30).unwrap();
+        assert_eq!((unallocated.date.as_str(), unallocated.hour), ("2026-11-21", None));
+        assert!(snapshot.subagent_starts.iter().any(|row| {
+            row.date == "2026-11-23" && row.model.as_deref() == Some("model")
+                && row.nearest_after.as_deref() == Some("2026-11-23")
+        }));
+        assert_eq!(report(&mut db, &Filter::default()).unwrap().daily.iter().map(|row| &row.key).collect::<Vec<_>>(),
+                   original.daily.iter().map(|row| &row.key).collect::<Vec<_>>());
+    }
+}

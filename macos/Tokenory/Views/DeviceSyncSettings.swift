@@ -43,7 +43,9 @@ struct DeviceSyncSettings: View {
                 Spacer()
                 if sync.enabled { Button(L("cloud.refresh")) { sync.refresh(localChanged: true) }.disabled(sync.busy || sync.managing) }
             }
+            if sync.pausing { Text(L("cloud.pausing")).foregroundStyle(.secondary) }
             if let message = sync.message { Text(message).foregroundStyle(.secondary).textSelection(.enabled) }
+            if let notice = sync.compatibilityNotice { Text(notice).foregroundStyle(.secondary) }
             Divider()
             Text(L("cloud.storage")).font(.headline)
             Text(L("cloud.pauseNote")).foregroundStyle(.secondary)
@@ -51,6 +53,14 @@ struct DeviceSyncSettings: View {
                 Button(Scope.device.title) { deletion = .device }
                 Button(Scope.all.title) { deletion = .all }
             }.disabled(sync.managing)
+            if sync.hasUnconfirmedDeviceDeletion {
+                Button(L("cloud.checkDeviceDeletion")) { Task { await sync.confirmPreviousDeletion(all: false) } }
+                    .disabled(sync.managing)
+            }
+            if sync.hasUnconfirmedAllDeletion {
+                Button(L("cloud.checkAllDeletion")) { Task { await sync.confirmPreviousDeletion(all: true) } }
+                    .disabled(sync.managing)
+            }
         }
         .alert(item: $deletion) { scope in
             Alert(title: Text(scope.title), message: Text(scope.detail),

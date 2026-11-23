@@ -326,6 +326,9 @@ struct OverviewView: View {
                                 Button { restoreRange() } label: { Label(L("overview.back"), systemImage: "arrow.left") }
                                     .buttonStyle(.plain).foregroundStyle(WorkspaceStyle.selection).font(.caption)
                             }
+                            if !localOnly, let notice = store.cloud.compatibilityNotice {
+                                Label(notice, systemImage: "icloud.slash").font(.callout).foregroundStyle(.secondary)
+                            }
                             WorkspacePanel {
                                 VStack(alignment: .leading, spacing: 20) {
                                     if overview.summary.recordCount > 0 {
@@ -369,7 +372,9 @@ struct OverviewView: View {
                             }
                             if let subagents = overview.codexSubagents, subagents.hasActivity {
                                 CodexSubagentsView(report: subagents,
-                                                  local: report.codexSubagents,
+                                                  local: multiDevice
+                                                    ? store.cloud.matchingSubagentDetails(in: report, for: reportFilter)
+                                                    : report.codexSubagents,
                                                   hasRemote: multiDevice,
                                                   remote: remoteReports.values.compactMap(\.codexSubagents),
                                                   codexSummary: overview.clients.first { $0.key == "codex" }?.summary)
