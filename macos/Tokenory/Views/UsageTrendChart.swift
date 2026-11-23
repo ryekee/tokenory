@@ -113,8 +113,8 @@ struct UsageTrendChart: View {
             })
         }
         return [DeviceBuckets(id: "local", name: localName, values: index(localReport))]
-            + remoteReports.keys.sorted().compactMap { id in
-                remoteReports[id].map { DeviceBuckets(id: "remote:" + id, name: deviceName(id), values: index($0)) }
+            + remoteReports.map { id, report in
+                DeviceBuckets(id: "remote:" + id, name: deviceName(id), values: index(report))
             }
     }
 
