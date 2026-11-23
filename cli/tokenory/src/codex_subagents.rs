@@ -16,6 +16,9 @@ use std::{
     path::Path,
 };
 
+pub(crate) const UNIQUE_ALIASES_SQL: &str = "SELECT ledger_id,min(thread_id) AS thread_id
+    FROM codex_activity_aliases GROUP BY ledger_id HAVING count(*)=1";
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Report {
@@ -260,9 +263,8 @@ pub(crate) fn query(db: &Connection, filter: &Filter) -> Result<Option<Report>> 
         .filter(|(_, thread)| thread.depth > 0)
         .filter_map(|(id, thread)| Some((id.as_str(), conversation_root(thread, &threads)?)))
         .collect();
-    let aliases = db.prepare_cached(
-        "SELECT ledger_id,min(thread_id) FROM codex_activity_aliases GROUP BY ledger_id HAVING count(*)=1",
-    )?.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+    let aliases = db.prepare_cached(UNIQUE_ALIASES_SQL)?
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
         .collect::<rusqlite::Result<HashMap<_, _>>>()?;
     let mut scoped = filter.clone();
     scoped.client = Some("codex".into());

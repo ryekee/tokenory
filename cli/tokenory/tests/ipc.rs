@@ -67,6 +67,12 @@ fn worker_queries_errors_writer_lock_and_eof_are_real_process_behaviors() {
     request(&mut input, "report", "overview", json!({}));
     let v = response("report");
     assert_eq!(v["result"]["summary"]["tokens"], 0);
+    request(&mut input, "snapshot", "deviceUsageSnapshot", json!({}));
+    let snapshot = response("snapshot");
+    assert_eq!(snapshot["result"]["schemaVersion"], 1);
+    assert_eq!(snapshot["result"]["timezone"], "Asia/Shanghai");
+    assert_eq!(snapshot["result"]["buckets"], json!([]));
+    assert_eq!(snapshot["result"]["subagentStarts"], json!([]));
     request(&mut input, "bad", "overview", json!({"from":"2026-02-30"}));
     assert!(response("bad")["error"].is_object());
     request(&mut input, "turns", "codexTurns", json!({"from":"2026-11-14","to":"2026-11-14"}));

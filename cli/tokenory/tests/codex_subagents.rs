@@ -112,6 +112,20 @@ async fn codex_starts_and_effective_usage_are_independent_of_the_main_total() {
     )
     .unwrap();
     let raw = serde_json::to_value(overview(&mut db, &today, home.path()).unwrap()).unwrap();
+    let snapshot = tokenory::device_snapshot::export(&mut db, &config.timezone).unwrap();
+    let child_buckets = snapshot.buckets.iter().filter(|r| r.is_subagent).collect::<Vec<_>>();
+    assert_eq!(child_buckets.iter().map(|r| r.summary.tokens).sum::<i64>(), 35);
+    assert_eq!(child_buckets.iter().filter_map(|r| r.summary.known_estimated_cost_usd).sum::<f64>(), 0.25);
+    assert_eq!(child_buckets.iter().map(|r| r.summary.unpriced_tokens).sum::<i64>(), 10);
+    let starts_today = snapshot.subagent_starts.iter().filter(|s| s.date == "2026-11-21"
+        && s.provider.is_none() && s.model.is_none()).map(|s| s.count).sum::<i64>();
+    assert_eq!(starts_today, 1);
+    assert!(snapshot.subagent_starts.iter().any(|s| s.date == "2026-11-20"
+        && s.model.as_deref() == Some("child-model") && s.nearest_after.as_deref() == Some("2026-11-21")));
+    let published = serde_json::to_string(&snapshot).unwrap();
+    for private_text in [parent, "rollout-", "Check the ledger", "agent_nickname", "sessionId", "item_key"] {
+        assert!(!published.contains(private_text));
+    }
     assert_eq!(raw["summary"]["tokens"], 375);
     assert_eq!(raw["clients"][0]["summary"]["knownEstimatedCostUsd"], 4.0);
     assert_eq!(raw["codexSubagents"]["starts"], 1);

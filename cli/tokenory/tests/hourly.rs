@@ -92,6 +92,10 @@ fn hourly_uses_beijing_time_all_rows_and_effective_sources() {
         ..Default::default()
     };
     let result = report(&mut db, &filter).unwrap();
+    let snapshot = tokenory::device_snapshot::export(&mut db, "Asia/Shanghai").unwrap();
+    let sum = |hour| snapshot.buckets.iter().filter(|row| row.hour == hour)
+        .map(|row| row.summary.tokens).sum::<i64>();
+    assert_eq!((sum(Some(0)), sum(Some(1)), sum(None)), (300, 50, 430));
     assert_eq!(result.details.len(), 1);
     assert_eq!(result.summary.tokens, 780);
     let hours = result.hourly.unwrap();
