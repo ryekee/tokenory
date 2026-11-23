@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare the Hiko Developer ID profile and CloudKit entitlements for the final app signature."""
+"""Prepare the Hiko Developer ID profile and verify signed CloudKit entitlements."""
 
 import argparse
 from datetime import datetime, timezone
@@ -81,10 +81,24 @@ def prepare(identity, profile_path, output):
     print(fingerprint)
 
 
+def verify(app, requested):
+    signed = subprocess.check_output(["/usr/bin/codesign", "--display", "--entitlements", "-", "--xml", str(app)])
+    if plistlib.loads(requested.read_bytes()) != plistlib.loads(signed):
+        raise SystemExit("The packaged app's signed CloudKit entitlements did not match the release profile.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--identity", required=True)
-    parser.add_argument("--profile", type=Path)
-    parser.add_argument("--out", type=Path, required=True)
+    commands = parser.add_subparsers(dest="command", required=True)
+    prepare_parser = commands.add_parser("prepare")
+    prepare_parser.add_argument("--identity", required=True)
+    prepare_parser.add_argument("--profile", type=Path)
+    prepare_parser.add_argument("--out", type=Path, required=True)
+    verify_parser = commands.add_parser("verify")
+    verify_parser.add_argument("app", type=Path)
+    verify_parser.add_argument("requested", type=Path)
     args = parser.parse_args()
-    prepare(args.identity, args.profile, args.out)
+    if args.command == "prepare":
+        prepare(args.identity, args.profile, args.out)
+    else:
+        verify(args.app, args.requested)

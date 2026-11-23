@@ -2,10 +2,14 @@ import copy
 from datetime import datetime, timedelta, timezone
 import hashlib
 from pathlib import Path
+import plistlib
+import subprocess
 import sys
+import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SCRIPT_DIR))
 from cloudkit_release_profile import BUNDLE, CONTAINER, TEAM, entitlements
 
 
@@ -33,6 +37,29 @@ class ReleaseCloudKitProfileTests(unittest.TestCase):
         self.assertEqual(result["com.apple.developer.icloud-container-environment"], "Production")
         self.assertEqual(result["com.apple.developer.icloud-services"], ["CloudKit"])
         self.assertEqual(result["com.apple.developer.icloud-container-identifiers"], [CONTAINER])
+
+    @unittest.skipUnless(sys.platform == "darwin", "requires macOS codesign")
+    def test_verify_signed_cloudkit_entitlements(self):
+        _, grants = entitlements(self.profile, self.fingerprints, self.now)
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "Fixture"
+            requested = Path(temporary) / "CloudKit.entitlements"
+            requested.write_bytes(plistlib.dumps(grants))
+            subprocess.run(["/usr/bin/clang", "-x", "c", "-", "-o", str(binary)],
+                           input=b"int main(void) { return 0; }\n", check=True)
+            subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", "--entitlements", str(requested),
+                            str(binary)], check=True, capture_output=True)
+            verify = [sys.executable, str(SCRIPT_DIR / "cloudkit_release_profile.py"), "verify",
+                      str(binary), str(requested)]
+
+            matching = subprocess.run(verify, capture_output=True, text=True)
+            self.assertEqual(matching.returncode, 0, matching.stderr)
+
+            del grants["com.apple.developer.icloud-container-environment"]
+            requested.write_bytes(plistlib.dumps(grants))
+            mismatched = subprocess.run(verify, capture_output=True, text=True)
+            self.assertNotEqual(mismatched.returncode, 0)
+            self.assertIn("signed CloudKit entitlements did not match the release profile", mismatched.stderr)
 
     def test_reject_wrong_profile_certificate_environment_and_bundle(self):
         for key, value in [("ProvisionsAllDevices", False), ("DeveloperCertificates", [b"other key"]),
