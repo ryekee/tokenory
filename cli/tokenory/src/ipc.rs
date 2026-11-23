@@ -228,6 +228,9 @@ fn execute(db: &mut Database, config: &mut Config, op: &str, v: Value) -> Result
             &payload(v)?,
         )?)?),
         "activity" => Ok(serde_json::to_value(queries::activity(db, &payload(v)?)?)?),
+        "deviceUsageSnapshot" => Ok(serde_json::to_value(crate::device_snapshot::export(
+            db, &config.timezone,
+        )?)?),
         "daily" => Ok(serde_json::to_value(
             queries::report(db, &payload(v)?)?.daily,
         )?),

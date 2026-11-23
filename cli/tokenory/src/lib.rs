@@ -6,6 +6,7 @@ pub mod clients;
 pub mod collector;
 pub mod config;
 pub mod db;
+pub mod device_snapshot;
 pub mod import;
 pub mod queries;
 pub mod usage;

@@ -9,6 +9,7 @@ codex_turns.rs: 校验完成主回合、缓存未变化日志、保存无正文�
 codex_subagents.rs / codex_subagents/logs.rs: 识别明确派生的 Codex 子代理和用户发起的主代理回合，持久化线程、父关系及回合开始证据。用有效账本汇总可归属的 Tokens、已有费用估算和未计价 Tokens，独立计算启动数。
 config.rs: 保存采集配置。
 db.rs: 维护 SQLite schema、记录和备份；迁移/恢复包含独立回合表；一次升级仅备份一次，自动备份保留 3 份，预览保留 24 小时内最近 3 份。
+device_snapshot.rs: 从同一个 SQLite 读事务生成 `deviceUsageSnapshot`。空请求返回一台 Mac 全部有效历史的版本、账本时区、按日期/可用小时/工具/来源/供应商/模型的用量，及支持筛选的子代理启动计数。逐条记录、会话身份、标题及路径均不出账本。
 import.rs: 预览、提交和撤销历史导入。
 ipc.rs: 向原生应用提供 worker JSON 协议、有效账本的已用模型、对话目录、按会话查标题、总览子代理卡及 codexTurns / turnAnalytics 查询。
 lib.rs: 导出账本引擎模块。

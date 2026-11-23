@@ -15,7 +15,7 @@ coverage.rs: 验证 coverage 的账本接口和行为。
 history_import.rs: 验证 history_import 的账本接口和行为。
 hourly.rs: 验证 hourly 的账本接口和行为。
 identity.rs: 验证 identity 的账本接口和行为。
-ipc.rs: 验证 ipc 的账本接口和行为。
+ipc.rs: 验证 worker 请求与响应。快照的小时、子代理、隐私和 worker 入口回归分别位于 hourly.rs、codex_subagents.rs 与 ipc.rs。
 migration.rs: 验证 migration 的账本接口和行为。
 pricing.rs: 验证 pricing 的账本接口和行为，覆盖 GPT-6.2 费率、长上下文、速度及优惠截止边界、远程费率覆盖、OpenClaw 时间依据、MiMo 订阅与免费路由、旧库的首次补价和离线回退。
 
