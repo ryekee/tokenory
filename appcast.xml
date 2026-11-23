@@ -3,20 +3,38 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.1.13</title>
-            <pubDate>Sun, 22 Nov 2026 21:44:02 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.1.13</link>
-            <sparkle:version>17</sparkle:version>
-            <sparkle:shortVersionString>0.1.13</sparkle:shortVersionString>
+            <title>0.2.0</title>
+            <pubDate>Tue, 24 Nov 2026 01:23:58 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.0</link>
+            <sparkle:version>18</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.1.13/Tokenory-0.1.13-macOS-arm64.zip" length="10897364" type="application/octet-stream" sparkle:edSignature="/WQgfFbJmw0W/CMaA2TK1WyyItlmGqHhJNau5yJ70H8HYLDXV3Sh7c0DYp45P1dzPd+TLCmm660+/jaD6O+ADA==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.0/Tokenory-0.2.0-macOS-arm64.zip" length="11530406" type="application/octet-stream" sparkle:edSignature="r8d2kiDEVlj749t9ARpM1+VxokwO/RGsLsvD+gfVPdHp0fjxUCUmFD3OvoyFZM71dMjpjEKKE4LH3c3tA73sAw==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- When Codex subagent activity is available, Overview shows launches, Tokens, estimated cost, and usage and cost shares. Expand a conversation to see usage by subagent and model, plus recorded main-agent turns.
+- Turn on iCloud Sync in Settings on each Mac signed in to the same Apple Account. Overview combines their usage and estimated costs, with a This Mac only switch. iCloud stores summaries, and raw logs stay on each Mac.
+- New usage is archived in your Mac’s system time zone. Previously archived and imported records keep their dates.
+- The HUD can hide after 30 seconds without new usage and return when usage arrives. Choose what a triple-click does, and hear a preview when you adjust the volume with sound enabled.
+- On the Speed tab, search by project, turn name, or turn ID. The list shows six turns per page.
+- Find Sources, Import, and Manage Backups in Settings. Refresh rates to preview changes to saved estimates before applying them.
+
+## Fixes
+
+- Fill in pending OpenClaw cost estimates when a matching rate is available.
+- Show the applied long-context rate in MiMo v2 Pro cost details.
 </description><description xml:lang="zh-Hans" sparkle:format="markdown">## 新功能
 
-- 有 Codex 子代理活动时，总览会显示启动次数、Tokens 和估算费用，并标出用量和费用占比。按对话展开可查看各子代理的模型用量，以及有记录的主代理回合数。
+- 在使用同一 Apple 账号的各台 Mac 上开启「iCloud 同步」，即可在「总览」查看合计用量和估算费用。iCloud 只保存汇总，原始日志留在各台 Mac。随时可切换「只看本机」。
+- 新采集的用量按 Mac 的系统时区归档，已有记录和导入记录保留原日期。
+- HUD 可在 30 秒没有新用量时隐藏，有新用量时再出现。三击动作可自选，开启音效后调节音量可以即时试听。
+- 速度页支持按项目名、回合名或回合 ID 搜索，每页显示 6 个回合。
+- 在设置里查看来源、导入历史和管理备份。刷新费率时，可以先预览已有估算的变化，再决定是否重算。
+
+## 修复
+
+- 有匹配费率时，补齐 OpenClaw 待计价记录的费用估算。
+- MiMo v2 Pro 的费用明细会显示实际用于估算的长上下文费率。
 </description></item>
     </channel>
 </rss>
