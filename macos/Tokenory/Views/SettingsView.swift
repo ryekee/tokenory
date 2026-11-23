@@ -1,5 +1,5 @@
 // [INPUT]: 接收用量存储、更新服务及系统登录项状态。
-// [OUTPUT]: 提供通用、HUD、价格、采集、iCloud 和数据设置。通用页的选择器按最长本地化选项等宽布局。
+// [OUTPUT]: 提供通用、HUD、价格、采集、iCloud、数据与关于设置。数据页包含导入和恢复，关于页管理更新。
 // [POS]: 设置窗口入口；价格目录交给 PriceCatalogView 展示。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -7,16 +7,18 @@ import SwiftUI
 import ServiceManagement
 
 private enum SettingsSection: String, CaseIterable {
-    case general, hud, prices, collection, cloud, data
-    var title: String { L("settings." + rawValue) }
+    case general, hud, prices, collection, sources, cloud, data, about
+    var title: String { L(self == .sources ? "nav.sources" : "settings." + rawValue) }
     var icon: String {
         switch self {
         case .general: "gearshape"
         case .hud: "rectangle.on.rectangle"
         case .prices: "dollarsign.circle"
         case .collection: "arrow.triangle.2.circlepath"
+        case .sources: "square.stack.3d.up"
         case .cloud: "icloud"
         case .data: "externaldrive"
+        case .about: "info.circle"
         }
     }
 
@@ -65,20 +67,27 @@ struct SettingsView: View {
     @State private var ratesExpanded = true
     @State private var tab: SettingsSection = .general
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
+    @AppStorage(AppAppearance.defaultsKey) private var appearance = AppAppearance.system
     @State private var login = LoginItemService()
     @ObservedObject private var updates = UpdateChecker.shared
     @State private var interval = 60
     @State private var scanPaths: [String: String] = [:]
+    @State private var defaultScanPaths: [String: [String]] = [:]
+    @State private var defaultPathsLoaded = false
+    @State private var defaultPathsFailed = false
+    @State private var collectionDraftInitialized = false
     @State private var selectedClient = "claude"
     @State private var pricingBusy = false
     @State private var priceNotice: String?
     @State private var collectionStatus: SettingsOperationStatus?
     @State private var ledgerStatus: SettingsOperationStatus?
+    @State private var importBusy = false
+    @State private var restoreGeneration = 0
     @State private var preview: RepricePreview?
     @State private var pendingRestore: URL?
 
     private var busy: Bool {
-        pricingBusy || collectionStatus?.isPending == true || ledgerStatus?.isPending == true
+        importBusy || pricingBusy || collectionStatus?.isPending == true || ledgerStatus?.isPending == true
     }
 
     var body: some View {
@@ -99,16 +108,18 @@ struct SettingsView: View {
                         case .hud: HUDSettingsView()
                         case .prices: priceSettings
                         case .collection: collectionSettings
+                        case .sources: SourcesView()
                         case .cloud: DeviceSyncSettings()
                         case .data: dataSettings
+                        case .about: aboutSettings
                         }
                         if tab == .prices, let priceNotice {
                             Label(priceNotice, systemImage: "checkmark.circle")
                                 .font(.callout).foregroundStyle(.secondary)
                         }
                     }.padding(.horizontal, 24).padding(.bottom, 24)
-                        .id(tab).transition(.opacity)
                 }
+                .id(tab)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(WorkspaceStyle.canvas(scheme))
@@ -117,11 +128,15 @@ struct SettingsView: View {
             .toolbar(removing: .title)
             .disclosureGroupStyle(WorkspaceDisclosureStyle())
             .onChange(of: tab) { _, _ in priceNotice = nil }
+            .onChange(of: appearance) { _, value in value.apply() }
             .onChange(of: interval) { _, _ in clearSavedCollectionStatus() }
             .onChange(of: scanPaths) { _, _ in clearSavedCollectionStatus() }
             .task {
                 await store.loadManagement(); login.refresh()
-                if let s = store.settings { interval = s.intervalSeconds; scanPaths = s.extraScanPaths.mapValues { $0.joined(separator: "\n") } }
+                initializeCollectionDraft()
+            }
+            .task(id: tab) {
+                if tab == .collection && !defaultPathsLoaded { await loadDefaultScanPaths() }
             }
             .sheet(isPresented: Binding(get: { preview != nil }, set: { if !$0 { preview = nil } })) {
                 if let p = preview {
@@ -146,12 +161,20 @@ struct SettingsView: View {
             }
     }
     private var generalSettings: some View {
-        let updateTitle = L("update.check")
-        let pickerTitles = AppLanguage.allCases.map(\.title) + UpdateChecker.intervalHours.map { L("update.interval_\($0)") }
-        let checkWidth = WorkspaceDropdownTrigger.fittingWidth(for: [updateTitle], includesChevron: false)
-        let pickerWidth = max(checkWidth, WorkspaceDropdownTrigger.fittingWidth(for: pickerTitles))
+        let pickerWidth = WorkspaceDropdownTrigger.fittingWidth(for: AppLanguage.allCases.map(\.title))
         return WorkspacePanel {
             VStack(spacing: 16) {
+                HStack {
+                    Text(L("appearance.title"))
+                    Spacer()
+                    Picker(L("appearance.title"), selection: $appearance) {
+                        ForEach(AppAppearance.allCases, id: \.self) { value in
+                            Text(value.title).tag(value)
+                        }
+                    }
+                    .labelsHidden().pickerStyle(.segmented).fixedSize()
+                }
+                Divider()
                 HStack {
                     Text(L("language.title"))
                     Spacer()
@@ -174,40 +197,56 @@ struct SettingsView: View {
                     Toggle(L("settings.login"), isOn: Binding(get: { login.enabled }, set: { value in do { try login.setEnabled(value) } catch { store.fail(error) } }))
                         .labelsHidden().toggleStyle(.switch).controlSize(.small).fixedSize().frame(width: 180, alignment: .trailing)
                 }
-                Divider()
-                HStack {
-                    Text(LF("update.current", updates.currentVersion)).foregroundStyle(.secondary)
-                    Spacer()
-                    Button { updates.check() } label: {
-                        Text(updateTitle).frame(width: pickerWidth == checkWidth ? checkWidth : nil)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(!updates.canCheckForUpdates)
-                }
-                HStack {
-                    Text(L("update.automatic"))
-                    Spacer()
-                    Toggle(L("update.automatic"), isOn: Binding(
-                        get: { updates.automaticallyChecksForUpdates },
-                        set: { updates.setAutomaticChecks($0) }
-                    )).labelsHidden().toggleStyle(.switch).controlSize(.small)
-                }
-                if updates.automaticallyChecksForUpdates {
-                    HStack {
-                        Text(L("update.frequency"))
-                        Spacer()
-                        WorkspaceDropdown(
-                            label: L("update.frequency"),
-                            selection: Binding(get: { updates.checkIntervalHours }, set: { updates.setIntervalHours($0) }),
-                            options: UpdateChecker.intervalHours, width: pickerWidth, title: { L("update.interval_\($0)") }
-                        )
-                    }
-                }
-                if let error = updates.startupError {
-                    Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled)
-                }
                 if login.status == .requiresApproval {
                     Button(L("settings.open_login")) { SMAppService.openSystemSettingsLoginItems() }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+        }
+    }
+
+    private var aboutSettings: some View {
+        let frequencies = UpdateChecker.intervalHours.map { L("update.interval_\($0)") }
+        let pickerWidth = WorkspaceDropdownTrigger.fittingWidth(for: frequencies)
+        return VStack(alignment: .leading, spacing: 14) {
+            WorkspacePanel {
+                HStack(spacing: 14) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable().scaledToFit().frame(width: 56, height: 56)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Tokenory").font(.title2.weight(.semibold))
+                        Text(LF("update.current", updates.currentVersion)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button(L("update.check")) { updates.check() }.disabled(!updates.canCheckForUpdates)
+                }
+            }
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text(L("update.automatic"))
+                        Spacer()
+                        Toggle(L("update.automatic"), isOn: Binding(
+                            get: { updates.automaticallyChecksForUpdates },
+                            set: { updates.setAutomaticChecks($0) }
+                        )).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    }
+                    if updates.automaticallyChecksForUpdates {
+                        Divider()
+                        HStack {
+                            Text(L("update.frequency"))
+                            Spacer()
+                            WorkspaceDropdown(
+                                label: L("update.frequency"),
+                                selection: Binding(get: { updates.checkIntervalHours }, set: { updates.setIntervalHours($0) }),
+                                options: UpdateChecker.intervalHours, width: pickerWidth, title: { L("update.interval_\($0)") }
+                            )
+                        }
+                    }
+                    if let error = updates.startupError {
+                        Label(error, systemImage: "exclamationmark.circle").font(.callout).textSelection(.enabled)
+                    }
                 }
             }
         }
@@ -248,14 +287,19 @@ struct SettingsView: View {
         }
     }
     private var collectionSettings: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let intervals = [30, 60, 120]
+        let intervalTitles = (intervals + [interval]).map { LF("settings.interval_seconds", $0) }
+        return VStack(alignment: .leading, spacing: 14) {
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
                         Text(L("settings.interval"))
                         Spacer()
-                        Stepper(LF("settings.interval_seconds", interval), value: $interval, in: 15...86400, step: 15)
-                            .fixedSize()
+                        WorkspaceDropdown(
+                            label: L("settings.interval"), selection: $interval, options: intervals,
+                            width: WorkspaceDropdownTrigger.fittingWidth(for: intervalTitles),
+                            title: { LF("settings.interval_seconds", $0) }
+                        )
                     }
                     Divider()
                     HStack {
@@ -278,43 +322,128 @@ struct SettingsView: View {
                             brand: { ($0, .tool) }
                         ).disabled(clients.isEmpty)
                     }
-                    pathEditor(L("settings.extra_paths"), tool: selectedClient, text: Binding(
+                    pathEditor(L("settings.scan_paths"), text: Binding(
                         get: { scanPaths[selectedClient] ?? "" },
                         set: { scanPaths[selectedClient] = $0 }
                     ))
                     Text(L("settings.paths_note")).font(.caption).foregroundStyle(.secondary)
+                    if let conflict = duplicateScanPathClient {
+                        Text(LF("settings.duplicate_path", clientName(conflict)))
+                            .font(.caption).foregroundStyle(.red)
+                    }
                 }
             }
             .disabled(collectionStatus?.isPending == true)
             VStack(alignment: .trailing, spacing: 8) {
                 Button(L("settings.save"), action: saveSettings)
                     .buttonStyle(.borderedProminent)
-                    .disabled(busy || store.settings == nil)
+                    .disabled(busy || store.settings == nil || !defaultPathsLoaded || duplicateScanPathClient != nil)
                 if let collectionStatus { operationFeedback(collectionStatus) }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
-    private func pathEditor(_ title: String, tool: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            BrandLabel(name: tool, kind: .tool, title: title).font(.callout).fontWeight(.medium)
-            TextEditor(text: text)
-                .font(.system(size: 12, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .padding(8).frame(height: 70)
-                .background(WorkspaceStyle.canvas(scheme), in: RoundedRectangle(cornerRadius: WorkspaceStyle.fieldRadius))
-                .accessibilityLabel(title)
+    private func pathEditor(_ title: String, text: Binding<String>) -> some View {
+        let defaults = defaultScanPaths[selectedClient] ?? []
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.callout).fontWeight(.medium)
+            VStack(alignment: .leading, spacing: 0) {
+                if defaultPathsFailed {
+                    HStack {
+                        Text(L("settings.default_paths_failed")).foregroundStyle(.secondary)
+                        Button(L("action.retry")) { Task { await loadDefaultScanPaths() } }
+                    }.font(.caption).padding(8)
+                } else if defaultPathsLoaded {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(defaults, id: \.self) { path in
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Image(systemName: "lock.fill").font(.system(size: 10)).accessibilityHidden(true)
+                                    Text(path).font(.system(size: 12, design: .monospaced))
+                                        .lineLimit(1).truncationMode(.middle).textSelection(.enabled).help(path)
+                                }
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }.padding(8)
+                    }.frame(height: min(CGFloat(max(defaults.count, 1)) * 19 + 16, 110))
+                    Divider().padding(.horizontal, 8)
+                } else {
+                    ProgressView().controlSize(.small).padding(8)
+                }
+                TextEditor(text: text)
+                    .font(.system(size: 12, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .padding(8).frame(height: 70)
+                    .accessibilityLabel(L("settings.extra_paths"))
+            }
+            .background(WorkspaceStyle.canvas(scheme), in: RoundedRectangle(cornerRadius: WorkspaceStyle.fieldRadius))
         }
+    }
+
+    private func loadDefaultScanPaths() async {
+        defaultPathsFailed = false
+        if store.settings == nil {
+            await store.loadManagement()
+            guard store.settings != nil else {
+                defaultPathsFailed = true
+                return
+            }
+        }
+        initializeCollectionDraft()
+        do {
+            defaultScanPaths = try await store.perform("defaultScanPaths").decode([String: [String]].self)
+            defaultPathsLoaded = true
+        } catch {
+            defaultPathsLoaded = false
+            defaultPathsFailed = true
+        }
+    }
+
+    private func initializeCollectionDraft() {
+        guard !collectionDraftInitialized, let settings = store.settings else { return }
+        interval = settings.intervalSeconds
+        scanPaths = settings.extraScanPaths.mapValues { $0.joined(separator: "\n") }
+        collectionDraftInitialized = true
+    }
+
+    private func expandedScanPath(_ value: String, home: String) -> String {
+        if value == "~" { return home }
+        if value.hasPrefix("~/") { return home + String(value.dropFirst()) }
+        return value
+    }
+
+    private func scanPathIdentity(_ value: String, home: String) -> String {
+        let expanded = expandedScanPath(value, home: home)
+        guard expanded.hasPrefix("/") else { return expanded }
+        return URL(fileURLWithPath: expanded).standardizedFileURL.resolvingSymlinksInPath().path
+    }
+
+    private var duplicateScanPathClient: String? {
+        guard let settings = store.settings, defaultPathsLoaded else { return nil }
+        for client in scanPaths.keys.sorted() {
+            let current = scanPaths[client, default: ""].split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            let old = settings.extraScanPaths[client, default: []]
+            let counts: ([String]) -> [String: Int] = { paths in
+                paths.reduce(into: [:]) { result, path in
+                    result[scanPathIdentity(path, home: settings.homeDir), default: 0] += 1
+                }
+            }
+            let oldCounts = counts(old)
+            let defaults = Set((defaultScanPaths[client] ?? []).map { scanPathIdentity($0, home: settings.homeDir) })
+            for (path, count) in counts(current) where count > oldCounts[path, default: 0] {
+                if count > 1 || defaults.contains(path) { return client }
+            }
+        }
+        return nil
     }
     private var dataSettings: some View {
         VStack(alignment: .leading, spacing: 14) {
             WorkspacePanel {
-                VStack(alignment: .leading, spacing: 12) {
-                    Label(L("data.location"), systemImage: "folder").font(.headline)
-                    Text(store.dataDirectory.path).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button(L("data.finder")) { NSWorkspace.shared.open(store.dataDirectory) }
-                }
+                ImportView(busy: $importBusy)
+                    .id(restoreGeneration)
+                    .disabled(pricingBusy || collectionStatus?.isPending == true || ledgerStatus?.isPending == true)
             }
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 12) {
@@ -326,6 +455,17 @@ struct SettingsView: View {
                     }
                     .disabled(busy)
                     if let ledgerStatus { operationFeedback(ledgerStatus) }
+                }
+            }
+            WorkspacePanel {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L("data.location")).font(.headline)
+                        Text(store.dataDirectory.path).font(.callout).foregroundStyle(.secondary)
+                            .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Button(L("data.finder")) { NSWorkspace.shared.open(store.dataDirectory) }
                 }
             }
         }
@@ -402,8 +542,10 @@ struct SettingsView: View {
     private func saveSettings() {
         guard var settings = store.settings else { return }
         settings.intervalSeconds = interval
+        let home = settings.homeDir
         settings.extraScanPaths = scanPaths.mapValues { text in
             text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                .map { expandedScanPath($0, home: home) }
         }.filter { !$0.value.isEmpty }
         runOperation(.saveCollection) {
             _ = try await store.perform("updateSettings", payload: try .encode(settings))
@@ -421,6 +563,9 @@ struct SettingsView: View {
         pendingRestore = FilePanels.open(types: [.data])
     }
     private func restore(from file: URL) {
-        runOperation(.restore) { try await store.restore(from: file) }
+        runOperation(.restore) {
+            try await store.restore(from: file)
+            restoreGeneration += 1
+        }
     }
 }

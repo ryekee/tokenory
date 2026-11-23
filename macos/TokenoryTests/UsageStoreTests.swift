@@ -286,7 +286,15 @@ final class UsageStoreTests: XCTestCase {
             XCTAssertEqual(store.reportFilter, store.filter)
             await engine.stop()
             do { _ = try await engine.request("status"); XCTFail("stopped engine accepted request") } catch {}
+            let cachedSources = store.sources
+            let previousGlobalError = store.error
+            await store.loadSources()
+            XCTAssertNotNil(store.sourcesError)
+            XCTAssertEqual(store.sources, cachedSources)
+            XCTAssertEqual(store.error, previousGlobalError)
             try await engine.start()
+            await store.loadSources()
+            XCTAssertNil(store.sourcesError)
             let report = try await engine.request("overview").decode(UsageReport.self)
             XCTAssertEqual(report.summary.tokens, 1000)
             let bad = root.appending(path: "bad.sqlite3")
@@ -369,14 +377,22 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertTrue(store.loading)
         XCTAssertEqual(store.reportFilter, first)
         XCTAssertEqual(store.report?.summary.tokens, 100)
+        // Returning to the displayed date should end the wait immediately.
+        store.filter = first
+        await store.refreshSelection(first, now: now)
+        XCTAssertFalse(store.loading)
         try Data().write(to: root.appending(path: "release"))
         await refresh.value
+        XCTAssertEqual(store.reportFilter, first)
+        XCTAssertEqual(store.report?.summary.tokens, 100)
+        store.filter = second
+        await store.refreshSelection(second, now: now)
         await engine.stop()
         XCTAssertFalse(store.loading)
         XCTAssertEqual(store.reportFilter, second)
         XCTAssertEqual(store.report?.summary.tokens, 200)
         let requests = try String(contentsOf: root.appending(path: "requests"), encoding: .utf8)
-        XCTAssertEqual(requests.split(separator: "\n"), ["overview", "activity", "overview"])
+        XCTAssertEqual(requests.split(separator: "\n"), ["overview", "activity", "overview", "overview"])
     }
 
     func testOlderFullRefreshCannotReplaceNewDayMenuMetrics() async throws {

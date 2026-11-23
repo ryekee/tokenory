@@ -1,5 +1,5 @@
 // [INPUT]: Validated filters, the effective ledger view, and local Codex/Antigravity title indexes.
-// [OUTPUT]: Effective usage reports with Fast and Codex subagent subsets, searchable conversations, and activity by day or hour.
+// [OUTPUT]: Effective usage reports with Fast and Codex subagent subsets, daily totals by client and source, searchable conversations, and activity by day or hour.
 // [POS]: Read-only aggregation boundary; never aggregate paginated details.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -263,6 +263,30 @@ pub struct Summary {
 pub struct Group {
     pub key: String,
     pub summary: Summary,
+}
+
+#[derive(Serialize)]
+pub struct DailySourceUsage {
+    pub date: String,
+    pub client: String,
+    pub source: String,
+    pub tokens: i64,
+}
+
+pub fn daily_source_usage(db: &Database) -> Result<Vec<DailySourceUsage>> {
+    let mut stmt = db.connection.prepare(
+        "SELECT date, client, source, SUM(tokens) FROM effective_usage
+         GROUP BY date, client, source ORDER BY date, client, source",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(DailySourceUsage {
+            date: row.get(0)?,
+            client: row.get(1)?,
+            source: row.get(2)?,
+            tokens: row.get(3)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

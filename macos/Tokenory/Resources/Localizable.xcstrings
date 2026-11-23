@@ -328,6 +328,34 @@
         }
       }
     },
+    "appearance.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Appearance" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "外观" } }
+      }
+    },
+    "appearance.system": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "System" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "跟随系统" } }
+      }
+    },
+    "appearance.light": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Light" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "浅色" } }
+      }
+    },
+    "appearance.dark": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Dark" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "深色" } }
+      }
+    },
     "language.title": {
       "comment": "Tokenory UI: language.title. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",
@@ -414,6 +442,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "设置"
+          }
+        }
+      }
+    },
+    "settings.about": {
+      "comment": "Tokenory UI: settings.about. Keep product names and technical IDs unchanged.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关于"
           }
         }
       }
@@ -1100,6 +1146,139 @@
             "value": "本地日志"
           }
         }
+      }
+    },
+    "source.updated": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新于 %@"
+          }
+        }
+      }
+    },
+    "source.sync_paused": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud sync is off on this Mac. Other devices show their last uploaded totals."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机 iCloud 同步已关闭，其他设备显示上次上传的用量。"
+          }
+        }
+      }
+    },
+    "source.syncing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading other devices…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取其他设备…"
+          }
+        }
+      }
+    },
+    "source.no_remote_devices": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No other devices have synced yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有其他设备同步。"
+          }
+        }
+      }
+    },
+    "source.sync_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on iCloud sync in Settings to see other devices."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在设置中开启 iCloud 同步，即可查看其他设备。"
+          }
+        }
+      }
+    },
+    "source.scanning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanning local sources…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在扫描本机来源…"
+          }
+        }
+      }
+    },
+    "source.scan_pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for the first scan."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待首次扫描。"
+          }
+        }
+      }
+    },
+    "source.load_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Could not load sources." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法读取来源。" } }
+      }
+    },
+    "source.refresh_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Couldn’t refresh sources. Showing the last results." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "来源刷新失败，当前显示上次结果。" } }
       }
     },
     "source.coverage": {
@@ -2197,13 +2376,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "One absolute path per line. Default folders are still scanned."
+            "value": "One path per line. Use ~/ for the home directory."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "每行一个绝对路径；默认目录继续扫描。"
+            "value": "每行一条路径，可用 ~/ 表示用户目录。"
           }
         }
       }
@@ -2438,6 +2617,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "状态未知"
+          }
+        }
+      }
+    },
+    "import.confirm_undo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo this import?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销这次导入？"
+          }
+        }
+      }
+    },
+    "import.undo_scope": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The ledger will recalculate usage for the %@ import covering %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账本将重新计算来自 %@ 的这批用量，涉及日期为 %@。"
           }
         }
       }
@@ -2927,6 +3140,91 @@
         }
       }
     },
+    "export.scope_note": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exports use the date, tool, provider, model and source filters from the statistics window."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出使用统计窗口的日期、工具、提供方、模型和来源筛选。"
+          }
+        }
+      }
+    },
+    "export.date_from": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从 %@ 起"
+          }
+        }
+      }
+    },
+    "export.date_to": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Through %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截至 %@"
+          }
+        }
+      }
+    },
+    "export.time_from": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From time"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起始时间"
+          }
+        }
+      }
+    },
+    "export.time_to": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Until time"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束时间"
+          }
+        }
+      }
+    },
     "export.note": {
       "comment": "Tokenory UI: export.note. Keep product names and technical IDs unchanged.",
       "extractionState": "manual",
@@ -2934,13 +3232,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exports counted records for the current filters, including sources and pricing details."
+            "value": "Exports counted records from this Mac, including sources and pricing details."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "导出当前筛选下的有效记录，包含来源与计价依据。"
+            "value": "仅导出本机账本中计入统计的记录，包含来源与计价依据。"
           }
         }
       }
@@ -3728,6 +4026,27 @@
             "value": "未知提供方"
           }
         }
+      }
+    },
+    "settings.scan_paths": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Scan locations" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "采集位置" } }
+      }
+    },
+    "settings.duplicate_path": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%@ contains a duplicate location." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "%@ 的采集位置重复。" } }
+      }
+    },
+    "settings.default_paths_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Could not load default locations." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法读取默认采集位置。" } }
       }
     },
     "settings.extra_paths": {
@@ -5950,6 +6269,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "重试"
+          }
+        }
+      }
+    },
+    "menu.collection_status": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Collection · %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "采集 · %@" } }
+      }
+    },
+    "menu.today_refresh_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t refresh today’s usage"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能刷新今日用量"
           }
         }
       }

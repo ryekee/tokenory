@@ -93,6 +93,8 @@ final class UsageStore {
     var loading = false
     var error: String?
     var sources: JSONValue = .null
+    private(set) var sourcesError: String?
+    private var sourcesGeneration = 0
     var prices: JSONValue = .null
     var priceProviders: [PriceProviderGroup] = []
     var usedPriceModels: Set<PriceModelIdentity> = []
@@ -361,11 +363,17 @@ final class UsageStore {
         try await engine.start(); error = nil; cloud.refresh(localChanged: true); await refresh(); await loadManagement()
     }
     func loadSources() async {
+        sourcesGeneration += 1
+        let generation = sourcesGeneration
         do {
             let response = try await engine.request("sources")
             let decodedClients = try response["clients"].decode([ClientInfo].self)
+            guard generation == sourcesGeneration else { return }
             sources = response; clients = decodedClients
-        } catch { fail(error) }
+            sourcesError = nil
+        } catch {
+            if generation == sourcesGeneration { sourcesError = error.localizedDescription }
+        }
     }
     func loadAgentTurns(_ query: TurnQuery, force: Bool = false) async {
         if !force, requestedTurnQuery == query,
@@ -390,6 +398,8 @@ final class UsageStore {
             let values = try await (s, p, c)
             let catalog = try values.1.decode(PriceCatalogResponse.self)
             clients = try values.0["clients"].decode([ClientInfo].self)
+            sourcesGeneration += 1
+            sourcesError = nil
             sources = values.0; prices = values.1; settings = try values.2.decode(EngineSettings.self)
             usedPriceModels = Set(catalog.usedModels ?? [])
             priceProviders = PriceProviderGroup.make(catalog.catalog ?? catalog.current?.snapshot.entries ?? [])
