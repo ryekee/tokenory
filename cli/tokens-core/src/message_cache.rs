@@ -1129,16 +1129,22 @@ const SHARED_PARSER_FAMILIES: &[SharedParserFamily] = &[
             // +1: Pi subagent sessions now derive agent attribution from
             // session_info names; version-1 caches carry those messages
             // without agent metadata.
-            (ClientId::Pi, 2),
+            // +1 (#122): the standard cross-session lane keys records on
+            // entry id + timestamp before `responseId`, which some providers
+            // reuse across distinct requests. Cached rows carry the old
+            // response-level keys and would keep collapsing those requests.
+            (ClientId::Pi, 3),
             // +1: Kimchi's Pi-compatible messages now carry stable
             // namespaced deduplication keys.
             (ClientId::Kimchi, 1),
             // +1: Standard Pi/OMP/Senpi parser now emits cross-session
             // namespaced dedup keys (same behavior as Kimchi/Prime).
-            (ClientId::Omp, 1),
-            (ClientId::Senpi, 1),
+            // +1 (#122): entry-identity-first keys, as for Pi above.
+            (ClientId::Omp, 2),
+            (ClientId::Senpi, 2),
             // Fork (missuo/tokens#48): Craft Agent rides the standard lane.
-            (ClientId::CraftAgent, 1),
+            // +1 (#122): entry-identity-first keys, as for Pi above.
+            (ClientId::CraftAgent, 2),
             // +3 for Prime Agent's independent history. v1->v2 strips a
             // leading BOM and recovers records containing undecodable
             // bytes; its accounting scan also continues past those records
@@ -1313,7 +1319,9 @@ fn parser_version(client: ClientId) -> u32 {
         // reparse the source to recover speed selections and turn boundaries.
         // v11->v12: recover compaction usage omitted from cumulative snapshots;
         // incremental state now retains a pending per-response record.
-        ClientId::Codex => 12,
+        // v12->v13: decode .jsonl.zst as whole rollouts, with the same identity
+        // as the corresponding plain file and an archive-sized fingerprint.
+        ClientId::Codex => 13,
         // v4->v5: jcode's assistant-message timestamp is now back-calculated
         // to the turn start (timestamp - tool_duration_ms) instead of using
         // the recorded (end-anchored) timestamp directly. Follow-up to #890.
@@ -1430,7 +1438,10 @@ fn parser_version(client: ClientId) -> u32 {
         // v1->v2: per-model token attribution now comes from
         // session_model_usage instead of crediting the whole session to
         // sessions.model, and dedup keys are namespaced per (session, model).
-        ClientId::Hermes => 2,
+        // v2->v3 spreads each lifetime usage row across the assistant
+        // messages in its window instead of booking it on the session's start
+        // day (missuo/tokens#129).
+        ClientId::Hermes => 3,
         // v1->v2: Unsloth Studio now reads the responding model and provider
         // route from scalar responseDetails fields. Reparse cached rows so
         // local usage stays authoritatively free, metered providers receive
@@ -1531,6 +1542,11 @@ fn parser_version(client: ClientId) -> u32 {
         ClientId::Antigravity => 1,
         ClientId::Zed => 1,
         ClientId::Trae => 1,
+        // Both the shared Codex parser and the TRAE-specific fallback can
+        // invalidate these cached messages.
+        ClientId::TraeCli => {
+            parser_version(ClientId::Codex) + crate::sessions::trae_cli::TRAE_CLI_PARSER_OFFSET
+        }
         ClientId::Warp => 1,
         ClientId::Gjc => 1,
         ClientId::CommandCode => 1,
@@ -3956,7 +3972,7 @@ mod tests {
         // and changes the incremental state layout.
         // Each bump is what stops an existing cache from replaying the old
         // rows, so it has to be asserted rather than assumed.
-        assert_eq!(parser_version(ClientId::Codex), 12);
+        assert_eq!(parser_version(ClientId::Codex), 13);
         assert_eq!(parser_version(ClientId::Claude), 2);
     }
 
@@ -4095,13 +4111,22 @@ mod tests {
     /// keep replaying alias attributions — only the version retires them.
     #[test]
     fn test_pi_format_parser_version_invalidates_v1_entries() {
-        // pi-format base 1 -> 2, applied to every family member's offset.
-        assert_eq!(parser_version(ClientId::Pi), 4);
+        // pi-format base 1 -> 2, applied to every family member's offset
+        // (the standard-lane members took a further +1 for #122, below).
         assert_eq!(parser_version(ClientId::Kimchi), 3);
-        assert_eq!(parser_version(ClientId::Omp), 3);
-        assert_eq!(parser_version(ClientId::Senpi), 3);
-        assert_eq!(parser_version(ClientId::CraftAgent), 3);
         assert_eq!(parser_version(ClientId::PrimeAgent), 5);
+    }
+
+    /// #122: the standard cross-session lane (Pi, OMP, Senpi, Craft Agent)
+    /// now keys records on entry id + timestamp before `responseId`. Source
+    /// files are byte-identical, so a warm cache would keep replaying the
+    /// response-level keys that collapse distinct requests sharing one id.
+    #[test]
+    fn test_pi_entry_identity_dedup_parser_version_invalidates_prior_entries() {
+        assert_eq!(parser_version(ClientId::Pi), 5);
+        assert_eq!(parser_version(ClientId::Omp), 4);
+        assert_eq!(parser_version(ClientId::Senpi), 4);
+        assert_eq!(parser_version(ClientId::CraftAgent), 4);
     }
 
     #[test]
@@ -4197,8 +4222,9 @@ mod tests {
     }
 
     #[test]
-    fn test_hermes_parser_version_invalidates_v1_entries() {
-        assert_eq!(parser_version(ClientId::Hermes), 2);
+    fn test_hermes_parser_version_invalidates_v2_entries() {
+        // v2->v3 re-dates usage from the session start onto its messages.
+        assert_eq!(parser_version(ClientId::Hermes), 3);
     }
 
     #[test]
@@ -5075,11 +5101,11 @@ mod tests {
             (
                 "pi-format",
                 &[
-                    (ClientId::Pi, 2),
+                    (ClientId::Pi, 3),
                     (ClientId::Kimchi, 1),
-                    (ClientId::Omp, 1),
-                    (ClientId::Senpi, 1),
-                    (ClientId::CraftAgent, 1),
+                    (ClientId::Omp, 2),
+                    (ClientId::Senpi, 2),
+                    (ClientId::CraftAgent, 2),
                     (ClientId::PrimeAgent, 3),
                 ],
             ),

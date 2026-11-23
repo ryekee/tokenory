@@ -42,6 +42,22 @@ use std::path::Path;
 /// the parser version retires those cached alias attributions.
 pub const PI_FORMAT_PARSER_BASE_VERSION: u32 = 2;
 
+const PI_REQUEST_KEYS_PREFIX: &str = "pi:request-keys:";
+
+/// The primary cross-session identity and the previous parser's key, if it
+/// changed. Carry both through existing message-cache entries so a legacy
+/// ledger row can be replaced without altering the shared cache format.
+pub fn pi_request_keys(key: &str) -> (&str, Option<&str>) {
+    let keys = key
+        .strip_prefix(PI_REQUEST_KEYS_PREFIX)
+        .and_then(|key| key.split_once(':'))
+        .and_then(|(length, keys)| keys.split_at_checked(length.parse().ok()?));
+    match keys {
+        Some((current, previous)) => (current, Some(previous)),
+        None => (key, None),
+    }
+}
+
 /// Pi session header (first line of JSONL)
 #[derive(Debug, Deserialize)]
 pub struct PiSessionHeader {
@@ -370,8 +386,10 @@ pub fn parse_pi_file(path: &Path) -> Vec<UnifiedMessage> {
 /// Pi branch/fork creates a new session file and copies prior assistant
 /// records into it verbatim (#1306), so a per-session key would count every
 /// copied record once per file. The parser emits a session-independent key —
-/// `message.responseId` preferred, the entry id plus immutable event fields
-/// as fallback — and the Pi lane drops repeats during aggregation.
+/// the entry id plus its recorded timestamp preferred, `message.responseId`
+/// only for a record without an entry id (some providers reuse response ids
+/// across distinct requests, #122) — and the Pi lane drops repeats during
+/// aggregation.
 pub(crate) fn parse_pi_format_file(
     path: &Path,
     client: &str,
@@ -455,6 +473,12 @@ pub(crate) fn parse_pi_format_rlm_file_with_observer(
 struct PiParseOptions {
     rlm_session_name_as_agent: bool,
     cross_session_dedup: bool,
+    /// Cross-session key preference. `true` keys a record on its entry id and
+    /// recorded timestamp, falling back to `message.responseId` only for a
+    /// record without an entry id. `false` keeps the historical
+    /// responseId-first order (Prime Agent, whose reconciliation rewrites the
+    /// `:message:` fallback key shape and is versioned separately).
+    entry_identity_first: bool,
     lossy_line_reader: bool,
 }
 
@@ -467,6 +491,7 @@ impl PiParseOptions {
         Self {
             rlm_session_name_as_agent: false,
             cross_session_dedup: false,
+            entry_identity_first: false,
             lossy_line_reader: false,
         }
     }
@@ -478,6 +503,7 @@ impl PiParseOptions {
         Self {
             rlm_session_name_as_agent: false,
             cross_session_dedup: true,
+            entry_identity_first: true,
             lossy_line_reader: false,
         }
     }
@@ -486,6 +512,7 @@ impl PiParseOptions {
         Self {
             rlm_session_name_as_agent: true,
             cross_session_dedup: true,
+            entry_identity_first: false,
             lossy_line_reader: true,
         }
     }
@@ -759,13 +786,12 @@ fn parse_pi_format_file_inner(
                     !id.trim().is_empty()
                         && accepts_replacement_field(id, options.lossy_line_reader)
                 });
-                unified.dedup_key = clean_response_key.or_else(|| {
+                let previous_key = clean_response_key.or_else(|| {
                     clean_message_key.map(|id| {
-                        let stable_timestamp = recorded_timestamp
-                            .map(|timestamp| timestamp.to_string())
-                            .unwrap_or_else(|| "missing".to_string());
+                        let timestamp = recorded_timestamp
+                            .map_or_else(|| "missing".into(), |time| time.to_string());
                         format!(
-                            "{namespace}:message:{id}:{stable_timestamp}:{provider}:{model}:{}:{}:{}:{}",
+                            "{namespace}:message:{id}:{timestamp}:{provider}:{model}:{}:{}:{}:{}",
                             unified.tokens.input,
                             unified.tokens.output,
                             unified.tokens.cache_read,
@@ -773,6 +799,22 @@ fn parse_pi_format_file_inner(
                         )
                     })
                 });
+                // Fork copies preserve both entry fields. Some providers reuse
+                // response IDs, so use them only when an entry lacks either field.
+                let entry_key = if options.entry_identity_first {
+                    clean_message_key
+                        .zip(recorded_timestamp)
+                        .map(|(id, time)| format!("{namespace}:entry:{id}:{time}"))
+                } else {
+                    None
+                };
+                unified.dedup_key = match (entry_key, previous_key) {
+                    (Some(current), Some(previous)) if client == "pi" => Some(format!(
+                        "{PI_REQUEST_KEYS_PREFIX}{}:{current}{previous}",
+                        current.len()
+                    )),
+                    (current, previous) => current.or(previous),
+                };
                 if unified.dedup_key.is_none() && options.lossy_line_reader {
                     let has_damaged_id = entry.id.as_deref().is_some_and(|id| {
                         !accepts_replacement_field(id, options.lossy_line_reader)
@@ -1287,7 +1329,7 @@ not valid json
     }
 
     #[test]
-    fn fork_copies_across_session_files_share_a_response_level_key() {
+    fn fork_copies_across_session_files_share_an_entry_level_key() {
         let parent = create_test_file(&fork_fixture("session-demo-1", None));
         let child = create_test_file(&fork_fixture("session-demo-2", None));
 
@@ -1300,7 +1342,13 @@ not valid json
         let parent_key = parent_messages[0].dedup_key.as_deref().unwrap();
         let child_key = child_messages[0].dedup_key.as_deref().unwrap();
         assert_eq!(parent_key, child_key);
-        assert_eq!(parent_key, "pi:response:resp-demo-fork");
+        assert_eq!(
+            pi_request_keys(parent_key),
+            (
+                "pi:entry:entry-fork-copy:1788696000000",
+                Some("pi:response:resp-demo-fork"),
+            )
+        );
     }
 
     #[test]
@@ -1319,10 +1367,10 @@ not valid json
         assert_eq!(child_messages.len(), 2);
         let child_keys: Vec<&str> = child_messages
             .iter()
-            .map(|message| message.dedup_key.as_deref().unwrap())
+            .map(|message| pi_request_keys(message.dedup_key.as_deref().unwrap()).0)
             .collect();
-        assert_eq!(child_keys[0], "pi:response:resp-demo-fork");
-        assert_eq!(child_keys[1], "pi:response:resp-demo-child-new");
+        assert_eq!(child_keys[0], "pi:entry:entry-fork-copy:1788696000000");
+        assert_eq!(child_keys[1], "pi:entry:entry-child-new:1788696060000");
         assert!(child_keys[1] != child_keys[0]);
     }
 
@@ -1348,7 +1396,7 @@ not valid json
     #[test]
     fn missing_response_id_falls_back_to_entry_identity_across_files() {
         // given: no responseId, but the fork preserves the entry id and the
-        // immutable event fields — those form the fallback key, and it must
+        // timestamp — those form the primary key, and it must
         // still be session-independent.
         let record = r#"{"type":"message","id":"entry-no-resp","parentId":"SESSION","timestamp":"2026-09-06T12:00:00.000Z","message":{"role":"assistant","provider":"openai-codex","model":"gpt-6-astra","usage":{"input":100,"output":20,"cacheRead":300,"cacheWrite":0,"totalTokens":420}}}"#;
         let make = |session: &str| {
@@ -1369,6 +1417,100 @@ not valid json
         let parent_key = parent_messages[0].dedup_key.as_deref().unwrap();
         let child_key = child_messages[0].dedup_key.as_deref().unwrap();
         assert_eq!(parent_key, child_key);
-        assert!(parent_key.starts_with("pi:message:entry-no-resp:"));
+        assert_eq!(
+            pi_request_keys(parent_key).0,
+            "pi:entry:entry-no-resp:1788696000000"
+        );
+        assert!(pi_request_keys(parent_key)
+            .1
+            .unwrap()
+            .starts_with("pi:message:entry-no-resp:"));
+    }
+
+    /// Two distinct requests whose provider reused one `responseId` (#122):
+    /// Magpie-shaped records with distinct entry ids and timestamps.
+    const REUSED_RESPONSE_ID_FIXTURE: &str = concat!(
+        r#"{"type":"session","id":"test-session","timestamp":"2026-11-09T00:00:00Z","cwd":"/tmp/test"}"#,
+        "\n",
+        r#"{"type":"message","id":"a","timestamp":"2026-11-09T00:00:01Z","message":{"role":"assistant","provider":"magpie","model":"deepseek-v4.1-flash","responseId":"reused-id","usage":{"input":100,"output":10,"cacheRead":1000,"cacheWrite":0,"totalTokens":1110}}}"#,
+        "\n",
+        r#"{"type":"message","id":"b","timestamp":"2026-11-09T00:00:02Z","message":{"role":"assistant","provider":"magpie","model":"deepseek-v4.1-flash","responseId":"reused-id","usage":{"input":100,"output":10,"cacheRead":1000,"cacheWrite":0,"totalTokens":1110}}}"#,
+        "\n",
+    );
+
+    #[test]
+    fn reused_response_id_across_distinct_entries_keeps_both_requests() {
+        let file = create_test_file(REUSED_RESPONSE_ID_FIXTURE);
+
+        let messages = parse_pi_file(file.path());
+
+        assert_eq!(messages.len(), 2);
+        assert_ne!(messages[0].dedup_key, messages[1].dedup_key);
+        let mut seen = std::collections::HashSet::new();
+        let total: i64 = messages
+            .iter()
+            .filter(|message| {
+                seen.insert(
+                    pi_request_keys(message.dedup_key.as_deref().unwrap())
+                        .0
+                        .to_owned(),
+                )
+            })
+            .map(|message| message.tokens.total())
+            .sum();
+        assert_eq!(total, 2_220);
+    }
+
+    #[test]
+    fn fork_copy_of_reused_response_id_entries_still_counts_once() {
+        // given: a fork copies both reused-responseId records verbatim into a
+        // new session file. Each copy must collapse onto its original, while
+        // the two originals stay distinct.
+        let parent = create_test_file(REUSED_RESPONSE_ID_FIXTURE);
+        let child = create_test_file(
+            &REUSED_RESPONSE_ID_FIXTURE.replace(r#""id":"test-session""#, r#""id":"fork""#),
+        );
+
+        let mut seen = std::collections::HashSet::new();
+        let total: i64 = parse_pi_file(parent.path())
+            .into_iter()
+            .chain(parse_pi_file(child.path()))
+            .filter(|message| {
+                seen.insert(
+                    pi_request_keys(message.dedup_key.as_deref().unwrap())
+                        .0
+                        .to_owned(),
+                )
+            })
+            .map(|message| message.tokens.total())
+            .sum();
+        assert_eq!(seen.len(), 2);
+        assert_eq!(total, 2_220);
+    }
+
+    #[test]
+    fn records_without_entry_id_fall_back_to_response_id() {
+        // given: no entry id, so the provider's response id is the only
+        // session-independent identity; a fork copy still collapses on it.
+        let make = |session: &str| {
+            format!(
+                r#"{{"type":"session","id":"{session}","timestamp":"2026-09-06T12:00:00.000Z","cwd":"/tmp/demo"}}"#
+            ) + "\n"
+                + r#"{"type":"message","timestamp":"2026-09-06T12:00:00.000Z","message":{"role":"assistant","provider":"openai-codex","model":"gpt-6-astra","responseId":"resp-no-entry","usage":{"input":100,"output":20,"cacheRead":0,"cacheWrite":0,"totalTokens":120}}}"#
+                + "\n"
+        };
+        let parent = create_test_file(&make("session-a"));
+        let child = create_test_file(&make("session-b"));
+
+        let parent_messages = parse_pi_file(parent.path());
+        let child_messages = parse_pi_file(child.path());
+
+        assert_eq!(parent_messages.len(), 1);
+        assert_eq!(child_messages.len(), 1);
+        assert_eq!(
+            parent_messages[0].dedup_key.as_deref(),
+            Some("pi:response:resp-no-entry")
+        );
+        assert_eq!(parent_messages[0].dedup_key, child_messages[0].dedup_key);
     }
 }

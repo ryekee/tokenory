@@ -626,7 +626,6 @@ async fn scans_pi_openclaw_and_open_code_family_and_filters_aliases_without_dupl
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(actual, expected);
     assert_eq!(all["turns"].as_array().unwrap().len(), 9);
-    assert_eq!(actual.len(), 42);
     let orca = serde_json::to_value(
         query(
             &mut db,
@@ -646,6 +645,7 @@ async fn scans_pi_openclaw_and_open_code_family_and_filters_aliases_without_dupl
         match cap["client"].as_str().unwrap() {
             "orca" => assert_eq!(cap["delegateClients"], json!(["micode"])),
             "paseo" => assert_eq!(cap["delegateClients"], json!(["claude", "codex"])),
+            "trae-cli" => assert_eq!(cap["supported"], false),
             _ if cap["supported"] == false => {
                 assert!(cap["reason"].is_string() && cap["remedy"].is_string())
             }

@@ -48,7 +48,7 @@ func clientName(_ value: String) -> String {
      "jcode": "Jcode", "junie": "Junie", "kilocode": "Kilo", "kilo": "Kilo CLI", "kimi": "Kimi", "kiro": "Kiro",
      "micode": "MiMo Code", "mux": "Mux", "openclaw": "OpenClaw", "opencode": "OpenCode", "opencodereview": "OpenCodeReview",
      "pi": "Pi", "qwen": "Qwen", "reasonix": "Reasonix", "roocode": "Roo Code", "paseo": "Paseo", "orca": "Orca",
-     "trae": "Trae", "warp": "Warp", "workbuddy": "WorkBuddy", "zcode": "ZCode", "zed": "Zed Agent"][value] ?? value
+     "trae": "Trae", "trae-cli": "TRAE CLI", "warp": "Warp", "workbuddy": "WorkBuddy", "zcode": "ZCode", "zed": "Zed Agent"][value] ?? value
 }
 
 struct MenuBarSummary: View {

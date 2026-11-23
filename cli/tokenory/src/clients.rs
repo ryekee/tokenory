@@ -2,8 +2,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use tokens_core::{scanner::ScanResult, ClientId};
 
-// The requested 42 products use 40 parsers: Paseo delegates to Claude/Codex,
-// and Orca's MiMo sandbox is discovered by the MiMo Code scanner.
+// Paseo delegates to Claude/Codex. The MiMo Code scanner also discovers Orca's sandbox.
 pub const CLIENTS: &[ClientId] = &[
     ClientId::Amp,
     ClientId::Antigravity,
@@ -41,6 +40,7 @@ pub const CLIENTS: &[ClientId] = &[
     ClientId::Reasonix,
     ClientId::RooCode,
     ClientId::Trae,
+    ClientId::TraeCli,
     ClientId::Warp,
     ClientId::WorkBuddy,
     ClientId::Zcode,
@@ -102,6 +102,7 @@ pub fn source_paths(scan: &ScanResult, client: ClientId) -> Vec<PathBuf> {
         ClientId::Copilot => {
             paths.extend(scan.copilot_desktop_db.iter().cloned());
             paths.extend(scan.copilot_vscode_sessions.iter().cloned());
+            paths.extend(scan.copilot_session_state_events.iter().cloned());
         }
         ClientId::Kilo => paths.extend(scan.kilo_db.iter().cloned()),
         ClientId::Hermes => paths.extend(scan.hermes_db.iter().cloned()),

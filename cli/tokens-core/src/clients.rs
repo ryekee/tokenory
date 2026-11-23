@@ -432,7 +432,7 @@ define_clients!(
             fallback_relative: ".codex",
         },
         relative: "sessions",
-        pattern: "*.jsonl",
+        pattern: "*.jsonl|*.jsonl.zst",
         headless: true,
         parse_local: true,
         submit_default: true
@@ -1071,6 +1071,22 @@ define_clients!(
         headless: false,
         parse_local: true,
         submit_default: true
+    },
+    // TRAE CLI writes local Codex-format rollouts. The Trae account cache
+    // uses a separate client and parser.
+    TraeCli = 54 => {
+        id: "trae-cli",
+        display: "TRAE CLI",
+        logo: None,
+        root: PathRoot::EnvVar {
+            var: "TRAE_HOME",
+            fallback_relative: ".trae",
+        },
+        relative: "cli/sessions",
+        pattern: "*.jsonl|*.jsonl.zst",
+        headless: false,
+        parse_local: true,
+        submit_default: true
     }
 );
 
@@ -1187,7 +1203,7 @@ mod tests {
     #[test]
     fn test_client_id_count() {
         // 53 upstream clients plus this fork's Craft Agent.
-        assert_eq!(ClientId::COUNT, 54);
+        assert_eq!(ClientId::COUNT, 55);
     }
 
     #[test]

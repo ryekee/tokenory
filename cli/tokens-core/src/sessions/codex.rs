@@ -1,6 +1,6 @@
 //! Codex CLI session parser
 //!
-//! Parses JSONL files from `~/.codex/sessions/` and its sibling
+//! Parses plain and zstd-compressed JSONL files from `~/.codex/sessions/` and its sibling
 //! `~/.codex/archived_sessions/` (where Codex CLI moves older sessions). Both
 //! directories share an identical JSONL schema, so a single parser handles
 //! both; the scan-root wiring that discovers `archived_sessions` lives in
@@ -10,17 +10,14 @@
 //! `codex_token_count_dedup_key`.
 //! Note: This parser has stateful logic to track model and delta calculations.
 
-use super::utils::{
-    extract_i64, extract_string, file_modified_timestamp_ms, parse_timestamp_value,
-    session_id_from_path,
-};
+use super::utils::{extract_i64, extract_string, file_modified_timestamp_ms, parse_timestamp_value};
 use super::{normalize_workspace_key, workspace_label_from_key, UnifiedMessage};
 use crate::provider_identity::inferred_provider_from_model;
 use crate::speed::InferenceSpeed;
 use crate::TokenBreakdown;
 use serde::Deserialize;
 use serde_json::Value;
-use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 /// Agents-tab bucket for a regular interactive Codex thread. Codex stamps each
@@ -144,7 +141,7 @@ pub(crate) struct CodexTotals {
 }
 
 impl CodexTotals {
-    fn from_usage(usage: &CodexTokenUsage) -> Self {
+    pub(crate) fn from_usage(usage: &CodexTokenUsage) -> Self {
         Self {
             input: usage.input_tokens.unwrap_or(0).max(0),
             output: usage.output_tokens.unwrap_or(0).max(0),
@@ -214,7 +211,7 @@ impl CodexTotals {
             || current_total.saturating_add(last_total.saturating_mul(2)) >= previous_total
     }
 
-    fn into_tokens(self) -> TokenBreakdown {
+    pub(crate) fn into_tokens(self) -> TokenBreakdown {
         // Clamp cached to not exceed input to prevent inflated totals when
         // malformed data reports more cached tokens than input tokens.
         let clamped_cached = self.cached.min(self.input).max(0);
@@ -422,12 +419,25 @@ impl CodexTurnCoverage {
 /// Client id the `codex` parser tags rollouts OpenClaw drove with.
 pub(crate) const OPENCLAW_CLIENT_ID: &str = "openclaw";
 
-/// Codex thread id from a rollout filename, `rollout-<timestamp>-<uuid>.jsonl`.
+pub fn is_rollout_archive(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with(".jsonl.zst"))
+}
+
+/// The ledger alias stays the same when a rollout is compressed.
+pub fn rollout_stem(path: &Path) -> Option<&str> {
+    let name = path.file_name()?.to_str()?;
+    name.strip_suffix(".jsonl.zst")
+        .or_else(|| path.file_stem()?.to_str())
+}
+
+/// Codex thread id from a plain or compressed rollout filename.
 ///
 /// Also accepts the extensionless rollout stem stored in older usage records.
 /// Returns `None` for other spellings.
 pub fn thread_id_from_rollout_path(path: &Path) -> Option<String> {
-    let stem = path.file_stem()?.to_str()?;
+    let stem = rollout_stem(path)?;
     let stem = stem.strip_prefix("rollout-")?;
     // `2026-08-30T10-00-00-` is 20 chars; everything after is the thread id.
     let candidate = stem.get(20..)?;
@@ -463,7 +473,7 @@ pub(crate) struct ParsedCodexFile {
     pub state: CodexParseState,
 }
 
-fn codex_workspace_from_cwd(cwd: &str) -> (Option<String>, Option<String>) {
+pub(crate) fn codex_workspace_from_cwd(cwd: &str) -> (Option<String>, Option<String>) {
     let workspace_key = normalize_codex_workspace_key(cwd);
     let workspace_label = workspace_key.as_deref().and_then(workspace_label_from_key);
 
@@ -1425,24 +1435,63 @@ fn flush_pending_model_messages_as_unknown(
     );
 }
 
-/// Parse a Codex JSONL file with stateful tracking
+/// Parse a Codex rollout with stateful tracking.
 pub fn parse_codex_file(path: &Path) -> Vec<UnifiedMessage> {
-    let file = match std::fs::File::open(path) {
-        Ok(f) => f,
-        Err(_) => return Vec::new(),
-    };
+    parse_codex_file_incremental(path, 0, CodexParseState::default()).messages
+}
 
-    let session_id = session_id_from_path(path);
-    let fallback_timestamp = file_modified_timestamp_ms(path);
-    let reader = BufReader::new(file);
-    let parsed = parse_codex_reader(
-        reader,
-        &session_id,
-        fallback_timestamp,
-        0,
-        CodexParseState::default(),
-    );
-    parsed.messages
+/// Bound decoded bytes while streaming compressed rollouts.
+const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
+
+struct ArchiveReader<R> {
+    reader: R,
+    failure: Option<io::ErrorKind>,
+}
+
+impl<R: Read> Read for ArchiveReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let result = self.reader.read(buf);
+        if let Err(error) = &result {
+            if error.kind() != io::ErrorKind::Interrupted {
+                self.failure = Some(error.kind());
+            }
+        }
+        result
+    }
+}
+
+/// Read a rollout without writing a decoded copy to disk. Archives only
+/// produce a result after the whole bounded stream has decoded successfully,
+/// even when a caller finishes early or handles a read error itself.
+pub fn read_rollout<T, E>(
+    path: &Path,
+    parse: impl FnOnce(&mut dyn BufRead) -> Result<T, E>,
+) -> Result<T, E>
+where
+    E: From<io::Error>,
+{
+    let file = std::fs::File::open(path)?;
+    if !is_rollout_archive(path) {
+        return parse(&mut BufReader::new(file));
+    }
+
+    let mut reader = BufReader::new(ArchiveReader {
+        reader: zstd::stream::read::Decoder::new(file)?.take(MAX_ARCHIVE_BYTES + 1),
+        failure: None,
+    });
+    let parsed = parse(&mut reader)?;
+    if let Some(kind) = reader.get_ref().failure {
+        return Err(io::Error::new(kind, "invalid Codex zstd stream").into());
+    }
+    io::copy(&mut reader, &mut io::sink())?;
+    if reader.get_ref().reader.limit() == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Codex archive exceeds the decoded size limit",
+        )
+        .into());
+    }
+    Ok(parsed)
 }
 
 fn reported_total_tokens(usage: &CodexTokenUsage) -> Option<i64> {
@@ -1485,35 +1534,52 @@ pub(crate) fn parse_codex_file_incremental(
     start_offset: u64,
     state: CodexParseState,
 ) -> ParsedCodexFile {
-    let mut file = match std::fs::File::open(path) {
-        Ok(file) => file,
-        Err(_) => {
-            return ParsedCodexFile {
-                messages: Vec::new(),
-                fallback_timestamp_indices: Vec::new(),
-                consumed_offset: start_offset,
-                parse_succeeded: false,
-                unresolved_model_events: false,
-                state,
-            };
-        }
+    let session_id = rollout_stem(path).unwrap_or("unknown");
+    let fallback_timestamp = file_modified_timestamp_ms(path);
+    let failed = |state| ParsedCodexFile {
+        messages: Vec::new(),
+        fallback_timestamp_indices: Vec::new(),
+        consumed_offset: start_offset,
+        parse_succeeded: false,
+        unresolved_model_events: false,
+        state,
     };
-
-    if file.seek(SeekFrom::Start(start_offset)).is_err() {
-        return ParsedCodexFile {
-            messages: Vec::new(),
-            fallback_timestamp_indices: Vec::new(),
-            consumed_offset: start_offset,
-            parse_succeeded: false,
-            unresolved_model_events: false,
-            state,
+    if is_rollout_archive(path) {
+        if start_offset != 0 {
+            return failed(state);
+        }
+        let parsed = read_rollout(path, |reader| {
+            let parsed =
+                parse_codex_reader(reader, session_id, fallback_timestamp, 0, state.clone());
+            if parsed.parse_succeeded {
+                Ok(parsed)
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid Codex archive transcript",
+                ))
+            }
+        });
+        return match parsed {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                tracing::warn!(path = %path.display(), %error, "Skipping Codex archive");
+                failed(state)
+            }
         };
     }
 
-    let session_id = session_id_from_path(path);
-    let fallback_timestamp = file_modified_timestamp_ms(path);
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => return failed(state),
+    };
+
+    if file.seek(SeekFrom::Start(start_offset)).is_err() {
+        return failed(state);
+    }
+
     let reader = BufReader::new(file);
-    parse_codex_reader(reader, &session_id, fallback_timestamp, start_offset, state)
+    parse_codex_reader(reader, session_id, fallback_timestamp, start_offset, state)
 }
 
 fn extract_model(payload: &CodexPayload) -> Option<String> {
@@ -1678,7 +1744,7 @@ const CODEX_SYSTEM_INJECTED_PREFIXES: [&str; 3] = [
 /// `<div>`, pasting an XML snippet, etc.). The `kind` field can't be used to
 /// distinguish them: both human and injected bodies appear as `kind:"plain"` or
 /// with no `kind` at all.
-fn codex_message_is_human_turn(message: Option<&str>) -> bool {
+pub(crate) fn codex_message_is_human_turn(message: Option<&str>) -> bool {
     match message {
         Some(text) => {
             let trimmed = text.trim_start();

@@ -1,4 +1,4 @@
-// [INPUT]: Codex rollout metadata and explicit user-input events.
+// [INPUT]: Metadata and explicit user-input events from plain and compressed Codex rollouts.
 // [OUTPUT]: Owned thread identity, spawn evidence and de-duplicated main turn starts.
 // [POS]: Log decoding boundary. User messages are read only to recognize legacy input and are never retained.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
@@ -6,12 +6,12 @@ use anyhow::Result;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, HashMap},
-    fs::{self, File, Metadata},
-    io::{BufRead, BufReader},
+    fs::{self, Metadata},
+    io::BufRead,
     path::{Path, PathBuf},
     time::SystemTime,
 };
-use tokens_core::sessions::codex::thread_id_from_rollout_path;
+use tokens_core::sessions::codex::{read_rollout, rollout_stem, thread_id_from_rollout_path};
 
 #[derive(Clone)]
 pub(crate) struct ThreadActivity {
@@ -54,14 +54,13 @@ struct CachedActivity {
 
 impl Cache {
     pub(crate) fn read(&mut self, path: &Path) -> Result<Option<ThreadActivity>> {
-        let file = File::open(path)?;
-        let before = file.metadata()?;
+        let before = fs::metadata(path)?;
         if let Some(entry) = self.files.get(path) {
             if entry.matches(&before)? {
                 return Ok(entry.activity.clone());
             }
         }
-        let activity = parse(path, BufReader::new(file))?;
+        let activity = read_rollout(path, |reader| parse(path, reader))?;
         let entry = CachedActivity {
             size: before.len(),
             modified: before.modified()?,
@@ -177,7 +176,7 @@ fn legacy_human_input(payload: &Value) -> bool {
 }
 
 fn parse(path: &Path, mut reader: impl BufRead) -> Result<Option<ThreadActivity>> {
-    let Some(alias) = path.file_stem().and_then(|stem| stem.to_str()) else {
+    let Some(alias) = rollout_stem(path) else {
         return Ok(None);
     };
     let expected_id = thread_id_from_rollout_path(path);

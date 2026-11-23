@@ -181,7 +181,7 @@ async fn discovers_antigravity_app_and_cli_dbs_dedupes_legacy_cache_and_tracks_h
     let t0 = fixture_midmorning();
     let app_db = home
         .path()
-        .join(".gemini/antigravity/conversations/sess-app.db");
+        .join(".gemini/antigravity-insiders/conversations/sess-app.db");
     {
         let conn = create_antigravity_db(&app_db, false, false);
         conn.execute(
@@ -305,10 +305,10 @@ async fn discovers_antigravity_app_and_cli_dbs_dedupes_legacy_cache_and_tracks_h
         .unwrap();
     }
 
-    // Conversation titles DB for Antigravity App
+    // Insiders keeps conversation titles beside its conversation directory.
     let summaries_db = home
         .path()
-        .join(".gemini/antigravity/conversation_summaries.db");
+        .join(".gemini/antigravity-insiders/conversation_summaries.db");
     {
         let conn = Connection::open(&summaries_db).unwrap();
         conn.execute_batch(
@@ -416,10 +416,10 @@ async fn discovers_antigravity_app_and_cli_dbs_dedupes_legacy_cache_and_tracks_h
 }
 
 #[tokio::test]
-async fn live_changes_and_worker_watch_antigravity_wal_updates_in_real_time() {
+async fn live_changes_and_worker_watch_antigravity_insiders_wal_updates_in_real_time() {
     let home = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
-    let conv_dir = home.path().join(".gemini/antigravity/conversations");
+    let conv_dir = home.path().join(".gemini/antigravity-insiders/conversations");
     fs::create_dir_all(&conv_dir).unwrap();
     Config {
         home_dir: home.path().into(),

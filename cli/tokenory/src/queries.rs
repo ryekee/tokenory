@@ -1,4 +1,4 @@
-// [INPUT]: Validated filters, the effective ledger view, and local Codex/Antigravity title indexes.
+// [INPUT]: Validated filters, the effective ledger view, and local Codex/Antigravity title indexes including Insiders.
 // [OUTPUT]: Effective usage reports with Fast and Codex subagent subsets, archived day totals, searchable conversations, and system-local hourly activity.
 // [POS]: Read-only aggregation boundary; never aggregate paginated details.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
@@ -128,16 +128,16 @@ pub(crate) fn codex_title<'a>(titles: &'a HashMap<String, String>, session_id: &
 
 pub(crate) fn antigravity_titles(home: &Path, client: &str) -> HashMap<String, String> {
     let candidates: &[&str] = match client {
-        "antigravity" => &[
-            ".gemini/antigravity/conversation_summaries.db",
-            ".gemini/antigravity-ide/conversation_summaries.db",
-        ],
-        "antigravity-cli" => &[".gemini/antigravity-cli/conversation_summaries.db"],
+        "antigravity" => &tokens_core::scanner::ANTIGRAVITY_APP_DIRECTORIES,
+        "antigravity-cli" => &["antigravity-cli"],
         _ => return HashMap::new(),
     };
     let mut titles = HashMap::new();
-    for rel in candidates {
-        let path = home.join(rel);
+    for app in candidates {
+        let path = home
+            .join(".gemini")
+            .join(app)
+            .join("conversation_summaries.db");
         let Ok(conn) =
             Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
         else {

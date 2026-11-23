@@ -325,11 +325,6 @@ pub(crate) enum SqliteScan {
 }
 
 impl SqliteScan {
-    /// True when rows were iterated, complete or not.
-    pub(crate) fn ran(self) -> bool {
-        matches!(self, SqliteScan::Ran | SqliteScan::Incomplete)
-    }
-
     /// True only when every row was iterated.
     ///
     /// What incremental callers need: a partial result is indistinguishable

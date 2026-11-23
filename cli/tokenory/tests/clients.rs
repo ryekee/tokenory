@@ -21,8 +21,8 @@ fn write(home: &Path, path: &str, value: Value) {
 #[test]
 fn requested_products_and_extra_path_validation() {
     let catalog = serde_json::to_value(tokenory::clients::catalog()).unwrap();
-    assert_eq!(catalog.as_array().unwrap().len(), 42);
-    assert_eq!(CLIENTS.len(), 40);
+    assert_eq!(catalog.as_array().unwrap().len(), 43);
+    assert_eq!(CLIENTS.len(), 41);
     assert_eq!(
         catalog
             .as_array()
@@ -334,4 +334,61 @@ async fn trae_and_warp_cumulative_cache_updates_do_not_add_a_second_snapshot() {
                 < 1e-9
         );
     }
+}
+
+#[tokio::test]
+async fn trae_cli_collects_its_own_logs_beside_trae_account_cache() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let live = home.path().join(".trae/cli/sessions/rollout-local.jsonl");
+    fs::create_dir_all(live.parent().unwrap()).unwrap();
+    fs::write(
+        &live,
+        concat!(
+            r#"{"timestamp":"2026-11-06T01:00:00Z","type":"session_meta","payload":{"id":"cli-thread","model_provider":"trae"}}"#,
+            "\n",
+            r#"{"timestamp":"2026-11-06T01:00:01Z","type":"turn_context","payload":{"model":"gpt-5-codex"}}"#,
+            "\n",
+            r#"{"timestamp":"2026-11-06T01:00:02Z","type":"token_usage_record","payload":{"response_id":"response-1","usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":12}}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    let archive_dir = home.path().join(".trae/cli/archived_sessions");
+    fs::create_dir_all(&archive_dir).unwrap();
+    fs::copy(&live, archive_dir.join(live.file_name().unwrap())).unwrap();
+    let cache_dir = PathBuf::from(tokens_core::clients::PathRoot::Config.resolve_with_env_strategy(
+        &home.path().to_string_lossy(),
+        false,
+    ));
+    write(
+        &cache_dir,
+        "trae-cache/sessions/usage.json",
+        json!([{"session_id":"desktop-session","model_name":"GPT-5.4","usage_time":1793926800_i64,"dollar_float":0.1,"extra_info":{"input_token":200}}]),
+    );
+
+    let config = Config {
+        home_dir: home.path().into(),
+        ..Default::default()
+    };
+    let mut db = Database::open(data.path()).unwrap();
+    let mut cache = DiagnosticCache::default();
+    let batch = collect_once(&config, &mut cache).await.unwrap();
+    assert_eq!(batch.records.len(), 2);
+    let cli = batch
+        .records
+        .iter()
+        .find(|record| record.client == "trae-cli")
+        .unwrap();
+    assert_eq!(
+        (cli.tokens.input, cli.tokens.cache_read, cli.tokens.output),
+        (60, 40, 12)
+    );
+    assert_eq!(cli.source_cost_usd, None);
+    persist(&mut db, batch).unwrap();
+    let report = report(&mut db, &Filter::default()).unwrap();
+    assert_eq!(report.summary.tokens, 312);
+    assert_eq!(report.summary.record_count, 2);
+    let next = collect_once(&config, &mut cache).await.unwrap();
+    assert_eq!(persist(&mut db, next).unwrap().changed, 0);
 }

@@ -128,8 +128,10 @@ pub struct ScanResult {
     /// VS Code Copilot chat session JSONL files discovered under
     /// `workspaceStorage/*/chatSessions/*.jsonl`.
     pub copilot_vscode_sessions: Vec<PathBuf>,
+    /// Copilot SDK journals written by Copilot CLI and VS Code Agent mode.
+    pub copilot_session_state_events: Vec<PathBuf>,
     /// Antigravity App / IDE SQLite conversation databases discovered under
-    /// `~/.gemini/antigravity/conversations/*.db` (and `antigravity-ide`).
+    /// `~/.gemini/{antigravity,antigravity-ide,antigravity-insiders}/conversations/*.db`.
     pub antigravity_dbs: Vec<PathBuf>,
 }
 
@@ -152,6 +154,7 @@ impl Default for ScanResult {
             opencode_json_dir: None,
             devin_dbs: Vec::new(),
             copilot_vscode_sessions: Vec::new(),
+            copilot_session_state_events: Vec::new(),
             antigravity_dbs: Vec::new(),
         }
     }
@@ -491,6 +494,9 @@ pub fn scan_directory(root: &str, pattern: &str) -> Vec<PathBuf> {
                 "*.json" => file_name.ends_with(".json"),
                 "*.json|*.jsonl" => file_name.ends_with(".json") || file_name.ends_with(".jsonl"),
                 "*.jsonl" => file_name.ends_with(".jsonl"),
+                "*.jsonl|*.jsonl.zst" => {
+                    file_name.ends_with(".jsonl") || file_name.ends_with(".jsonl.zst")
+                }
                 "prime-agent-session" => {
                     file_name.ends_with(".jsonl") && file_name != "rlm-subagents.jsonl"
                 }
@@ -761,12 +767,50 @@ fn join_native_path(root: &std::path::Path, relative: &str) -> std::path::PathBu
     path
 }
 
+pub const ANTIGRAVITY_APP_DIRECTORIES: [&str; 3] = [
+    "antigravity",
+    "antigravity-ide",
+    "antigravity-insiders",
+];
+
+pub fn antigravity_conversation_roots(home_dir: &str, use_env_roots: bool) -> Vec<PathBuf> {
+    let gemini_home = crate::clients::PathRoot::EnvVar {
+        var: "GEMINI_CLI_HOME",
+        fallback_relative: ".gemini",
+    }
+    .resolve_with_env_strategy(home_dir, use_env_roots);
+    ANTIGRAVITY_APP_DIRECTORIES
+        .iter()
+        .map(|app| Path::new(&gemini_home).join(app).join("conversations"))
+        .collect()
+}
+
 pub fn built_in_extra_scan_paths_for(
     home_dir: &str,
     enabled: &HashSet<ClientId>,
     use_env_roots: bool,
 ) -> Vec<(ClientId, PathBuf)> {
     let mut paths = crate::paseo::discover_scan_paths(Path::new(home_dir), enabled, use_env_roots);
+
+    if enabled.contains(&ClientId::TraeCli) {
+        let trae_home = ClientId::TraeCli
+            .data()
+            .root
+            .resolve_with_env_strategy(home_dir, use_env_roots);
+        paths.push((
+            ClientId::TraeCli,
+            join_native_path(Path::new(&trae_home), "cli/archived_sessions"),
+        ));
+        if use_env_roots {
+            let cli_home = std::env::var("TRAECLI_HOME").unwrap_or_default();
+            let cli_home = cli_home.trim();
+            if !cli_home.is_empty() {
+                paths.extend(["sessions", "archived_sessions"].map(|relative| {
+                    (ClientId::TraeCli, join_native_path(Path::new(cli_home), relative))
+                }));
+            }
+        }
+    }
 
     if enabled.contains(&ClientId::Claude) {
         // `transcripts` is a sibling of the registered `projects` root, not a
@@ -1823,6 +1867,39 @@ fn discover_copilot_vscode_sessions(home_dir: &str, use_env_roots: bool) -> Vec<
     files
 }
 
+fn copilot_session_state_roots(home_dir: &str, use_env_roots: bool) -> Vec<PathBuf> {
+    let mut roots = vec![PathBuf::from(join_native(home_dir, ".copilot/session-state"))];
+    if use_env_roots {
+        if let Some(home) = std::env::var_os("COPILOT_HOME")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+        {
+            roots.push(home.join("session-state"));
+        }
+    }
+    roots
+}
+
+fn discover_copilot_session_state_events(roots: &[PathBuf]) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    let mut seen = HashSet::new();
+    for root in roots {
+        let Ok(sessions) = std::fs::read_dir(root) else {
+            continue;
+        };
+        for session in sessions.filter_map(Result::ok) {
+            let events = session.path().join("events.jsonl");
+            if events.is_file()
+                && seen.insert(std::fs::canonicalize(&events).unwrap_or_else(|_| events.clone()))
+            {
+                files.push(events);
+            }
+        }
+    }
+    files.sort_unstable();
+    files
+}
+
 /// Scan all session client directories in parallel, with user-controlled
 /// [`ScannerSettings`] merged in.
 ///
@@ -2309,7 +2386,7 @@ fn scan_all_clients_with_env_strategy_inner(
     }
 
     if enabled_with_lookups.contains(&ClientId::Codex) {
-        // Codex: ~/.codex/sessions/**/*.jsonl
+        // Codex: ~/.codex/sessions/**/*.jsonl[.zst]
         let codex_home = if use_env_roots {
             std::env::var("CODEX_HOME").unwrap_or_else(|_| join_native(home_dir, ".codex"))
         } else {
@@ -2325,7 +2402,7 @@ fn scan_all_clients_with_env_strategy_inner(
             codex_path,
         );
 
-        // Codex archived sessions: ~/.codex/archived_sessions/**/*.jsonl
+        // Codex archived sessions: ~/.codex/archived_sessions/**/*.jsonl[.zst]
         let codex_archived_path = join_native(&codex_home, "archived_sessions");
         push_unique_scan_task(
             &mut tasks,
@@ -2334,7 +2411,7 @@ fn scan_all_clients_with_env_strategy_inner(
             codex_archived_path,
         );
 
-        // Codex headless: <headless_root>/codex/*.jsonl
+        // Codex headless: <headless_root>/codex/*.jsonl[.zst]
         for root in &headless_roots {
             push_unique_scan_task(
                 &mut tasks,
@@ -2660,14 +2737,7 @@ fn scan_all_clients_with_env_strategy_inner(
     }
 
     if enabled.contains(&ClientId::Antigravity) {
-        let gemini_home = crate::clients::PathRoot::EnvVar {
-            var: "GEMINI_CLI_HOME",
-            fallback_relative: ".gemini",
-        }
-        .resolve_with_env_strategy(home_dir, use_env_roots);
-        for subdir in ["antigravity/conversations", "antigravity-ide/conversations"] {
-            antigravity_db_roots.push(PathBuf::from(join_native(&gemini_home, subdir)));
-        }
+        antigravity_db_roots.extend(antigravity_conversation_roots(home_dir, use_env_roots));
         database_roots.extend(
             antigravity_db_roots
                 .iter()
@@ -2926,6 +2996,11 @@ fn scan_all_clients_with_env_strategy_inner(
                     .into_iter()
                     .map(|path| (ClientId::Copilot, path)),
             );
+            roots.extend(
+                copilot_session_state_roots(home_dir, use_env_roots)
+                    .into_iter()
+                    .map(|path| (ClientId::Copilot, path)),
+            );
         }
         if let Some(path) = &result.zed_db {
             roots.push((ClientId::Zed, path.clone()));
@@ -3033,6 +3108,14 @@ fn scan_all_clients_with_env_strategy_inner(
         }
 
         result.copilot_vscode_sessions = discover_copilot_vscode_sessions(home_dir, use_env_roots);
+        let mut sdk_roots = copilot_session_state_roots(home_dir, use_env_roots);
+        if let Some(extra) = scanner_settings.extra_scan_paths.get("copilot") {
+            for root in extra {
+                sdk_roots.push(root.clone());
+                sdk_roots.push(root.join("session-state"));
+            }
+        }
+        result.copilot_session_state_events = discover_copilot_session_state_events(&sdk_roots);
 
         if let Some(path) = copilot_exporter_path_with_env_strategy(use_env_roots) {
             let key = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
@@ -3041,6 +3124,16 @@ fn scan_all_clients_with_env_strategy_inner(
                 copilot_files.push(path);
                 copilot_files.sort_unstable();
             }
+        }
+        let sdk_paths: HashSet<_> = result
+            .copilot_session_state_events
+            .iter()
+            .map(|path| std::fs::canonicalize(path).unwrap_or_else(|_| path.clone()))
+            .collect();
+        if !sdk_paths.is_empty() {
+            result.get_mut(ClientId::Copilot).retain(|path| {
+                !sdk_paths.contains(&std::fs::canonicalize(path).unwrap_or_else(|_| path.clone()))
+            });
         }
     }
 
