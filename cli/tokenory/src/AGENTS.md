@@ -14,8 +14,8 @@ ipc.rs: 向原生应用提供 worker JSON 协议、有效账本的已用模型�
 lib.rs: 导出账本引擎模块。
 main.rs: 提供 CLI 命令和单写者锁；compact 回收空闲页。
 remote_pricing.rs: 拉取并校验官方远程费率表，保留最近一次有效修订。
-price_coverage.rs: 从缓存扩展模型覆盖，为未计价记录生成首次估算候选。
-pricing.rs: 保存价格快照，计算估算并重估历史。Codex 自动审批用固定参考价。GPT-6.2 支持长上下文、Fast 和按快照日期确定的 Ultrafast 优惠。
+price_coverage.rs: 从缓存扩展模型覆盖，为未计价记录生成首次估算候选；用 OpenClaw 原生事件键核验请求时间，保留文件时间回退与按日聚合的边界。
+pricing.rs: 保存价格快照，计算估算并重估历史。Codex 自动审批用固定参考价。小米 Token Plan 使用对应 MiMo API 美元参考价；OpenRouter 已验证的 Step 3.5 Flash 免费路由为零。GPT-6.2 支持长上下文、Fast 和按快照日期确定的 Ultrafast 优惠。
 queries.rs: 当日用量支持时间戳半开区间，按设备本地午夜查询。按有效来源、筛选和对话查询用量与 Fast tokens、已知估算费用。对话目录按工具与会话 ID 汇总，实时读取 Codex 本地标题索引与 Antigravity `conversation_summaries.db` 标题。activity 聚合日期、工具、模型及小时分布。
 usage.rs: 定义用量记录和 token 分类。
 

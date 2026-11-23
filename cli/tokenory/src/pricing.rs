@@ -1,5 +1,5 @@
 // [INPUT]: 读取 UsageRecord、官方费率和 SQLite 账本。
-// [OUTPUT]: 提供价格快照、自动审批的等价估算和带备份的重估流程。
+// [OUTPUT]: 提供价格快照、逐请求及订阅等价估算、可备份的首次补价与重估。
 // [POS]: 在采集与查询之间保存可追溯的计价依据；GPT-6.2 Ultrafast 按快照日期选择优惠价。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -17,6 +17,8 @@ use tokens_core::pricing::{
 const COMPACTOR_REFERENCE: &str = "GPT-6 Luna reference (user-selected)";
 const AUTO_REVIEW: &str = "codex-auto-review";
 const TOKENS_CI_REFERENCE: &str = "tokens.ci export reference";
+const STEPFUN_FREE: &str = "stepfun/step-3.5-flash:free";
+const MIMO_V2_PRO_SOURCE: &str = "https://mimo.xiaomi.com/mimo-v2-pro";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -150,14 +152,7 @@ impl PriceSnapshot {
                 },
             });
         }
-        p.entries.push(PriceEntry {
-            remote_policy: None,
-            schedule: None, provider: "xiaomi".into(), model: "mimo-v2-pro".into(), matched_key: "mimo-v2-pro".into(),
-            source: "https://mimo.xiaomi.com/mimo-v2-pro".into(),
-            assumption: "Archived official launch USD rates (2026-03-18), verified 2026-11-13; not current availability or historical billing; event input above 256K costs 2x, aggregates use base rates; launch cache-write promotion applied".into(),
-            explicit_free: false, allow_fast: false,
-            rates: ModelPricing { input_cost_per_token: Some(1e-6), output_cost_per_token: Some(3e-6), cache_read_input_token_cost: Some(0.2e-6), cache_creation_input_token_cost: Some(0.), ..Default::default() },
-        });
+        p.entries.extend(Self::openclaw_references());
         p.entries.push(PriceEntry {
             remote_policy: None,
             schedule: None, provider: "devin".into(), model: "compactor".into(),
@@ -181,6 +176,43 @@ impl PriceSnapshot {
             },
         });
         p
+    }
+    fn openclaw_references() -> Vec<PriceEntry> {
+        let mut entries = Vec::new();
+        for (model, source, input, output, cache, terms) in [
+            ("mimo-v2-pro", MIMO_V2_PRO_SOURCE, 1., 3., 0.2,
+             "Archived launch USD list rates; per-request input above 256K costs 2x; cache write promotion"),
+            ("mimo-v2.5-pro", "https://mimo.mi.com/docs/en-US/price/pay-as-you-go", 0.435, 0.87, 0.0036,
+             "Archived USD real-time API list rates effective 2026-05-27; cache write promotion"),
+        ] {
+            for provider in ["xiaomi", "xiaomi-tp"] {
+                let basis = if provider == "xiaomi-tp" {
+                    format!("{terms}; Xiaomi Token Plan usage at first-party API-equivalent rates, not subscription charges")
+                } else { terms.to_string() };
+                entries.push(PriceEntry {
+                    remote_policy: None, schedule: None, provider: provider.into(), model: model.into(),
+                    matched_key: model.into(), source: source.into(), assumption: basis,
+                    explicit_free: false, allow_fast: false,
+                    rates: ModelPricing {
+                        input_cost_per_token: Some(input / 1e6), output_cost_per_token: Some(output / 1e6),
+                        cache_read_input_token_cost: Some(cache / 1e6),
+                        cache_creation_input_token_cost: Some(0.), ..Default::default()
+                    },
+                });
+            }
+        }
+        entries.push(PriceEntry {
+            remote_policy: None, schedule: None, provider: "openrouter".into(), model: STEPFUN_FREE.into(),
+            matched_key: STEPFUN_FREE.into(), source: "https://openrouter.ai/stepfun/step-3.5-flash:free/pricing".into(),
+            assumption: "OpenRouter explicitly lists this free route at zero USD".into(),
+            explicit_free: true, allow_fast: false,
+            rates: ModelPricing {
+                input_cost_per_token: Some(0.), output_cost_per_token: Some(0.),
+                cache_read_input_token_cost: Some(0.), cache_creation_input_token_cost: Some(0.),
+                ..Default::default()
+            },
+        });
+        entries
     }
     pub fn validate(&self) -> Result<()> {
         let mut seen = std::collections::HashSet::new();
@@ -232,6 +264,15 @@ pub struct Estimate {
     pub basis: String,
     pub reason: Option<String>,
 }
+fn normalize_route<'a>(provider: &str, model: &'a str) -> &'a str {
+    if provider == "openrouter"
+        && model.strip_suffix(":free").is_some_and(|base| base.trim_end() == "stepfun/step-3.5-flash")
+    {
+        STEPFUN_FREE
+    } else {
+        model
+    }
+}
 pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     let unknown = |reason: &str| Estimate {
         cost: None,
@@ -245,13 +286,19 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
         && r.client == "codex"
         && r.model == AUTO_REVIEW
         && r.provider == "unknown";
+    // Keep historical exact entries eligible. A spelling of an official free route can
+    // be resolved even before the next scan adds the observed spelling to the catalog.
+    let lookup_model = normalize_route(&r.provider, &r.model);
+    let matches_model = |e: &PriceEntry| {
+        e.model == r.model || (e.explicit_free && e.model == lookup_model)
+    };
     let Some(e) = p.entries.iter().find(|e| {
         if e.source == TOKENS_CI_REFERENCE {
             return e.model == r.model
                 && r.client == "codex"
                 && (review_export || (source == "local" && e.provider == r.provider));
         }
-        e.model == r.model
+        matches_model(e)
             && e.provider == r.provider
             && (e.source != COMPACTOR_REFERENCE || r.client == "devin-cli")
     }) else {
@@ -319,11 +366,8 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
         },
     };
     let t = &r.tokens;
-    let aggregate = r.timestamp_ms.is_none()
-        || matches!(
-            r.metadata["granularity"].as_str(),
-            Some("day" | "sourceRecord")
-        );
+    let request_time = crate::price_coverage::request_timestamp(source, r);
+    let aggregate = request_time.is_none();
     // A daily or session aggregate is not one long-context request.
     let mut rates = if aggregate {
         ModelPricing {
@@ -336,7 +380,7 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
     } else {
         e.rates.clone()
     };
-    let official_mimo = e.source == "https://mimo.xiaomi.com/mimo-v2-pro";
+    let official_mimo = e.source == MIMO_V2_PRO_SOURCE;
     if official_mimo && !aggregate && t.input + t.cache_read + t.cache_write > 256_000 {
         rates.input_cost_per_token = rates.input_cost_per_token.map(|v| v * 2.);
         rates.output_cost_per_token = rates.output_cost_per_token.map(|v| v * 2.);
@@ -379,7 +423,7 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
         0.
     };
     let (factor, period) = if e.schedule.is_some() {
-        match deepseek_factor(r) {
+        match deepseek_factor(r, request_time) {
             Ok(value) => value,
             Err(reason) => return unknown(reason),
         }
@@ -442,14 +486,8 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
 }
 // Calendar version is part of each immutable snapshot. Weekend makeup workdays
 // remain off-peak: the provider explicitly prices every Saturday/Sunday off-peak.
-fn deepseek_factor(r: &UsageRecord) -> Result<(f64, &'static str), &'static str> {
+fn deepseek_factor(r: &UsageRecord, timestamp: Option<i64>) -> Result<(f64, &'static str), &'static str> {
     use chrono::{Datelike, Timelike};
-    let timestamp = r.timestamp_ms.filter(|_| {
-        !matches!(
-            r.metadata["granularity"].as_str(),
-            Some("day" | "sourceRecord")
-        )
-    });
     let (date, hour) = if let Some(ms) = timestamp {
         let dt = chrono::DateTime::from_timestamp_millis(ms)
             .ok_or("invalid request timestamp")?
@@ -534,7 +572,8 @@ pub fn active_snapshot(c: &rusqlite::Connection) -> Result<Option<(String, Price
         .transpose()
 }
 pub fn initialize(db: &mut Database) -> Result<()> {
-    const VERSION: &str = "2026-11-20-codex-review-reference-v1";
+    const PREVIOUS: &str = "2026-11-20-codex-review-reference-v1";
+    const VERSION: &str = "2026-11-23-openclaw-request-and-routes-v1";
     let installed: Option<String> = db
         .connection
         .query_row(
@@ -547,7 +586,13 @@ pub fn initialize(db: &mut Database) -> Result<()> {
         let mut current = active_snapshot(&db.connection)?
             .map(|(_, p)| p)
             .unwrap_or_else(|| PriceSnapshot::new(vec![]));
-        for entry in PriceSnapshot::bundled_reference().entries {
+        let additions = if installed.as_deref() == Some(PREVIOUS) {
+            // Preserve unrelated active prices, including newer downloaded tariffs.
+            PriceSnapshot::openclaw_references()
+        } else {
+            PriceSnapshot::bundled_reference().entries
+        };
+        for entry in additions {
             current
                 .entries
                 .retain(|e| e.provider != entry.provider || e.model != entry.model);
@@ -641,6 +686,7 @@ pub(crate) fn snapshot_with_feed(
         let bare_model = reference_model
             .strip_prefix(&format!("{lookup_provider}/"))
             .unwrap_or(reference_model);
+        let bare_model = normalize_route(lookup_provider, bare_model);
         let canonical_model =
             tokens_core::pricing::aliases::resolve_alias(bare_model).unwrap_or(bare_model);
         if let Some(reference) = bundled

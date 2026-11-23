@@ -17,7 +17,7 @@ hourly.rs: 验证 hourly 的账本接口和行为。
 identity.rs: 验证 identity 的账本接口和行为。
 ipc.rs: 验证 ipc 的账本接口和行为。
 migration.rs: 验证 migration 的账本接口和行为。
-pricing.rs: 验证 pricing 的账本接口和行为，覆盖 GPT-6.2 费率、长上下文、速度及优惠截止边界、远程费率覆盖、回填和离线回退。
+pricing.rs: 验证 pricing 的账本接口和行为，覆盖 GPT-6.2 费率、长上下文、速度及优惠截止边界、远程费率覆盖、OpenClaw 时间依据、MiMo 订阅与免费路由、旧库的首次补价和离线回退。
 
 
 price_catalog.rs: 验证未使用供应商、峰谷与参考规则、订阅价格边界。

@@ -38,5 +38,5 @@ pub fn entries(current: Option<&PriceSnapshot>) -> Result<Vec<PriceEntry>> {
 }
 
 pub fn subscription_provider(provider: &str) -> bool {
-    provider.contains("plan") || matches!(provider, "github-copilot" | "github_copilot" | "gitlab" | "cline-pass")
+    provider.contains("plan") || matches!(provider, "github-copilot" | "github_copilot" | "gitlab" | "cline-pass" | "xiaomi-tp")
 }

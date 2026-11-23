@@ -1,5 +1,5 @@
 // [INPUT]: 使用真实计价、导入和 SQLite 接口。
-// [OUTPUT]: 验证价格匹配、自动审批参考价回填、GPT-6.2 档位与优惠截止边界和历史重估。
+// [OUTPUT]: 验证价格匹配、原生请求时间、订阅等价估算、免费路由、仅回填待计价与历史重估。
 // [POS]: 隔离测试账本，验证计价规则的外部行为。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use tokenory::{
@@ -862,4 +862,67 @@ fn remote_catalog_reprices_only_pending_rows_and_survives_offline_refresh() {
     assert!(parse(&data).is_err());
     data["entries"][1] = data["entries"][0].clone();
     assert!(parse(&data).is_err());
+}
+
+#[test]
+fn openclaw_pricing_requires_a_matching_native_event_time() {
+    let mut r = record();
+    r.client = "openclaw".into();
+    r.provider = "deepseek".into();
+    r.model = "deepseek-v4-flash".into();
+    r.date = "2026-11-05".into();
+    r.timezone = Some("Asia/Shanghai".into());
+    r.metadata = serde_json::json!({"granularity":"sourceRecord","collectionMode":"sessionSnapshot"});
+    r.tokens = Tokens { input: 1_000_000, output: 1_000_000, ..Default::default() };
+    let p = PriceSnapshot::bundled_reference();
+    for (utc, expected) in [("2026-11-05T01:00:00Z", 1.5), ("2026-11-05T04:00:00Z", 0.75)] {
+        let time = chrono::DateTime::parse_from_rfc3339(utc).unwrap().timestamp_millis();
+        r.timestamp_ms = Some(time);
+        r.key = format!(r#"snapshot:["openclaw","session",["event","openclaw:e1:{time}:1000000:1000000"]]"#);
+        assert_eq!(estimate("local", &r, &p).cost, Some(expected));
+        assert!(estimate("tokens-ci", &r, &p).cost.is_none());
+        r.key = r#"snapshot:["openclaw","session",["event","openclaw:e1:1000000:1000000"]]"#.into();
+        assert!(estimate("local", &r, &p).cost.is_none());
+        r.key = format!(r#"snapshot:["openclaw","session",["event","openclaw:e1:{time}:1000000:999"]]"#);
+        assert!(estimate("local", &r, &p).cost.is_none());
+    }
+}
+
+#[test]
+fn previous_catalog_repairs_only_missing_amounts_and_keeps_active_prices() {
+    let t = tempfile::tempdir().unwrap();
+    let mut db = Database::open(t.path()).unwrap();
+    let mut old = PriceSnapshot::deepseek_reference();
+    old.entries[0].rates.output_cost_per_token = Some(9e-6);
+    let old_id = save_snapshot(&mut db, old).unwrap();
+    db.connection.execute("INSERT OR REPLACE INTO app_state(key,value) VALUES ('officialCatalog','2026-11-20-codex-review-reference-v1')", []).unwrap();
+    let mut r = record();
+    r.client = "openclaw".into();
+    r.provider = "xiaomi-tp".into();
+    r.source_cost_usd = Some(23.);
+    r.tokens = Tokens { input: 1_000_000, output: 1_000_000, cache_read: 1_000_000, ..Default::default() };
+    r.metadata = serde_json::json!({"granularity":"sourceRecord","collectionMode":"sessionSnapshot"});
+    let time = r.timestamp_ms.unwrap();
+    for (n, model) in ["mimo-v2-pro", "mimo-v2.5-pro", "stepfun/step-3.5-flash :free",
+                       "stepfun/step-3.5-flash", "mimo-v2.5-pro"].into_iter().enumerate() {
+        r.provider = if n == 2 || n == 3 { "openrouter" } else { "xiaomi-tp" }.into();
+        r.model = model.into();
+        r.key = format!(r#"snapshot:["openclaw","s",["event","openclaw:{n}:{time}:1000000:1000000"]]"#);
+        if n == 4 { r.estimated_cost_usd = Some(123.); }
+        tokenory::db::put_record(&db.connection,"local","",&r).unwrap();
+    }
+    tokenory::pricing::initialize(&mut db).unwrap();
+    let costs: Vec<Option<f64>> = db.connection.prepare("SELECT estimated_cost FROM usage_records ORDER BY item_key")
+        .unwrap().query_map([], |r| r.get(0)).unwrap().collect::<Result<_,_>>().unwrap();
+    assert!((costs[0].unwrap() - 8.4).abs() < 1e-10);
+    assert!((costs[1].unwrap() - 1.3086).abs() < 1e-10);
+    assert_eq!(&costs[2..], &[Some(0.), None, Some(123.)]);
+    let unchanged: i64 = db.connection.query_row("SELECT count(*) FROM usage_records WHERE source_cost=23", [], |r|r.get(0)).unwrap();
+    assert_eq!(unchanged, 5);
+    assert!(tokenory::pricing::load_snapshot(&db.connection, &old_id).is_ok());
+    let active = tokenory::pricing::active_snapshot(&db.connection).unwrap().unwrap();
+    assert_eq!(active.1.entries[0].rates.output_cost_per_token, Some(9e-6));
+    assert!(std::fs::read_dir(t.path().join("backups")).unwrap().flatten().any(|e| e.file_name().to_string_lossy().contains("price-coverage")));
+    tokenory::pricing::initialize(&mut db).unwrap();
+    assert_eq!(tokenory::pricing::active_snapshot(&db.connection).unwrap().unwrap().0, active.0);
 }

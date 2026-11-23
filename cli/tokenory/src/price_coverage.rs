@@ -1,5 +1,5 @@
 // [INPUT]: 读取价格快照、上游价格缓存和未计价记录。
-// [OUTPUT]: 提供首次计价候选和新增模型的快照扩展。
+// [OUTPUT]: 提供首次计价候选、OpenClaw 请求时间核验和新增模型的快照扩展。
 // [POS]: 连接价格刷新与账本；已有金额只由显式重估修改。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -35,6 +35,33 @@ pub(crate) fn pending_assignments(
         }
     }
     Ok(changes)
+}
+
+/// OpenClaw saves a message's own time in its event key. A fallback file
+/// mtime or SQLite row time is only stored in timestampMs, not in that key.
+pub(crate) fn request_timestamp(source: &str, record: &UsageRecord) -> Option<i64> {
+    let time = record.timestamp_ms?;
+    match record.metadata["granularity"].as_str() {
+        Some("day") => return None,
+        Some("sourceRecord") => (),
+        _ => return Some(time),
+    }
+    if source != "local" || record.client != "openclaw" || time <= 0 {
+        return None;
+    }
+    let key = record.key.strip_prefix("snapshot:")?;
+    let (client, _, (kind, event)): (&str, serde::de::IgnoredAny, (&str, &str)) =
+        serde_json::from_str(key).ok()?;
+    if client != "openclaw" || kind != "event" {
+        return None;
+    }
+    let mut parts = event.strip_prefix("openclaw:")?.rsplitn(4, ':');
+    let output = parts.next()?.parse::<i64>().ok()?;
+    let input = parts.next()?.parse::<i64>().ok()?;
+    let timestamp = parts.next()?.parse::<i64>().ok()?;
+    let identity = parts.next()?;
+    (!identity.is_empty() && timestamp == time && input == record.tokens.input
+        && output == record.tokens.output).then_some(time)
 }
 
 // 新模型直接使用本次 worker 已加载的价格数据，无需等下次网络刷新。
