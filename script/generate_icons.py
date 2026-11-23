@@ -38,6 +38,3 @@ manifest(menu_icon, {
     'images': [{'filename': 'icon.svg', 'idiom': 'mac'}],
     'properties': {'preserves-vector-representation': True, 'template-rendering-intent': 'original'},
 })
-accent=assets/'AccentColor.colorset'
-accent.mkdir(exist_ok=True)
-manifest(accent, {'colors':[{'idiom':'universal','color':{'color-space':'srgb','components':{'red':'0.18','green':'0.34','blue':'0.62','alpha':'1.0'}}},{'idiom':'universal','appearances':[{'appearance':'luminosity','value':'dark'}],'color':{'color-space':'srgb','components':{'red':'0.48','green':'0.68','blue':'0.98','alpha':'1.0'}}}]})

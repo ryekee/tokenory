@@ -84,7 +84,7 @@ private struct DateRangePopover: View {
                                 if selected { Image(systemName: "checkmark").font(.caption) }
                             }
                             .padding(.horizontal, 10).frame(height: 32).contentShape(Rectangle())
-                            .background(selected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
+                            .background(selected ? WorkspaceStyle.selection.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
                         }.buttonStyle(WorkspaceHoverStyle())
                     }
                 }.frame(width: 115).padding(.top, 35)
@@ -145,12 +145,12 @@ private struct DateRangePopover: View {
         let isToday = day.date == today
         return Button { draft.selectDay(day.date) } label: {
             Text("\(day.number)").font(.system(size: 12, weight: isToday ? .bold : .regular)).monospacedDigit()
-                .foregroundStyle(endpoint ? Color.white : Color.primary)
+                .foregroundStyle(endpoint ? WorkspaceStyle.onSelection : Color.primary)
                 .frame(width: 30, height: 30)
-                .background(endpoint ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 6))
-                .overlay { if isToday && !endpoint { RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor, lineWidth: 1) } }
+                .background(endpoint ? WorkspaceStyle.selection : .clear, in: RoundedRectangle(cornerRadius: 6))
+                .overlay { if isToday && !endpoint { RoundedRectangle(cornerRadius: 6).strokeBorder(WorkspaceStyle.selection, lineWidth: 1) } }
                 .frame(maxWidth: .infinity).contentShape(Rectangle())
-                .background(included ? Color.accentColor.opacity(0.12) : .clear)
+                .background(included ? WorkspaceStyle.selection.opacity(0.12) : .clear)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(day.label)

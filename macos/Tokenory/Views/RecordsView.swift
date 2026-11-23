@@ -91,7 +91,7 @@ struct RecordsView: View {
                                                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
                                                 }
                                                 .font(.callout).frame(height: 38).contentShape(Rectangle())
-                                                .background(selectedID == detail.id ? Color.accentColor.opacity(0.12) : .clear)
+                                                .background(selectedID == detail.id ? WorkspaceStyle.selection.opacity(0.12) : .clear)
                                             }
                                             .buttonStyle(WorkspaceHoverStyle())
                                             .accessibilityElement(children: .combine)
@@ -212,7 +212,7 @@ struct RecordsView: View {
                             .frame(minWidth: 28, minHeight: 28).contentShape(Rectangle())
                             .background {
                                 if number == page {
-                                    RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.15))
+                                    RoundedRectangle(cornerRadius: 6).fill(WorkspaceStyle.selection.opacity(0.15))
                                         .matchedGeometryEffect(id: "page", in: pageIndicator)
                                 }
                             }

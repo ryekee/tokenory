@@ -1,5 +1,5 @@
 // [INPUT]: Shared, persisted HUD preferences and local audio service.
-// [OUTPUT]: Visibility, six screen positions, display metric and independent sound controls.
+// [OUTPUT]: Visibility, six screen positions with the workspace selection color, display metric and sound controls.
 // [POS]: Settings section and its sound controls.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -31,10 +31,10 @@ struct HUDSettingsView: View {
                                         let placement = HUDPlacement.allCases[row * 3 + column]
                                         Button { preferences.placement = placement } label: {
                                             Text(placement.label).frame(width: 82, height: 28)
-                                                .background(preferences.placement == placement ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                                                .background(preferences.placement == placement ? WorkspaceStyle.selection.opacity(0.25) : Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
                                                 .overlay {
                                                     RoundedRectangle(cornerRadius: 6)
-                                                        .strokeBorder(preferences.placement == placement ? Color.accentColor : .clear, lineWidth: 1.5)
+                                                        .strokeBorder(preferences.placement == placement ? WorkspaceStyle.selection : .clear, lineWidth: 1.5)
                                                 }
                                         }
                                         .buttonStyle(.plain)

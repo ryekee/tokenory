@@ -1,16 +1,18 @@
 // [INPUT]: Shared usage filters and the Records conversation selection.
-// [OUTPUT]: Single-row dimension controls and a title-aware conversation picker with a bounded result list.
+// [OUTPUT]: Single-row dimension controls with neutral light-mode labels and a title-aware conversation picker.
 // [POS]: Filter toolbar; the conversation lookup runs only while its popover is open.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 struct UsageFiltersView: View {
     @Environment(UsageStore.self) private var store
+    @Environment(\.colorScheme) private var scheme
     let showsSource: Bool
 
     var body: some View {
         HStack(spacing: 8) {
             primaryFilters
+                .environment(\.dropdownLabelColor, scheme == .light ? WorkspaceStyle.lightFilterLabel : nil)
             if showsSource {
                 sourcePicker
                 ConversationPicker()
