@@ -4,13 +4,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 NOTES="${1:?usage: package_release.sh RELEASE_NOTES.json}"
-NOTES_SNAPSHOT="$(mktemp)"
-trap 'rm -f "$NOTES_SNAPSHOT"' EXIT
+SIGNING_TEMP="$(mktemp -d)"
+NOTES_SNAPSHOT="$SIGNING_TEMP/release-notes.json"
+trap 'rm -f "$NOTES_SNAPSHOT" "$SIGNING_TEMP/embedded.provisionprofile" "$SIGNING_TEMP/CloudKit.entitlements" "$SIGNING_TEMP/signed.plist"; rmdir "$SIGNING_TEMP"' EXIT
 cp "$NOTES" "$NOTES_SNAPSHOT"
 python3 ./script/release_notes.py "$NOTES_SNAPSHOT" > /dev/null
 IDENTITY="${TOKENORY_SIGNING_IDENTITY:-Developer ID Application: Shenzhen Hiko Technology Co., Ltd. (JQTFJ8P2T7)}"
 PROFILE="${TOKENORY_NOTARY_PROFILE:-Hiko-notray}"
 ACCOUNT="ee.ryek.tokenory"
+PROFILE_OPTIONS=(--identity "$IDENTITY" --out "$SIGNING_TEMP")
+if [[ -n "${TOKENORY_DEVELOPER_ID_PROFILE:-}" ]]; then
+    PROFILE_OPTIONS+=(--profile "$TOKENORY_DEVELOPER_ID_PROFILE")
+fi
+IDENTITY="$(python3 ./script/cloudkit_release_profile.py "${PROFILE_OPTIONS[@]}")"
 TOKENORY_CONFIGURATION=Release ./script/build.sh
 BUILT_APP="$ROOT_DIR/.build/xcode/Build/Products/Release/Tokenory.app"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$BUILT_APP/Contents/Info.plist")"
@@ -28,11 +34,19 @@ for component in \
     "$FRAMEWORK/Versions/B/Autoupdate" \
     "$FRAMEWORK/Versions/B/Updater.app" \
     "$FRAMEWORK" \
-    "$APP/Contents/Helpers/tokenory" \
-    "$APP"; do
+    "$APP/Contents/Helpers/tokenory"; do
     codesign --force --options runtime --timestamp --sign "$IDENTITY" "$component"
 done
+cp "$SIGNING_TEMP/embedded.provisionprofile" "$APP/Contents/embedded.provisionprofile"
+codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$SIGNING_TEMP/CloudKit.entitlements" "$APP"
 codesign --verify --deep --strict "$APP"
+codesign --display --entitlements - "$APP" > "$SIGNING_TEMP/signed.plist"
+python3 - "$SIGNING_TEMP/CloudKit.entitlements" "$SIGNING_TEMP/signed.plist" <<'PY'
+import plistlib, sys
+with open(sys.argv[1], 'rb') as requested, open(sys.argv[2], 'rb') as signed:
+    if plistlib.load(requested) != plistlib.load(signed):
+        raise SystemExit("The packaged app's signed CloudKit entitlements did not match the release profile.")
+PY
 ARCHIVE="Tokenory-$VERSION-macOS-arm64.zip"
 ditto -c -k --keepParent "$APP" "$OUT/$ARCHIVE"
 xcrun notarytool submit "$OUT/$ARCHIVE" --keychain-profile "$PROFILE" --wait --output-format json > "$OUT/notarization.json"
