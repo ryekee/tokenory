@@ -1,6 +1,74 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "cloud.pausing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finishing the current upload before pausing…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在完成本次上传，随后暂停同步…"
+          }
+        }
+      }
+    },
+    "cloud.checkDeviceDeletion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check previous deletion for this Mac"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核实上次本机删除"
+          }
+        }
+      }
+    },
+    "cloud.checkAllDeletion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check previous deletion for all Macs"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核实上次全部删除"
+          }
+        }
+      }
+    },
+    "cloud.incompatibleDevices": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some Macs are missing from these totals. Update Tokenory on those Macs and sync again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分 Mac 的用量未计入。请在这些 Mac 上更新 Tokenory 后重新同步。"
+          }
+        }
+      }
+    },
     "settings.cloud": {
       "extractionState": "manual",
       "localizations": {

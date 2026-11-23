@@ -16,6 +16,7 @@ private struct DeviceProjection: Sendable {
     let filter: UsageFilter
     let overview: UsageReport
     let local: UsageReport
+    let localRevision: Int64
     let remote: [String: UsageReport]
     let snapshotVersion: Int
     let annual: DeviceAnnualProjection
@@ -38,10 +39,18 @@ final class DeviceSyncStore {
     private(set) var enabled: Bool
     private(set) var busy = false
     private(set) var managing = false
+    private(set) var pausing = false
     private(set) var lastContact: Date?
     private(set) var managementError: String?
     private var transferError: String?
-    var message: String? { managementError ?? transferError }
+    private var revoked = false
+    private var incompatibleDevices = false
+    var message: String? {
+        managementError ?? (revoked ? DeviceCloudError.revoked.localizedDescription : nil) ?? transferError
+    }
+    var compatibilityNotice: String? { incompatibleDevices ? L("cloud.incompatibleDevices") : nil }
+    private(set) var hasUnconfirmedDeviceDeletion = false
+    private(set) var hasUnconfirmedAllDeletion = false
     private(set) var sources: [DeviceSourceSummary] = []
     private(set) var remoteCatalog: UsageReport?
     private var projection: DeviceProjection?
@@ -63,6 +72,10 @@ final class DeviceSyncStore {
     func overview(for filter: UsageFilter?) -> UsageReport? { projection?.filter == filter ? projection?.overview : nil }
     func remote(for filter: UsageFilter?) -> [String: UsageReport] { projection?.filter == filter ? projection?.remote ?? [:] : [:] }
     func local(for filter: UsageFilter?) -> UsageReport? { projection?.filter == filter ? projection?.local : nil }
+    func matchingSubagentDetails(in report: UsageReport, for filter: UsageFilter) -> CodexSubagentReport? {
+        guard let projection, projection.filter == filter, projection.localRevision == report.revision else { return nil }
+        return report.codexSubagents
+    }
     var localCalendar: UsageActivity? { projection?.annual.localCalendar }
     var activity: ActivityReport? { projection?.annual.activity }
     var remoteActivity: [String: ActivityReport] { projection?.annual.remoteActivity ?? [:] }
@@ -72,7 +85,7 @@ final class DeviceSyncStore {
     convenience init(engine: EngineClient, usesDefaultLedger: Bool) {
         self.init(service: DeviceCloudSync(),
                   availableForLedger: usesDefaultLedger && ProcessInfo.processInfo.environment["TOKENORY_TESTING"] != "1") {
-            try await engine.request("deviceUsageSnapshot", as: DeviceUsageSnapshot.self)
+            try await engine.deviceUsageSnapshot()
         }
     }
 
@@ -82,6 +95,8 @@ final class DeviceSyncStore {
         self.service = service
         self.availableForLedger = availableForLedger
         enabled = availableForLedger && service.isEnabled
+        revoked = availableForLedger && service.wasRevoked
+        updatePendingDeletes()
     }
 
     func start() {
@@ -97,6 +112,7 @@ final class DeviceSyncStore {
                 guard let self else { return }
                 generation += 1
                 resetSnapshots()
+                revoked = false
                 lastContact = nil
                 refresh(localChanged: true)
             }
@@ -130,7 +146,7 @@ final class DeviceSyncStore {
                     let annual = cachedAnnual ?? Self.buildAnnual(all: all, local: local, others: others,
                                                                   filter: annualFilter, from: from, to: to)
                     return DeviceProjection(filter: filter, overview: DeviceUsageSnapshot.overview(devices: all, filter: filter),
-                                            local: DeviceUsageSnapshot.overview(devices: local, filter: filter),
+                                            local: DeviceUsageSnapshot.overview(devices: local, filter: filter), localRevision: localSnapshot.revision,
                                             remote: others.reduce(into: [:]) { rows, item in
                                                 rows[item.key] = DeviceUsageSnapshot.overview(devices: [item.key: item.value], filter: filter)
                                             }, snapshotVersion: version, annual: annual)
@@ -178,76 +194,60 @@ final class DeviceSyncStore {
                 busy = false
                 if pending { pending = false; refresh() }
             }
+            var localError: Error?
+            do { try await refreshLocal(ticket: ticket) }
+            catch { localError = error }
+            guard ticket == generation else { return }
+            if let localError { noteFailure(localError) }
             do {
                 let id = service.deviceID
-                let needsLocal = localDirty || snapshots[id] == nil
-                let publication = enabled && (needsLocal || uploadPending) ? try await service.beginPublication() : nil
-                if needsLocal {
-                    localDirty = false
-                    do {
-                        let snapshot = try await loadSnapshot()
-                        guard ticket == generation else { return }
-                        snapshots[id] = snapshot
-                        uploadPending = enabled
-                        snapshotsChanged()
-                    } catch {
-                        localDirty = true
-                        throw error
-                    }
-                }
-                if let publication, uploadPending, let snapshot = snapshots[id] {
-                    let data = try await Task.detached(priority: .utility) {
-                        let encoder = JSONEncoder()
-                        encoder.outputFormatting = [.sortedKeys]
-                        return try encoder.encode(snapshot)
-                    }.value
-                    try await service.publish(data, revision: snapshot.revision, publication: publication)
-                    guard ticket == generation else { return }
-                    uploadPending = false
-                }
-                let all = try await service.snapshots()
+                let others = try await service.snapshots(excludingLocal: true)
                 guard generation == ticket else { return }
-                let others = all.filter { $0.deviceID != id }
+                if service.wasRevoked { markRevoked() }
+                enabled = service.isEnabled
                 let dates = Dictionary(uniqueKeysWithValues: others.map { ($0.deviceID, $0.updatedAt) })
                 if dates != remoteDates {
-                    let (decoded, rows, catalog) = try await Task.detached(priority: .utility) {
+                    let (decoded, rows, catalog, incompatible) = try await Task.detached(priority: .utility) {
                         var values: [String: DeviceUsageSnapshot] = [:]
                         var rows: [DeviceSourceSummary] = []
+                        var incompatible = false
                         for item in others {
-                            let snapshot = try JSONDecoder().decode(DeviceUsageSnapshot.self, from: item.data)
-                            values[item.deviceID] = snapshot
-                            let full = DeviceUsageSnapshot.overview(devices: [item.deviceID: snapshot], filter: .init())
-                            rows.append(DeviceSourceSummary(id: item.deviceID, name: item.deviceName, updatedAt: item.updatedAt, clients: full.clients))
+                            do {
+                                let snapshot = try JSONDecoder().decode(DeviceUsageSnapshot.self, from: item.data)
+                                guard snapshot.timezone == DeviceUsageSnapshot.reportingTimezone else {
+                                    incompatible = true
+                                    continue
+                                }
+                                values[item.deviceID] = snapshot
+                                let full = DeviceUsageSnapshot.overview(devices: [item.deviceID: snapshot], filter: .init())
+                                rows.append(DeviceSourceSummary(id: item.deviceID, name: item.deviceName, updatedAt: item.updatedAt, clients: full.clients))
+                            } catch DeviceUsageSnapshot.DecodingIssue.unsupportedVersion {
+                                incompatible = true
+                            }
                         }
-                        return (values, rows.sorted { ($0.name, $0.id) < ($1.name, $1.id) }, DeviceUsageSnapshot.overview(devices: values, filter: .init()))
+                        return (values, rows.sorted { ($0.name, $0.id) < ($1.name, $1.id) },
+                                DeviceUsageSnapshot.overview(devices: values, filter: .init()), incompatible)
                     }.value
                     guard ticket == generation else { return }
                     snapshots = decoded.merging(snapshots.filter { $0.key == id }) { _, local in local }
                     sources = rows
                     remoteCatalog = catalog
                     remoteDates = dates
+                    incompatibleDevices = incompatible
                     snapshotsChanged()
                 }
-                enabled = service.isEnabled
                 lastContact = Date()
-                transferError = nil
+                if localError == nil { transferError = nil }
                 #if CLOUD_DEVELOPMENT
                 if ProcessInfo.processInfo.arguments.contains("--cloud-sync-receipt") {
                     let totals = snapshots.mapValues { $0.buckets.reduce(Int64(0)) { $0 + $1.summary.tokens } }
                     let items = totals.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
-                    FileHandle.standardError.write(Data("TOKENORY_SYNC local=\(id) devices=\(all.count) enabled=\(enabled) \(items)\n".utf8))
+                    FileHandle.standardError.write(Data("TOKENORY_SYNC local=\(id) devices=\(snapshots.count) enabled=\(enabled) \(items)\n".utf8))
                 }
                 #endif
             } catch {
                 guard ticket == generation else { return }
-                enabled = service.isEnabled
-                if let cloudError = error as? DeviceCloudError {
-                    switch cloudError {
-                    case .revoked, .accountChanged, .noAccount: resetSnapshots()
-                    default: break
-                    }
-                }
-                transferError = error.localizedDescription
+                noteFailure(error)
                 #if CLOUD_DEVELOPMENT
                 if ProcessInfo.processInfo.arguments.contains("--cloud-sync-receipt") {
                     FileHandle.standardError.write(Data("TOKENORY_SYNC_ERROR \(error.localizedDescription)\n".utf8))
@@ -257,13 +257,78 @@ final class DeviceSyncStore {
         }
     }
 
-    func enable() async { await manage { try await self.service.enable() } }
-    func stop() async { await manage { await self.service.stop() } }
+    private func refreshLocal(ticket: Int) async throws {
+        let id = service.deviceID
+        let needsLocal = localDirty || snapshots[id] == nil
+        let publication = enabled && (needsLocal || uploadPending) ? try await service.beginPublication() : nil
+        guard ticket == generation else { return }
+        if needsLocal {
+            localDirty = false
+            defer { if ticket != generation { localDirty = true } }
+            do {
+                let snapshot = try await loadSnapshot()
+                guard ticket == generation else { return }
+                snapshots[id] = snapshot
+                uploadPending = enabled
+                snapshotsChanged()
+            } catch {
+                localDirty = true
+                throw error
+            }
+        }
+        if let publication, uploadPending, let snapshot = snapshots[id] {
+            let data = try await Task.detached(priority: .utility) {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.sortedKeys]
+                return try encoder.encode(snapshot)
+            }.value
+            guard ticket == generation else { return }
+            try await service.publish(data, revision: snapshot.revision, publication: publication)
+            if ticket == generation { uploadPending = false }
+        }
+    }
+
+    private func markRevoked() {
+        revoked = true
+        uploadPending = false
+    }
+
+    private func noteFailure(_ error: Error) {
+        if let cloudError = error as? DeviceCloudError {
+            switch cloudError {
+            case .revoked:
+                resetSnapshots(keepingLocal: true)
+                markRevoked()
+            case .accountChanged, .noAccount: resetSnapshots()
+            default: break
+            }
+        }
+        enabled = service.isEnabled
+        transferError = error.localizedDescription
+    }
+
+    func enable() async { await manage { try await self.service.enable(); self.revoked = false } }
+    func stop() async {
+        await manage {
+            self.pausing = true
+            await self.service.stop()
+            self.pausing = false
+        }
+    }
     func delete(all: Bool) async {
         await manage(operation: all ? "cloud.deleteAll" : "cloud.deleteDevice") {
             if all { try await self.service.deleteAll() } else { try await self.service.deleteDevice() }
-            if all { self.resetSnapshots() }
+            if all { self.resetSnapshots(keepingLocal: true) }
         }
+    }
+
+    func confirmPreviousDeletion(all: Bool) async {
+        await manage { try await self.service.confirmPreviousDeletion(all: all) }
+    }
+
+    private func updatePendingDeletes() {
+        hasUnconfirmedDeviceDeletion = service.hasDeletionToConfirm(all: false)
+        hasUnconfirmedAllDeletion = service.hasDeletionToConfirm(all: true)
     }
 
     private func manage(operation: String? = nil, _ action: () async throws -> Void) async {
@@ -275,15 +340,17 @@ final class DeviceSyncStore {
             managementError = operation.map { L($0) + " · " + error.localizedDescription } ?? error.localizedDescription
         }
         enabled = service.isEnabled
+        updatePendingDeletes()
         managing = false
         if managementError == nil { refresh(localChanged: true) }
     }
 
-    private func resetSnapshots() {
-        snapshots = [:]
+    private func resetSnapshots(keepingLocal: Bool = false) {
+        snapshots = keepingLocal ? snapshots.filter { $0.key == service.deviceID } : [:]
         remoteDates = [:]
         remoteCatalog = nil
         sources = []
+        incompatibleDevices = false
         uploadPending = false
         snapshotVersion += 1
         annualVersion += 1

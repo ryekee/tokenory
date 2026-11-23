@@ -5,6 +5,9 @@
 import Foundation
 
 struct DeviceUsageSnapshot: Codable, Sendable {
+    static let reportingTimezone = "Asia/Shanghai"
+    enum DecodingIssue: Error { case unsupportedVersion }
+
     let schemaVersion: Int
     let revision: Int64
     let timezone: String
@@ -115,7 +118,7 @@ extension DeviceUsageSnapshot {
         let fields = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try fields.decode(Int.self, forKey: .schemaVersion)
         guard schemaVersion == 1 else {
-            throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: fields, debugDescription: "Unsupported usage snapshot version")
+            throw DecodingIssue.unsupportedVersion
         }
         revision = try fields.decode(Int64.self, forKey: .revision)
         timezone = try fields.decode(String.self, forKey: .timezone)

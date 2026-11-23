@@ -50,7 +50,7 @@ struct DeviceCloudWrite: Sendable {
 }
 
 enum DeviceCloudError: String, LocalizedError {
-    case unavailable, noAccount, accountChanged, stopped, revoked, conflict, invalidData, staleRevision, unconfirmedDeletion
+    case unavailable, noAccount, accountChanged, stopped, revoked, conflict, invalidData, staleRevision, unconfirmedDeletion, deletionStillPresent
     var errorDescription: String? {
         let selected = Bundle.main.path(forResource: Localization.identifier, ofType: "lproj")
         let bundle = selected.flatMap(Bundle.init(path:)) ?? .main
@@ -128,6 +128,10 @@ final class DeviceCloudPreferences: @unchecked Sendable {
         get { defaults.string(forKey: prefix + "account") }
         set { defaults.set(newValue, forKey: prefix + "account") }
     }
+    fileprivate var revoked: Bool {
+        get { defaults.bool(forKey: prefix + "revoked") }
+        set { defaults.set(newValue, forKey: prefix + "revoked") }
+    }
     fileprivate var sequence: Int64 { (defaults.object(forKey: prefix + "sequence") as? NSNumber)?.int64Value ?? 0 }
     fileprivate func issue(grant: UUID) -> DeviceCloudPublication {
         Self.lock.withLock {
@@ -150,6 +154,8 @@ actor DeviceCloudSync {
     private let preferences: DeviceCloudPreferences
     private var operation = UUID()
     private var inFlight: Set<Int64> = []
+    private var committingPublications = 0
+    private var pauseWaiters: [CheckedContinuation<Void, Never>] = []
     private var cacheAccount: String?
     private var cacheEpoch: UUID?
     private var cache: [UUID: (data: Data, digest: String)] = [:]
@@ -159,6 +165,8 @@ actor DeviceCloudSync {
     }
     nonisolated var isEnabled: Bool { preferences.grant != nil }
     nonisolated var hasParticipated: Bool { preferences.account != nil }
+    nonisolated var wasRevoked: Bool { preferences.revoked }
+    nonisolated func hasDeletionToConfirm(all: Bool) -> Bool { preferences.pendingRemoval(all: all) != nil }
 
     init(backend: any DeviceCloudTransport = CloudKitDeviceTransport(), preferences: DeviceCloudPreferences = .init()) {
         self.backend = backend
@@ -166,9 +174,34 @@ actor DeviceCloudSync {
         deviceID = preferences.deviceID
     }
 
-    func stop() {
+    func stop() async {
+        stopPublishing()
+        guard committingPublications > 0 else { return }
+        await withCheckedContinuation { pauseWaiters.append($0) }
+    }
+
+    private func stopPublishing() {
         operation = UUID()
         preferences.grant = nil
+    }
+
+    private func revokePublication() {
+        stopPublishing()
+        preferences.revoked = true
+    }
+
+    private func commitPublication(account: String, previous: DeviceCloudHead, next: DeviceCloudManifest,
+                                   write: DeviceCloudWrite?, removing: UUID?) async throws {
+        committingPublications += 1
+        defer {
+            committingPublications -= 1
+            if committingPublications == 0 {
+                let waiters = pauseWaiters
+                pauseWaiters.removeAll()
+                for waiter in waiters { waiter.resume() }
+            }
+        }
+        try await backend.commit(account: account, previous: previous, next: next, write: write, removing: removing)
     }
 
     private func currentAccount() async throws -> String {
@@ -176,7 +209,8 @@ actor DeviceCloudSync {
         let account = try await backend.accountID()
         if let bound = preferences.account, bound != account {
             if ticket == operation {
-                stop()
+                stopPublishing()
+                preferences.revoked = false
                 cache.removeAll()
             }
             throw DeviceCloudError.accountChanged
@@ -185,7 +219,7 @@ actor DeviceCloudSync {
     }
 
     func enable() async throws {
-        stop()
+        stopPublishing()
         let ticket = operation
         let account = try await backend.accountID()
         if cacheAccount != account { cache.removeAll() }
@@ -209,6 +243,7 @@ actor DeviceCloudSync {
             guard ticket == operation else { throw DeviceCloudError.stopped }
             preferences.account = account
             preferences.grant = .init(account: account, epoch: next.epoch, token: token)
+            preferences.revoked = false
             preferences.setRemoval(nil, all: true)
             preferences.setRemoval(nil, all: false)
             return
@@ -233,12 +268,13 @@ actor DeviceCloudSync {
         inFlight.insert(publication.sequence)
         defer { inFlight.remove(publication.sequence) }
         for _ in 0..<4 {
+            guard ticket == operation else { throw DeviceCloudError.stopped }
             let head = try await backend.head(account: account, createZone: false)
             guard ticket == operation, preferences.grant?.token == grant.token else { throw DeviceCloudError.stopped }
             guard publication.sequence == preferences.sequence else { throw DeviceCloudError.staleRevision }
             guard account == grant.account, head.version != nil, grant.epoch == head.manifest.epoch,
                   var entry = head.manifest.devices[deviceID], entry.grant == grant.token else {
-                stop()
+                revokePublication()
                 throw DeviceCloudError.revoked
             }
             if entry.payloadGrant == grant.token, let saved = entry.sequence {
@@ -262,24 +298,25 @@ actor DeviceCloudSync {
             entry.digest = digest
             var next = head.manifest
             next.devices[deviceID] = entry
-            do { try await backend.commit(account: account, previous: head, next: next, write: write, removing: old) }
+            do { try await commitPublication(account: account, previous: head, next: next, write: write, removing: old) }
             catch DeviceCloudError.conflict { continue }
             return
         }
         throw DeviceCloudError.conflict
     }
 
-    func snapshots() async throws -> [DeviceCloudSnapshot] {
+    func snapshots(excludingLocal: Bool = false) async throws -> [DeviceCloudSnapshot] {
         let account = try await currentAccount()
         for _ in 0..<4 {
             let ticket = operation
             let head = try await backend.head(account: account, createZone: false)
             guard ticket == operation else { continue }
             if let grant = preferences.grant, grant.account == account,
-               (grant.epoch != head.manifest.epoch || head.manifest.devices[deviceID]?.grant != grant.token) { stop() }
+               (grant.epoch != head.manifest.epoch || head.manifest.devices[deviceID]?.grant != grant.token) { revokePublication() }
             guard head.version != nil else { cache.removeAll(); return [] }
             let readTicket = operation
-            let ids = Set(head.manifest.devices.values.compactMap(\.payload))
+            let devices = excludingLocal ? head.manifest.devices.filter { $0.key != deviceID } : head.manifest.devices
+            let ids = Set(devices.values.compactMap(\.payload))
             var verified = cacheAccount == account && cacheEpoch == head.manifest.epoch
                 ? cache.filter { ids.contains($0.key) } : [:]
             let missing = Array(ids.subtracting(verified.keys))
@@ -291,7 +328,7 @@ actor DeviceCloudSync {
                 guard readTicket == operation, latest.changeTag == head.changeTag else { continue }
                 for (id, bytes) in try result.get() { verified[id] = (bytes, DeviceCloudPreferences.digest(bytes)) }
             }
-            let snapshots: [DeviceCloudSnapshot] = try head.manifest.devices.sorted(by: { $0.key < $1.key }).compactMap { id, entry in
+            let snapshots: [DeviceCloudSnapshot] = try devices.sorted(by: { $0.key < $1.key }).compactMap { id, entry in
                 guard let payload = entry.payload else { return nil }
                 guard let saved = verified[payload], saved.digest == entry.digest,
                       let time = entry.updatedAt, let revision = entry.revision else { throw DeviceCloudError.invalidData }
@@ -308,21 +345,32 @@ actor DeviceCloudSync {
     func deleteDevice() async throws { try await remove(all: false) }
     func deleteAll() async throws { try await remove(all: true) }
 
+    func confirmPreviousDeletion(all: Bool) async throws {
+        guard let pending = preferences.pendingRemoval(all: all) else { return }
+        let ticket = operation
+        let account = try await currentAccount()
+        guard account == pending.account else { throw DeviceCloudError.accountChanged }
+        let head = try await backend.head(account: account, createZone: false)
+        guard ticket == operation else { throw DeviceCloudError.stopped }
+        let previousScopeRemains = head.version != nil && pending.epoch == head.manifest.epoch
+            && (all || pending.grant == head.manifest.devices[deviceID]?.grant)
+        preferences.setRemoval(nil, all: all)
+        if previousScopeRemains { throw DeviceCloudError.deletionStillPresent }
+    }
+
     private func remove(all: Bool) async throws {
-        stop()
+        stopPublishing()
         cache.removeAll()
         let ticket = operation
         let account = try await currentAccount()
-        var pending = preferences.pendingRemoval(all: all)
-        guard pending == nil || pending?.account == account else { throw DeviceCloudError.accountChanged }
+        guard ticket == operation else { throw DeviceCloudError.stopped }
+        var target: DeviceCloudRemoval?
         for _ in 0..<4 {
             let head = try await backend.head(account: account, createZone: all)
             guard ticket == operation else { throw DeviceCloudError.stopped }
-            // A lost acknowledgement must not turn a retry into deletion of newly re-authorized data.
-            if let pending, pending.epoch != (head.version == nil ? nil : head.manifest.epoch) {
-                preferences.setRemoval(nil, all: all)
-                return
-            }
+            let epoch = head.version == nil ? nil : head.manifest.epoch
+            let grant = head.manifest.devices[deviceID]?.grant
+            if let target, target.epoch != epoch || (!all && target.grant != grant) { throw DeviceCloudError.conflict }
             guard head.version != nil || all else { preferences.setRemoval(nil, all: all); return }
             var next = head.manifest
             let removed: UUID?
@@ -330,21 +378,19 @@ actor DeviceCloudSync {
                 next = DeviceCloudManifest()
                 removed = nil
             } else {
-                guard let entry = next.devices[deviceID], pending == nil || pending?.grant == entry.grant else {
+                guard let entry = next.devices[deviceID] else {
                     preferences.setRemoval(nil, all: all)
                     return
                 }
                 next.devices.removeValue(forKey: deviceID)
                 removed = entry.payload
             }
-            pending = .init(account: account, epoch: head.version == nil ? nil : head.manifest.epoch,
-                            grant: head.manifest.devices[deviceID]?.grant)
-            preferences.setRemoval(pending, all: all)
+            target = .init(account: account, epoch: epoch, grant: grant)
+            preferences.setRemoval(target, all: all)
             do { try await backend.commit(account: account, previous: head, next: next, write: nil, removing: removed) }
             catch DeviceCloudError.conflict {
-                // The initial empty-zone transaction definitively lost the create race, so
-                // re-read the first published state and apply the explicit delete to that epoch.
-                if head.version == nil { pending = nil; preferences.setRemoval(nil, all: all) }
+                preferences.setRemoval(nil, all: all)
+                if epoch == nil { target = nil }
                 continue
             }
             catch {
@@ -352,6 +398,7 @@ actor DeviceCloudSync {
                 if error is URLError || networkError.map({ [.networkFailure, .networkUnavailable, .serverResponseLost].contains($0.code) }) == true {
                     throw DeviceCloudError.unconfirmedDeletion
                 }
+                preferences.setRemoval(nil, all: all)
                 throw error
             }
             preferences.setRemoval(nil, all: all)

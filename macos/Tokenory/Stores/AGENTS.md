@@ -15,6 +15,6 @@ Codex / Antigravity `todayUsageChanged` 事件只刷新当日汇总，实时传�
 
 UsageStore 的 todayDay / todayTimeZone / todayUsageError 供 HUD 识别跨日与不可用读数，沿用今日独立查询与代际保护。
 
-DeviceSyncStore.swift 从本机 worker 取全部有效历史，用户开启后写入同一 Apple 账号的私有库，以设备 ID 替换快照。按当前筛选在后台生成总览和各设备明细；相同维度和快照复用全年活动；账户切换后清空已展示的云端数据。
+DeviceSyncStore.swift 读取本机分块快照，独立处理发布与拉取，以设备 ID 替换兼容快照。后台生成所选期间总览与设备明细。子代理细节仅使用与本机快照一致的账本修订。账户切换后清空已展示的云端数据。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md

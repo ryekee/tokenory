@@ -1,6 +1,23 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "deletionStillPresent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The previous data is still in iCloud. Choose Delete again to remove it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次要删除的数据仍在 iCloud 中。请重新确认删除。"
+          }
+        }
+      }
+    },
     "accountChanged": {
       "extractionState": "manual",
       "localizations": {
