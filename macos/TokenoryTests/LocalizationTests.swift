@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import Tokenory
 
@@ -26,5 +27,26 @@ final class LocalizationTests: XCTestCase {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .current
         XCTAssertEqual(date, calendar.date(from: DateComponents(year: 2026, month: 11, day: 5)))
+    }
+
+    @MainActor
+    func testBackgroundClockNotificationsRefreshOnMainActor() async {
+        let center = NotificationCenter()
+        let workspaceCenter = NotificationCenter()
+        let refreshed = expectation(description: "Midnight, time zone and wake each trigger a refresh")
+        refreshed.expectedFulfillmentCount = 3
+        let observer = SystemClockObserver(center: center, workspaceCenter: workspaceCenter) {
+            MainActor.preconditionIsolated()
+            refreshed.fulfill()
+        }
+
+        DispatchQueue.global().async {
+            dispatchPrecondition(condition: .notOnQueue(.main))
+            center.post(name: .NSCalendarDayChanged, object: nil)
+            center.post(name: .NSSystemTimeZoneDidChange, object: nil)
+            workspaceCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
+        }
+        await fulfillment(of: [refreshed], timeout: 5)
+        withExtendedLifetime(observer) {}
     }
 }
