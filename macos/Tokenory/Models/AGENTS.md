@@ -8,6 +8,6 @@ HUDReading.swift: LocalUsageDay 按设备当前时区计算本地日与夏令时
 UsageTrend.swift: 按本机或设备汇总时区构造趋势，按实际日长展示小时和夏令时重复小时。
 UsageActivity.swift: 补齐日历日期、使用规律和保持未知费用的模型移动平均。
 
-TurnAnalytics.swift: 解码回合、按工具分组的本地会话标题和能力目录。计算全范围指标及小时、日或周速度分布，提供四分位、离群点、代表回合、最近点及回合搜索。
+TurnAnalytics.swift: 解码回合、按工具分组的本地会话标题和能力目录。计算全范围指标及小时、日或周速度分布，提供四分位、离群点的绘图位置、代表回合、最近点及回合搜索。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md

@@ -26,6 +26,6 @@ WorkspaceControls.swift: 提供前缘对齐、展开间距统一的工作区控�
 WorkspaceStyle.swift: 定义随系统切换的 Tokyo Neon 和 Tokyo Neon Light、共享卡片及活动日历原有表面。卡片只绘制表面，文字在标签上设色，控件随窗口焦点使用系统底色。蓝色和薄荷绿区分设备，粉色标记费用，黄色标记 Fast。浅色模式的选中态使用图标指针的品牌蓝，深色模式使用霓虹粉。
 
 TurnsView.swift: 多 agent 回合摘要、工具与模型筛选、能力弹窗、时间分组筛选及回合详情。默认按回合开始时间倒序，可按项目、已保存回合名和 ID 搜索。每页 6 条，末页保持列表高度。宽窗口详情与列表等高，窄窗口上下排列。详情用间距分组，精简数据口径通过帮助控件查看。无回合时显示一处页级空态，请求失败提供重试。
-TurnSpeedChart.swift: 按系统时区绘制小时、日或周速度箱体及稀疏与离群回合；悬停或用键盘查看区间和典型速度。
+TurnSpeedChart.swift: 按系统时区绘制小时、日或周速度箱体及稀疏与离群回合；离群点对齐所属箱体中心，悬停或用键盘可查看原始回合时间。
 
 [PROTOCOL]: Update this header on change, then check AGENTS.md
