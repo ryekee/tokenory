@@ -19,6 +19,7 @@ Native macOS utility for checking AI usage and USD cost estimates. Preserve the 
 - Use system typography, semantic foreground/background colors and native controls. Use Tokyo Neon for the dark statistics workspace and the Tokenory-designed Tokyo Neon Light for the light workspace. Follow the appearance selected in General settings.
 - Overview: compact filters and a toolbar range calendar; adjacent token/cost totals, secondary active-day/model counts, a token mix strip and a combined Tokens and cost chart. Tool and model rankings share a token/cost sort. Annual activity and model history follow below.
 - Dates use a temporal axis; values use locale-aware formatting. Never compress every date into a categorical label.
+- Usage over time uses five equal intervals from zero and a fixed-width right axis. Pick a round step that fits the stacked peak and its headroom. Use one unit for the axis so all labels are integers or halves. Keep the scale while the peak fits its current band.
 - All UI copy lives in the String Catalog with stable semantic keys, complete sentences, placeholders and plural variants. English and Simplified Chinese ship together.
 - Prices are managed by the app. Missing evidence is shown as an unavailable estimate; users never enter unit prices.
 - Display USD with `$`, comma grouping and two decimal places. Compact token numbers use comma grouping and at most two decimal places; full token counts remain integers. Display rounding never changes stored values or pricing. Unknown costs must never appear as zero.

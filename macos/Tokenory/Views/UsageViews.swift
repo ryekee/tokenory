@@ -1,5 +1,5 @@
 // [INPUT]: Typed usage summaries and today-only turn statistics.
-// [OUTPUT]: Locale-aware formats, device legend and focus-aware toolbar switch, source and Fast shares, and three-column menu summary.
+// [OUTPUT]: Locale-aware formats and compact units, device legend and focus-aware toolbar switch, source and Fast shares, and three-column menu summary.
 // [POS]: Shared native usage presentation; speed does not depend on dashboard filters.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -27,14 +27,15 @@ extension InferenceSpeed {
     var fastHelp: String { L(source == "selected" ? "fast.selected_help" : "fast.reported_help") }
 }
 
-func compactTokens(_ value: Int64, locale: Locale = Localization.locale) -> String {
-    // Compact notation suppresses grouping in Chinese (1740.69万). Keep the
-    // familiar units while formatting their numeric part with comma separators.
-    let units: [(Double, String)] = locale.identifier.hasPrefix("zh")
+func compactUsageUnits(locale: Locale) -> [(divisor: Double, suffix: String)] {
+    locale.identifier.hasPrefix("zh")
         ? [(1e12, "万亿"), (1e8, "亿"), (1e4, "万")]
         : [(1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K")]
-    let unit = units.first { Double(value) >= $0.0 } ?? (1, "")
-    return (Double(value) / unit.0).formatted(.number.precision(.fractionLength(0...2)).locale(Locale(identifier: "en_US"))) + unit.1
+}
+
+func compactTokens(_ value: Int64, locale: Locale = Localization.locale) -> String {
+    let unit = compactUsageUnits(locale: locale).first { Double(value) >= $0.divisor } ?? (1, "")
+    return (Double(value) / unit.divisor).formatted(.number.precision(.fractionLength(0...2)).locale(Locale(identifier: "en_US"))) + unit.suffix
 }
 func usd(_ value: Double?) -> String {
     value.map { "$" + $0.formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "en_US"))) } ?? L("cost.unavailable")
