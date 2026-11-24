@@ -1,5 +1,5 @@
 // [INPUT]: Effective daily ledger aggregates in Beijing reporting dates.
-// [OUTPUT]: Calendar cells, habits and aligned model history with optional costs.
+// [OUTPUT]: Calendar cells, habits and aligned model history with optional costs and a padded stacked peak.
 // [POS]: Pure presentation data; totals remain raw when averages or order change.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -110,7 +110,10 @@ struct UsageHistory {
             : rows.isEmpty ? 0 : costs.isEmpty ? nil : costs.reduce(0, +)
         unpricedTokens = rows.reduce(0) { $0 + $1.summary.unpricedTokens }
         let plottedSeries = series
-        maximum = max(1, (0..<calendarDays.count).map { index in plottedSeries.compactMap { $0.values[index] }.reduce(0, +) }.max() ?? 0) * 1.08
+        let peak = (0..<calendarDays.count).map { index in
+            plottedSeries.compactMap { $0.values[index] }.reduce(0, +)
+        }.max() ?? 0
+        maximum = peak * 1.08
     }
 
     static func trailingAverage(_ values: [Double?], window: Int = 30) -> [Double?] {

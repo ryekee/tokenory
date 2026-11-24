@@ -1,5 +1,5 @@
 // [INPUT]: Real daily client/model aggregates for the annual range.
-// [OUTPUT]: Stacked model history, raw totals and single-click daily/moving-average inspection.
+// [OUTPUT]: Stacked model history, round axis ticks, raw totals and daily/moving-average inspection.
 // [POS]: Annual overview chart; known costs remain visible when another model has unpriced usage.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -95,8 +95,42 @@ private func historyColor(_ series: HistorySeries) -> Color {
     return Color(hue: hue, saturation: max(0.18, 0.63 - Double(series.shade % 5) * 0.1), brightness: 0.74 + Double(series.shade % 4) * 0.06)
 }
 
+struct HistoryAxisScale {
+    static let intervals = 5
+    let maximum: Double
+    let labels: [String]
+
+    init(paddedMaximum: Double, metric: UsageMetric, locale: Locale = Localization.locale) {
+        let minimumStep: Double = metric == .tokens ? 1 : 0.01
+        let target = max(minimumStep, paddedMaximum / Double(Self.intervals))
+        let magnitude = pow(10, floor(log10(target)))
+        let multiplier = [1.0, 2, 2.5, 5, 10].first { $0 * magnitude >= target } ?? 10
+        let step = multiplier * magnitude
+        maximum = step * Double(Self.intervals)
+
+        // Keep one unit for the entire axis. Choose it only if each tick can
+        // be shown exactly as an integer or half in that unit.
+        let units = compactUsageUnits(locale: locale) + [(1, "")]
+        let regularUnit = units.first { unit in
+            let halves = 2 * step / unit.divisor
+            let rounded = halves.rounded()
+            return rounded >= 1 && abs(halves - rounded) < 1e-9
+        }
+        let unit = regularUnit ?? (divisor: 0.01, suffix: "¢")
+        let prefix = metric == .cost && regularUnit != nil ? "$" : ""
+        let zero = prefix + "0" + (regularUnit == nil ? unit.suffix : "")
+        let format = FloatingPointFormatStyle<Double>.number
+            .precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US"))
+        labels = (0...Self.intervals).reversed().map { tick in
+            guard tick > 0 else { return zero }
+            return prefix + (Double(tick) * step / unit.divisor).formatted(format) + unit.suffix
+        }
+    }
+}
+
 private struct HistoryPlot: View {
     let data: UsageHistory
+    private let axis: HistoryAxisScale
     private let rowCount: Int
     private let readoutWidth: CGFloat
     @State private var selectedIndex: Int?
@@ -104,6 +138,7 @@ private struct HistoryPlot: View {
     @State private var keyboardSelection = false
     init(data: UsageHistory) {
         self.data = data
+        axis = HistoryAxisScale(paddedMaximum: data.maximum, metric: data.metric)
         let limit = min(6, data.series.count)
         var count = 0
         for index in data.days.indices {
@@ -119,15 +154,19 @@ private struct HistoryPlot: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let width = max(1, geometry.size.width - 70)
+            let axisWidth: CGFloat = 70
+            let axisGap: CGFloat = 9
+            let width = max(1, geometry.size.width - axisWidth)
             let height = max(1, geometry.size.height - 30)
             ZStack(alignment: .topLeading) {
-                HistoryAreas(data: data).frame(width: width, height: height)
+                HistoryAreas(data: data, axisMaximum: axis.maximum).frame(width: width, height: height)
                     .accessibilityHidden(true)
-                ForEach(0...4, id: \.self) { tick in
-                    Text(value(data.maximum * Double(4 - tick) / 4))
+                ForEach(axis.labels.indices, id: \.self) { tick in
+                    Text(axis.labels[tick])
                         .font(.system(size: 10)).foregroundStyle(WorkspaceStyle.subtext).monospacedDigit()
-                        .offset(x: width + 9, y: height * Double(tick) / 4 - 5)
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                        .frame(width: axisWidth - axisGap, alignment: .leading)
+                        .offset(x: width + axisGap, y: historyGridY(tick, height: height) - 5)
                 }
                 HStack {
                     if let first = data.days.first { Text(Localization.day(first.key)) }
@@ -194,15 +233,20 @@ private extension UsageHistory {
     }
 }
 
+private func historyGridY(_ tick: Int, height: CGFloat) -> CGFloat {
+    height * CGFloat(tick) / CGFloat(HistoryAxisScale.intervals)
+}
+
 // Selection lives in a separate overlay so pointer motion does not rebuild the stacked annual paths.
 private struct HistoryAreas: View {
     let data: UsageHistory
+    let axisMaximum: Double
     @Environment(\.colorScheme) private var scheme
     var body: some View {
         Canvas { context, size in
             let width = size.width, height = size.height
-            for tick in 0...4 {
-                let y = height * CGFloat(tick) / 4
+            for tick in 0...HistoryAxisScale.intervals {
+                let y = historyGridY(tick, height: height)
                 var line = Path(); line.move(to: CGPoint(x: 0, y: y)); line.addLine(to: CGPoint(x: width, y: y))
                 context.stroke(line, with: .color(.secondary.opacity(0.15)), lineWidth: 0.5)
             }
@@ -217,10 +261,10 @@ private struct HistoryAreas: View {
                     if start < end {
                         var path = Path()
                         for i in start..<end {
-                            let point = CGPoint(x: data.position(of: i, width: width), y: height * (1 - (base[i] + (series.values[i] ?? 0)) / data.maximum))
+                            let point = CGPoint(x: data.position(of: i, width: width), y: height * (1 - (base[i] + (series.values[i] ?? 0)) / axisMaximum))
                             if i == start { path.move(to: point) } else { path.addLine(to: point) }
                         }
-                        for i in (start..<end).reversed() { path.addLine(to: CGPoint(x: data.position(of: i, width: width), y: height * (1 - base[i] / data.maximum))) }
+                        for i in (start..<end).reversed() { path.addLine(to: CGPoint(x: data.position(of: i, width: width), y: height * (1 - base[i] / axisMaximum))) }
                         path.closeSubpath()
                         context.fill(path, with: .color(historyColor(series).opacity(scheme == .dark ? 0.48 : 0.38)))
                         context.stroke(path, with: .color(historyColor(series).opacity(0.85)), lineWidth: 0.8)
