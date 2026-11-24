@@ -269,7 +269,7 @@ private struct OverviewLoadingPlaceholder: View {
     private func metric(_ label: String, value: String, primary: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label).font(.caption)
-            Text(value).font(.system(size: primary ? 32 : 23, weight: .semibold))
+            Text(value).font(DisplayNumberFont.font(size: primary ? 32 : 23))
         }.frame(maxWidth: primary ? .infinity : nil, alignment: .leading)
     }
 }

@@ -76,7 +76,7 @@ struct MenuBarSummary: View {
     private func metric(_ title: String, _ value: String, unit: String = "") -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.subheadline).foregroundStyle(.secondary)
-            (Text(value).font(.system(size: 25, weight: .semibold)) + Text(unit.isEmpty ? "" : " " + unit).font(.caption).foregroundColor(.secondary))
+            (Text(value).font(DisplayNumberFont.font(size: 25)) + Text(unit.isEmpty ? "" : " " + unit).font(.caption).foregroundColor(.secondary))
                 .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
         }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
     }

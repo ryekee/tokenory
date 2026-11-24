@@ -31,7 +31,7 @@ struct UsageHistoryChart: View {
                         Text(L(metric == .tokens ? "history.total_tokens" : data.unpricedTokens > 0 ? "cost.known" : "cost.estimate"))
                             .font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                         Text(metric == .tokens ? compactTokens(Int64(data.total ?? 0)) : usd(data.total))
-                            .font(.title3.weight(.semibold)).monospacedDigit()
+                            .font(DisplayNumberFont.font(for: .title3))
                     }.help(data.unpricedTokens > 0 ? LF("usage.unpriced", compactTokens(data.unpricedTokens)) : L("history.total_help"))
                 }.foregroundStyle(WorkspaceStyle.text)
                 ViewThatFits(in: .horizontal) {

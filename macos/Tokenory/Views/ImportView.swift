@@ -65,7 +65,8 @@ struct ImportView: View {
     private func previewDetails(_ preview: ImportPreview) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L("import.preview")).font(.headline)
-            Text(preview.tokens.formatted(.number.locale(Localization.locale)) + " tokens").font(.title2).monospacedDigit()
+            Text("\(Text(preview.tokens.formatted(.number.locale(Localization.locale))).font(DisplayNumberFont.font(for: .title2))) tokens")
+                .font(.title2)
             Text(LF("import.summary", Localization.dateRange(preview.start, preview.end), preview.dayCount, preview.rowCount))
                 .font(.callout).foregroundStyle(.secondary)
             if preview.sourceTimezone == nil {

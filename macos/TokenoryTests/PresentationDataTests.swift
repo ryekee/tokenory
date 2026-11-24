@@ -1,9 +1,27 @@
 import AppKit
+import CoreText
 import SwiftUI
 import XCTest
 @testable import Tokenory
 
 final class PresentationDataTests: XCTestCase {
+    @MainActor func testDisplayNumberFontLoadsBundledFaceAndChineseUnits() throws {
+        let resource = try XCTUnwrap(Bundle.main.url(forResource: "MapleMono-NF-CN-SemiBold", withExtension: "ttf"))
+        XCTAssertNotNil(Bundle.main.url(forResource: "MapleMono-NF-CN-OFL", withExtension: "txt"))
+        let font = DashboardRollingValue.Style.displayNumber(32).drumFont
+        XCTAssertEqual(font.fontName, "MapleMono-NF-CN-SemiBold")
+        let fontURL = CTFontCopyAttribute(font as CTFont, kCTFontURLAttribute) as? URL
+        XCTAssertEqual(fontURL?.standardizedFileURL, resource.standardizedFileURL)
+
+        let reading = NSAttributedString(string: "7.38亿 12.89万", attributes: [.font: font])
+        let runs = CTLineGetGlyphRuns(CTLineCreateWithAttributedString(reading)) as? [CTRun] ?? []
+        XCTAssertFalse(runs.isEmpty)
+        for run in runs {
+            let runFont = (CTRunGetAttributes(run) as NSDictionary)[kCTFontAttributeName] as! CTFont
+            XCTAssertEqual(CTFontCopyPostScriptName(runFont) as String, font.fontName)
+        }
+    }
+
     @MainActor func testWorkspacePaletteMatchesApprovedLightAndDarkRoles() {
         let roles: [(ColorScheme, [UInt32])] = [
             (.light, [0xF6F8FA, 0xFFFFFF, 0x231B32, 0x60566E, 0x008CE0, 0x00A677,

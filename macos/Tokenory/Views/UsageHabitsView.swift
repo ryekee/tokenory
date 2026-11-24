@@ -28,7 +28,8 @@ struct UsageHabitsView: View {
                         }.frame(maxWidth: .infinity, alignment: .leading)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(L("activity.peak")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
-                            Text(compactTokens(peak.tokens) + " tokens").font(.title3.weight(.medium)).monospacedDigit()
+                            Text("\(Text(compactTokens(peak.tokens)).font(DisplayNumberFont.font(for: .title3))) tokens")
+                                .font(.title3.weight(.medium))
                             Text(Localization.day(peak.key) + " · " + usd(peak.cost)).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                         }.frame(maxWidth: .infinity, alignment: .leading)
                     }.foregroundStyle(WorkspaceStyle.text)
