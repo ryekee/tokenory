@@ -3,26 +3,17 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.2.0</title>
-            <pubDate>Tue, 24 Nov 2026 01:23:58 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.0</link>
-            <sparkle:version>18</sparkle:version>
-            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+            <title>0.2.1</title>
+            <pubDate>Wed, 25 Nov 2026 01:20:57 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.1</link>
+            <sparkle:version>19</sparkle:version>
+            <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.0/Tokenory-0.2.0-macOS-arm64.zip" length="11530406" type="application/octet-stream" sparkle:edSignature="r8d2kiDEVlj749t9ARpM1+VxokwO/RGsLsvD+gfVPdHp0fjxUCUmFD3OvoyFZM71dMjpjEKKE4LH3c3tA73sAw==" />
-        <description xml:lang="en" sparkle:format="markdown">## New Features
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.1/Tokenory-0.2.1-macOS-arm64.zip" length="11532283" type="application/octet-stream" sparkle:edSignature="Mx0qyXnyxUiUdhtqz0rpde8Ma793ZICH3v9VEL7rlAE1VdiMDb1lLg7eTllNlbm6NTdmJc9YQxtKNNQgRoZ6DQ==" />
+        <description xml:lang="en" sparkle:format="markdown">## Fixes
 
-- Turn on iCloud Sync in Settings on each Mac signed in to the same Apple Account. Overview combines their usage and estimated costs, with a This Mac only switch. iCloud stores summaries, and raw logs stay on each Mac.
-- New usage is archived in your Mac’s system time zone. Previously archived and imported records keep their dates.
-- The HUD can hide after 30 seconds without new usage and return when usage arrives. Choose what a triple-click does, and hear a preview when you adjust the volume with sound enabled.
-- On the Speed tab, search by project, turn name, or turn ID. The list shows six turns per page.
-- Find Sources, Import, and Manage Backups in Settings. Refresh rates to preview changes to saved estimates before applying them.
-
-## Fixes
-
-- Fill in pending OpenClaw cost estimates when a matching rate is available.
-- Show the applied long-context rate in MiMo v2 Pro cost details.
+- Fixed a crash that could cause Tokenory to quit at midnight while refreshing today’s usage.
 </description></item>
     </channel>
 </rss>
