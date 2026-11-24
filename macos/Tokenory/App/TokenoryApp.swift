@@ -1,6 +1,26 @@
 import AppKit
 import SwiftUI
 
+/// macOS can post the midnight notification on a background queue.
+@MainActor
+final class SystemClockObserver: NSObject {
+    private let onChange: @MainActor () -> Void
+
+    init(center: NotificationCenter = .default,
+         workspaceCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
+         onChange: @escaping @MainActor () -> Void) {
+        self.onChange = onChange
+        super.init()
+        center.addObserver(self, selector: #selector(clockChanged(_:)), name: .NSCalendarDayChanged, object: nil)
+        center.addObserver(self, selector: #selector(clockChanged(_:)), name: .NSSystemTimeZoneDidChange, object: nil)
+        workspaceCenter.addObserver(self, selector: #selector(clockChanged(_:)), name: NSWorkspace.didWakeNotification, object: nil)
+    }
+
+    @objc private nonisolated func clockChanged(_ notification: Notification) {
+        Task { @MainActor in onChange() }
+    }
+}
+
 @MainActor
 func openDashboard(using openWindow: OpenWindowAction) {
     openWindow(id: "dashboard")
@@ -9,6 +29,8 @@ func openDashboard(using openWindow: OpenWindowAction) {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var clockObserver: SystemClockObserver?
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--light-appearance") {
@@ -22,15 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard ProcessInfo.processInfo.environment["TOKENORY_TESTING"] != "1" else { return }
         NotificationCenter.default.addObserver(self, selector: #selector(workspaceOpened(_:)), name: NSWindow.didBecomeMainNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(workspaceClosed(_:)), name: NSWindow.willCloseNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(systemClockChanged(_:)), name: .NSSystemTimeZoneDidChange, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(systemClockChanged(_:)), name: .NSCalendarDayChanged, object: nil)
-        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(systemClockChanged(_:)), name: NSWorkspace.didWakeNotification, object: nil)
+        clockObserver = SystemClockObserver { UsageStore.shared.systemClockChanged() }
         UsageStore.shared.start()
         HUDController.shared.start()
         UpdateChecker.shared.start()
-    }
-    @objc private func systemClockChanged(_ notification: Notification) {
-        UsageStore.shared.systemClockChanged()
     }
     @objc private func workspaceOpened(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, window.canBecomeMain, !(window is NSPanel) else { return }
