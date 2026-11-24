@@ -3,17 +3,25 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.2.1</title>
-            <pubDate>Wed, 25 Nov 2026 01:20:57 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.1</link>
-            <sparkle:version>19</sparkle:version>
-            <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
+            <title>0.2.2</title>
+            <pubDate>Wed, 25 Nov 2026 01:35:35 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.2</link>
+            <sparkle:version>20</sparkle:version>
+            <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.1/Tokenory-0.2.1-macOS-arm64.zip" length="11532283" type="application/octet-stream" sparkle:edSignature="Mx0qyXnyxUiUdhtqz0rpde8Ma793ZICH3v9VEL7rlAE1VdiMDb1lLg7eTllNlbm6NTdmJc9YQxtKNNQgRoZ6DQ==" />
-        <description xml:lang="en" sparkle:format="markdown">## Fixes
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.2/Tokenory-0.2.2-macOS-arm64.zip" length="21261609" type="application/octet-stream" sparkle:edSignature="UkXzJSBg760vajbv7rqShh+6EZwE3MeArs9by6kjgsA0vB19RATa4aOgN125Odi+XA/7XuHnOWJ5XIU0XkJFDg==" />
+        <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- Fixed a crash that could cause Tokenory to quit at midnight while refreshing today’s usage.
+- Count usage from TRAE CLI, Antigravity Insiders and Copilot SDK logs, including VS Code Agent mode.
+- Recover Codex usage from compressed session archives. A session with both a text copy and a compressed copy is counted once.
+
+## Fixes
+
+- Count distinct Pi requests that share a response ID, and distribute Hermes session totals across days using assistant message times.
+- Estimate Antigravity’s Claude Opus 5.5 and Sonnet 5.5 requests at the model’s API rate across all four effort levels. Previously unpriced requests are filled in when a matching rate is available.
+- The activity calendar now matches the other Overview cards and outlines the day under the pointer. The usage history chart uses stable, rounded axis labels.
+- Speed chart outliers line up with their distribution boxes. Key usage figures use Maple Mono, including Chinese units.
 </description></item>
     </channel>
 </rss>
