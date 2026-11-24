@@ -1,5 +1,5 @@
 // [INPUT]: 使用真实计价、导入和 SQLite 接口。
-// [OUTPUT]: 验证价格匹配、原生请求时间、订阅等价估算、长上下文计价依据、免费路由、待计价回填与历史重估。
+// [OUTPUT]: 验证价格匹配、Antigravity 推理档位、原生请求时间、订阅等价估算、长上下文计价依据、免费路由、待计价回填与历史重估。
 // [POS]: 隔离测试账本，验证计价规则的外部行为。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use tokenory::{
@@ -51,6 +51,81 @@ fn snapshot(input: f64, output: f64) -> PriceSnapshot {
         },
     }])
 }
+#[test]
+fn antigravity_claude_effort_uses_model_rates_and_preserves_speed_rules() {
+    let snapshot = PriceSnapshot::bundled_reference();
+    let mut r = record();
+    r.provider = "anthropic".into();
+    r.tokens = Tokens { input: 1_000, cache_read: 2_000, output: 100, reasoning: 300, ..Default::default() };
+    for client in ["antigravity", "antigravity-cli"] {
+        r.client = client.into();
+        for (model, standard) in [("claude-opus-5-5", 0.0124), ("claude-sonnet-5-5", 0.0062)] {
+            for effort in ["low", "medium", "high", "max"] {
+                r.model = format!("{model}-{effort}");
+                r.metadata = serde_json::json!({"granularity": "event"});
+                let result = estimate("local", &r, &snapshot);
+                assert!((result.cost.unwrap() - standard).abs() < 1e-12);
+                assert!(result.basis.contains(model));
+                r.metadata["inferenceSpeed"] = serde_json::json!({"speed":"fast"});
+                let fast = estimate("local", &r, &snapshot).cost;
+                if model == "claude-opus-5-5" {
+                    assert!((fast.unwrap() - standard * 2.).abs() < 1e-12);
+                } else {
+                    assert!(fast.is_none());
+                }
+            }
+        }
+    }
+    r.metadata = serde_json::json!({});
+    r.model = "claude-opus-5-5-fast".into();
+    assert!(estimate("local", &r, &snapshot).cost.is_none());
+    r.provider = "reseller".into();
+    r.model = "claude-opus-5-5-medium".into();
+    assert!(estimate("local", &r, &snapshot).cost.is_none());
+}
+
+#[test]
+fn antigravity_upgrade_backfills_pending_at_the_active_opus_rate() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = Database::open(root.path()).unwrap();
+    let mut old = PriceSnapshot::bundled_reference();
+    old.entries.retain(|e| e.model == "claude-opus-5-5");
+    old.entries[0].rates.input_cost_per_token = Some(7e-6);
+    let old_id = save_snapshot(&mut db, old).unwrap();
+    db.connection.execute(
+        "INSERT INTO app_state VALUES ('officialCatalog','2026-11-23-openclaw-request-and-routes-v1')", [],
+    ).unwrap();
+    let mut pending = record();
+    pending.client = "antigravity".into();
+    pending.provider = "anthropic".into();
+    pending.model = "claude-opus-5-5-medium".into();
+    tokenory::db::put_record(&db.connection, "local", "", &pending).unwrap();
+    let mut known = pending.clone();
+    known.key = "known".into();
+    known.estimated_cost_usd = Some(0.50);
+    known.price_snapshot_id = Some(old_id);
+    tokenory::db::put_record(&db.connection, "local", "", &known).unwrap();
+
+    tokenory::pricing::initialize(&mut db).unwrap();
+    let (new_id, active) = tokenory::pricing::active_snapshot(&db.connection).unwrap().unwrap();
+    let alias = active.entries.iter().find(|e| e.model == pending.model).unwrap();
+    assert_eq!(alias.matched_key, "claude-opus-5-5");
+    let read = |key: &str| -> UsageRecord {
+        let body: String = db.connection.query_row(
+            "SELECT body FROM usage_records WHERE item_key=?1", [key], |row| row.get(0),
+        ).unwrap();
+        serde_json::from_str(&body).unwrap()
+    };
+    let filled = read(&pending.key);
+    assert!((filled.estimated_cost_usd.unwrap() - 0.017).abs() < 1e-12);
+    assert_eq!(filled.price_snapshot_id, Some(new_id.clone()));
+    assert_eq!(filled.model, pending.model);
+    assert_eq!(filled.source_cost_usd, pending.source_cost_usd);
+    assert_eq!(serde_json::to_value(read(&known.key)).unwrap(), serde_json::to_value(known).unwrap());
+    tokenory::pricing::initialize(&mut db).unwrap();
+    assert_eq!(tokenory::pricing::active_snapshot(&db.connection).unwrap().unwrap().0, new_id);
+}
+
 #[test]
 fn gpt_62_official_rates_cover_cache_speed_context_and_promotion_boundary() {
     let mut p = PriceSnapshot::bundled_reference();
@@ -841,6 +916,11 @@ fn remote_catalog_reprices_only_pending_rows_and_survives_offline_refresh() {
     let mut new_model = data["entries"][1].clone();
     new_model["model"] = "gpt-remote-fixture".into();
     data["entries"].as_array_mut().unwrap().push(new_model);
+    data["entries"].as_array_mut().unwrap().push(serde_json::json!({
+        "provider":"anthropic", "model":"claude-opus-5-5",
+        "source":"https://platform.claude.com/docs/en/about-claude/pricing",
+        "standard":{"input":8,"output":40}, "fast":3
+    }));
     data["entries"][1]["standard"]["output"] = 20.into();
     data["effectiveAt"] = "2020-01-01T00:00:00Z".into();
     // Set a historical cutoff to exercise scheduled rates without a wall-clock dependency.
@@ -850,6 +930,12 @@ fn remote_catalog_reprices_only_pending_rows_and_survives_offline_refresh() {
     let new_id = apply_refresh(&mut db, &upstream, Some(parse(&data).unwrap())).unwrap();
     let applied = load_snapshot(&db.connection, &new_id).unwrap();
     let old = load_snapshot(&db.connection, &old_id).unwrap();
+    let mut opus = record();
+    opus.client = "antigravity".into();
+    opus.provider = "anthropic".into();
+    opus.model = "claude-opus-5-5-medium".into();
+    opus.metadata["inferenceSpeed"] = serde_json::json!({"speed":"fast"});
+    assert!((estimate("local", &opus, &applied).cost.unwrap() - 0.084).abs() < 1e-12);
     assert!((estimate("test", &existing, &old).cost.unwrap() - 0.007).abs() < 1e-12);
     assert!((estimate("test", &existing, &applied).cost.unwrap() - 0.012).abs() < 1e-12);
 

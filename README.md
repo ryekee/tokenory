@@ -43,6 +43,8 @@
 
 Tokenory 按 API 参考费率估算美元费用，单独保留来源报告的成本。缺少适用费率的记录标为待计价。实际订阅费用以服务商账单为准。 OpenClaw 有原生请求时间的记录支持按北京时间计算 DeepSeek 峰谷参考价。小米 Token Plan 用量按对应 MiMo API 参考价折算，OpenRouter 的 Step 3.5 Flash 免费路由按零美元计。
 
+Antigravity 中的 Claude Opus 5.5 和 Sonnet 5.5 保留原始推理档位，各档位按对应模型的 API 费率和实际 token 用量估算。
+
 在「设置 → 价格」点击「刷新费率」，会备份、补齐待计价记录，并预览已有估算按新费率计算后的金额。确认重估后，Tokenory 会备份并写入结果。
 
 ### 历史记录，留在本机
