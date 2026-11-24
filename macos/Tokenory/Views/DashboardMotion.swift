@@ -1,5 +1,5 @@
 // [INPUT]: 已显示的日期范围、格式化读数及其数值。
-// [OUTPUT]: 与 HUD 共享进位轨迹的读数过渡；为面板图形提供范围切换曲线。
+// [OUTPUT]: 大号读数静止与滚动时共用随包分发的等宽字体；与 HUD 共享进位轨迹的读数过渡；为面板图形提供范围切换曲线。
 // [POS]: 统计窗口短时、静音的日期过渡。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -187,23 +187,23 @@ struct DashboardOdometer {
 
 struct DashboardRollingValue: View {
     enum Style {
-        case headline, callout, caption2, semibold(CGFloat)
+        case headline, callout, caption2, displayNumber(CGFloat)
 
-        var font: Font {
+        @MainActor var font: Font {
             switch self {
             case .headline: .headline
             case .callout: .callout
             case .caption2: .caption2
-            case .semibold(let size): .system(size: size, weight: .semibold)
+            case .displayNumber(let size): DisplayNumberFont.font(size: size)
             }
         }
 
-        var drumFont: NSFont {
+        @MainActor var drumFont: NSFont {
             switch self {
             case .headline: .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
             case .callout: .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
             case .caption2: .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
-            case .semibold(let size): .monospacedDigitSystemFont(ofSize: size, weight: .semibold)
+            case .displayNumber(let size): DisplayNumberFont.native(size: size)
             }
         }
     }

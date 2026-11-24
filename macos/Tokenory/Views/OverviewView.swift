@@ -11,7 +11,7 @@ private struct CodexSubagentsView: View {
     let remote: [CodexSubagentReport]
     let codexSummary: UsageSummary?
     @Environment(\.colorScheme) private var colorScheme
-    private let metricFont = Font.title3.weight(.medium).monospacedDigit()
+    private var metricFont: Font { DisplayNumberFont.font(for: .title3) }
 
     private var tokensShare: Double? {
         subagentShare(Double(report.tokens), of: codexSummary.map { Double($0.tokens) })
@@ -468,7 +468,7 @@ struct OverviewView: View {
             GridRow(alignment: .firstTextBaseline) {
                 ForEach(fields) { field in
                     DashboardRollingValue(text: field.value, value: field.amount, range: range,
-                                          style: .semibold(field.primary ? 32 : 23), themed: true)
+                                          style: .displayNumber(field.primary ? 32 : 23), themed: true)
                         .fixedSize()
                         .cursorTooltip(enabled: multiDevice && field.local != nil) {
                             OverviewDeviceReadout(rows: totalRows)

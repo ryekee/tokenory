@@ -250,7 +250,7 @@ private struct TurnsContent: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L(key)).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                DashboardRollingValue(text: value, value: amount, range: isActive ? range : nil, style: .semibold(32))
+                DashboardRollingValue(text: value, value: amount, range: isActive ? range : nil, style: .displayNumber(32))
                 Text(unit).font(.caption).foregroundStyle(.secondary)
             }
             .lineLimit(1).minimumScaleFactor(0.75).textSelection(.enabled)
@@ -461,7 +461,7 @@ private struct TurnDetail: View {
             }
             VStack(alignment: .leading, spacing: 5) {
                 Text(L("turns.duration")).font(.caption).foregroundStyle(.secondary)
-                Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.duration(turn.durationMs)).font(.system(size: 32, weight: .semibold)).monospacedDigit()
+                Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.duration(turn.durationMs)).font(DisplayNumberFont.font(size: 32))
             }
             if let wait = turn.toolWaitMs {
                 VStack(spacing: 8) {
@@ -535,7 +535,7 @@ private struct TurnMetricValue: View {
     let unit: String
     let size: CGFloat
     var body: some View {
-        Text("\(Text(value).font(.system(size: size, weight: .semibold)).foregroundStyle(.primary))\(Text(unit.isEmpty ? "" : " " + unit).font(.caption).foregroundStyle(.secondary))")
+        Text("\(Text(value).font(DisplayNumberFont.font(size: size)).foregroundStyle(.primary))\(Text(unit.isEmpty ? "" : " " + unit).font(.caption).foregroundStyle(.secondary))")
             .monospacedDigit().lineLimit(1).minimumScaleFactor(0.75).textSelection(.enabled)
     }
 }
