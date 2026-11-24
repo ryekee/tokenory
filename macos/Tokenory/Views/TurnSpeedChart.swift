@@ -1,5 +1,7 @@
+// From Uiverse.io by NK2552003 - https://uiverse.io/NK2552003/silly-moth-73
+// MIT License, Copyright (c) NK2552003 (Nitish)
 // [INPUT]: Committed range, calendar-based turn distributions, and selected turn identity.
-// [OUTPUT]: Speed boxes and sparse/outlier points with hover readouts and bucket selection.
+// [OUTPUT]: Speed distributions with outliers aligned to their boxes and timestamped turn readouts.
 // [POS]: Keeps pointer state local and uses the reporting calendar's time axis.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -9,6 +11,11 @@ struct TurnSpeedChart: View {
     private enum Target: Equatable {
         case bucket(start: Date, center: Date)
         case turn(AgentTurn)
+
+        func plotTime(in timeline: TurnSpeedTimeline) -> Date {
+            if case .turn(let turn) = self { return timeline.plotTime(for: turn) }
+            return time
+        }
 
         var time: Date {
             switch self {
@@ -141,7 +148,7 @@ struct TurnSpeedChart: View {
                             hovered = target
                             if let target { select(target) }
                         }
-                    if let hovered, let x = proxy.position(forX: hovered.time) {
+                    if let hovered, let x = proxy.position(forX: hovered.plotTime(in: timeline)) {
                         let width: CGFloat = 208
                         let anchor = frame.minX + x
                         let left = anchor + width + 12 <= geometry.size.width ? anchor + 12 : anchor - width - 12
@@ -171,7 +178,7 @@ struct TurnSpeedChart: View {
             context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, lineCap: .round))
         }
         func dot(_ turn: AgentTurn, radius: CGFloat, hollow: Bool) {
-            guard let x = proxy.position(forX: turn.start), let y = proxy.position(forY: turn.speed) else { return }
+            guard let x = proxy.position(forX: timeline.plotTime(for: turn)), let y = proxy.position(forY: turn.speed) else { return }
             let path = Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
             context.fill(path, with: .color(hollow ? surface : accent))
             if hollow { context.stroke(path, with: .color(accent), lineWidth: 1.25) }
@@ -212,7 +219,7 @@ struct TurnSpeedChart: View {
         var closest: AgentTurn?
         var distance = radius
         for turn in timeline.points(in: first..<last) {
-            guard let x = proxy.position(forX: turn.start), let y = proxy.position(forY: turn.speed) else { continue }
+            guard let x = proxy.position(forX: timeline.plotTime(for: turn)), let y = proxy.position(forY: turn.speed) else { continue }
             let next = hypot(x - point.x, y - point.y)
             if next < distance {
                 closest = turn

@@ -79,7 +79,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 ## Turn speed
 
 - Group by local reporting time. Use hours for one day, days for 2–7 days, and Monday-start weeks for longer ranges and All Time. Clip edge weeks to the selected dates.
-- Show a quartile box and median tick for each group with at least three turns. Plot sparse turns and outliers individually and leave empty periods blank. Hover shows the period, measured values and turn count. Selecting a box filters the list to that period and selects the observed turn closest to the median.
+- Show a quartile box and median tick for each group with at least three turns. Draw each outlier at the horizontal center of its box. Plot sparse turns at their start times and leave empty periods blank. Inspecting an outlier shows its actual turn timestamp. Hover shows the period, measured values and turn count. Selecting a box filters the list to that period and selects the observed turn closest to the median.
 
 ## Annual calendar
 

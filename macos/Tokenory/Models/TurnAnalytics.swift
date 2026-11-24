@@ -1,5 +1,5 @@
 // [INPUT]: Multi-agent completed main-turn analytics and support capabilities from the Rust worker.
-// [OUTPUT]: Validated turns, searchable projects, titles and IDs, whole-range summaries and speed distributions.
+// [OUTPUT]: Validated turns, searchable projects, titles and IDs, whole-range summaries and speed distributions with bucket-aligned outliers.
 // [POS]: Turn analytics presentation boundary; independent of priced usage pagination.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -192,6 +192,7 @@ struct TurnSpeedTimeline: Sendable {
     let maxSpeed: Double
     private let bucketsByCalendarStart: [Date: TurnSpeedBucket]
     private let visiblePoints: [AgentTurn]
+    private let outlierCenters: [AgentTurn.ID: Date]
 
     fileprivate init(chronologicalPoints points: [AgentTurn], query: TurnQuery) {
         var calendar = Localization.reportingCalendar
@@ -210,7 +211,7 @@ struct TurnSpeedTimeline: Sendable {
         let end = to.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
             ?? points.last.flatMap { calendar.dateInterval(of: component, for: $0.start)?.end }
         guard let start, let end, start < end else {
-            domain = nil; buckets = []; bucketsByCalendarStart = [:]; visiblePoints = []; maxSpeed = 0
+            domain = nil; buckets = []; bucketsByCalendarStart = [:]; visiblePoints = []; outlierCenters = [:]; maxSpeed = 0
             return
         }
 
@@ -225,7 +226,14 @@ struct TurnSpeedTimeline: Sendable {
         let buckets = mapped.map(\.1).sorted { $0.start < $1.start }
         self.buckets = buckets
         bucketsByCalendarStart = Dictionary(uniqueKeysWithValues: mapped)
-        visiblePoints = buckets.flatMap(\.visiblePoints).sorted { ($0.startMs, $0.id) < ($1.startMs, $1.id) }
+        var centers: [AgentTurn.ID: Date] = [:]
+        for bucket in buckets {
+            for turn in bucket.distribution?.outliers ?? [] { centers[turn.id] = bucket.center }
+        }
+        outlierCenters = centers
+        // Buckets are chronological. Within each bucket, sparse turns are chronological
+        // and all outliers share a single plotted time.
+        visiblePoints = buckets.flatMap(\.visiblePoints)
         maxSpeed = included.lazy.map(\.speed).max() ?? 0
     }
 
@@ -235,6 +243,8 @@ struct TurnSpeedTimeline: Sendable {
         return bucket
     }
 
+    func plotTime(for turn: AgentTurn) -> Date { outlierCenters[turn.id] ?? turn.start }
+
     func points(in interval: Range<Date>) -> ArraySlice<AgentTurn> {
         visiblePoints[lowerBound(interval.lowerBound)..<lowerBound(interval.upperBound)]
     }
@@ -243,7 +253,7 @@ struct TurnSpeedTimeline: Sendable {
         var lower = 0, upper = visiblePoints.count
         while lower < upper {
             let mid = (lower + upper) / 2
-            if visiblePoints[mid].start < date { lower = mid + 1 } else { upper = mid }
+            if plotTime(for: visiblePoints[mid]) < date { lower = mid + 1 } else { upper = mid }
         }
         return lower
     }

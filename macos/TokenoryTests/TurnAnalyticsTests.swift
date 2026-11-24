@@ -1,5 +1,5 @@
 // [INPUT]: Typed turn fixtures and IPC-shaped JSON.
-// [OUTPUT]: Verifies summary definitions, title and ID search, missing values and calendar-based speed distributions.
+// [OUTPUT]: Verifies summary definitions, search, speed distributions and lookup at the plotted positions of outliers and sparse turns.
 // [POS]: Native turn analytics contract; no synthetic observations in gaps.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import XCTest
@@ -86,21 +86,31 @@ final class TurnAnalyticsTests: XCTestCase {
         XCTAssertNil(first.distribution)
         XCTAssertEqual(first.visiblePoints.map(\.id), ["first", "last"])
         XCTAssertEqual(first.visiblePoints.map(\.speed), [0, 10])
+        XCTAssertEqual(timeline.points(in: start..<(start + 1)).map(\.id), ["first"])
+        XCTAssertEqual(timeline.plotTime(for: first.visiblePoints[1]), first.visiblePoints[1].start)
     }
 
     func testHourlyDistributionKeepsOutliersAndSelectsAnObservedTurnForTheMedian() throws {
+        let day = try XCTUnwrap(Localization.date("2026-11-18"))
+        let midnight = Int64(day.timeIntervalSince1970 * 1000)
         let rows = [0, 20, 22, 24, 25, 26, 28, 100].enumerated().map { index, speed in
-            turn(String(index), start: Int64(1000 + index), duration: 1000, tokens: Int64(speed),
+            turn(String(index), start: midnight + Int64(index) * 500_000, duration: 1000, tokens: Int64(speed),
                  reasoning: nil, ttft: nil)
         }
         let data = TurnPresentation(report: TurnReport(revision: 1, models: [], turns: rows.reversed()),
-                                    query: TurnQuery(from: "1970-01-01", to: "1970-01-01"))
-        let hour = try XCTUnwrap(data.speedTimeline?.buckets.first)
+                                    query: TurnQuery(from: "2026-11-18", to: "2026-11-18"))
+        let timeline = try XCTUnwrap(data.speedTimeline)
+        let center = day.addingTimeInterval(1800)
+        let hour = try XCTUnwrap(timeline.bucket(at: center))
         let stats = try XCTUnwrap(hour.distribution)
         XCTAssertEqual(stats.middle, 21.5...26.5)
         XCTAssertEqual(stats.median, 24.5)
         XCTAssertEqual(stats.whiskers, 20...28)
         XCTAssertEqual(hour.visiblePoints.map(\.speed), [0, 100])
+        XCTAssertEqual(hour.visiblePoints.map(\.startMs), [midnight, midnight + 3_500_000])
+        XCTAssertEqual(timeline.points(in: center..<(center + 1)).map(\.id), ["0", "7"])
+        XCTAssertTrue(timeline.points(in: day..<(day + 1)).isEmpty)
+        XCTAssertEqual(timeline.plotTime(for: stats.representative), stats.representative.start)
         XCTAssertEqual(stats.representative.id, "3")
     }
 
