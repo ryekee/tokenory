@@ -28,6 +28,11 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 - 源成本、标准费率估算和订阅扣费保持独立。
 - 修改模块时更新文件契约、模块地图和对应使用说明。
 
+## 计价维护
+
+- **需要修改计价逻辑**：在 App 端修复对应逻辑，包括 Rust worker。模型归属、请求时间、token 类别或计费规则错误属于此类。
+- **模型已正确识别，仅缺少费率**：更新 `cli/tokenory/data/remote-pricing.json`，保留仍有效的条目并递增 `revision`。用 `script/publish_pricing.py` 独立发布到 GitHub `updates` 分支的 `pricing.json`，并验证已发布版本的 App 刷新费率后能回填待计价记录。
+
 ## Git 提交
 
 - 提交标题使用 `[标签] 简短摘要`，标签用小写，方括号后留一个空格。例如 `[docs] Clarify backup instructions`。
