@@ -1,5 +1,5 @@
 // [INPUT]: Combined annual activity, per-device calendars and day navigation callback.
-// [OUTPUT]: Fixed YlGnBu calendar with isolated hover readout and direct day navigation.
+// [OUTPUT]: Fixed YlGnBu calendar with a theme-accent cell outline, isolated hover readout and direct day navigation.
 // [POS]: Native overview history section; no palette customization.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -21,7 +21,7 @@ struct UsageActivityView: View {
         }
     }
     var body: some View {
-        WorkspacePanel(preservesCalendarAppearance: true) {
+        WorkspacePanel {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
                     Text(L("activity.title")).font(.headline)
@@ -44,6 +44,12 @@ struct UsageActivityView: View {
     private func calendar(_ activity: UsageActivity) -> some View {
         let weeks = (activity.leadingDays + activity.days.count + 6) / 7
         let maxTokens = activity.days.map(\.tokens).max() ?? 0
+        let palette = palette
+        let fill: (ActivityDay) -> Color = { day in
+            guard day.tokens > 0 else { return Color.primary.opacity(0.045) }
+            let level = min(3, Int(Double(day.tokens) / Double(max(1, maxTokens)) * 4))
+            return palette[level]
+        }
         let partial = activity.days.contains { ($0.summary?.unpricedTokens ?? 0) > 0 }
         let names = showsDeviceBreakdown ? [L("cloud.overview.total"), store.localDeviceName] + store.remoteActivityCalendars.keys.map(store.deviceName) : []
         let width = CursorTooltipLayout.summaryWidth(names: names, tokens: maxTokens, cost: activity.days.compactMap(\.cost).max(), partial: partial)
@@ -77,7 +83,7 @@ struct UsageActivityView: View {
                                         let day = activity.days[i]
                                         Button { hover.index = nil; selectDay(day.key) } label: {
                                             RoundedRectangle(cornerRadius: 2)
-                                                .fill(day.tokens == 0 ? Color.primary.opacity(0.045) : palette[min(3, Int(Double(day.tokens) / Double(max(1, maxTokens)) * 4))])
+                                                .fill(fill(day))
                                                 .frame(width: cell, height: 11)
                                         }.buttonStyle(.plain)
                                             .accessibilityLabel(day.label)
@@ -101,9 +107,12 @@ struct UsageActivityView: View {
                         case .ended: hover.index = nil
                         }
                     }
-                    .background {
-                        ActivityTooltip(hover: hover, pointer: tooltipPointer, activity: activity, cell: cell, showsDeviceBreakdown: showsDeviceBreakdown,
-                                        width: width, reservesPendingLine: partial)
+                    .overlay {
+                        ActivityHoverLayer(hover: hover, pointer: tooltipPointer, activity: activity, cell: cell,
+                                           fill: fill, showsDeviceBreakdown: showsDeviceBreakdown,
+                                           width: width, reservesPendingLine: partial)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                     }
                 }
             }.scrollIndicators(.hidden)
@@ -173,25 +182,36 @@ enum ActivityMonthLabelLayout {
     var index: Int?
 }
 
-private struct ActivityTooltip: View {
+private struct ActivityHoverLayer: View {
     let hover: ActivityHover
     let pointer: TooltipPointer
     let activity: UsageActivity
     let cell: CGFloat
+    let fill: (ActivityDay) -> Color
     let showsDeviceBreakdown: Bool
     let width: CGFloat
     let reservesPendingLine: Bool
     @Environment(UsageStore.self) private var store
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         if let index = hover.index, activity.days.indices.contains(index) {
             let day = activity.days[index]
             let offset = index + activity.leadingDays
             let mark = CGRect(x: CGFloat(offset / 7) * (cell + 3), y: 19 + CGFloat(offset % 7) * 14, width: cell, height: 11)
-            Color.clear.selectedTooltip(avoiding: mark, pointer: pointer) {
-                UsageBucketReadout(title: day.label, summary: day.summary, tokens: day.tokens, cost: day.cost,
-                                   rows: showsDeviceBreakdown ? rows(for: day, at: index) : [], width: width, reservesPendingLine: reservesPendingLine)
-            }
+            Color.clear
+                .overlay(alignment: .topLeading) {
+                    let border = RoundedRectangle(cornerRadius: 2)
+                    border.fill(WorkspaceStyle.surface(scheme))
+                        .overlay { border.strokeBorder(WorkspaceStyle.selection, lineWidth: 1) }
+                        .overlay { RoundedRectangle(cornerRadius: 1).fill(fill(day)).padding(2) }
+                        .frame(width: mark.width, height: mark.height)
+                        .offset(x: mark.minX, y: mark.minY)
+                }
+                .selectedTooltip(avoiding: mark, pointer: pointer) {
+                    UsageBucketReadout(title: day.label, summary: day.summary, tokens: day.tokens, cost: day.cost,
+                                       rows: showsDeviceBreakdown ? rows(for: day, at: index) : [], width: width, reservesPendingLine: reservesPendingLine)
+                }
         }
     }
     private func rows(for day: ActivityDay, at index: Int) -> [OverviewDeviceRow] {

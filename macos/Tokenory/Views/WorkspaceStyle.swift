@@ -1,6 +1,7 @@
 // [INPUT]: The macOS appearance and the data role of each mark.
 // [OUTPUT]: Tokyo Neon and Tokyo Neon Light colors, dropdown colors, panel surfaces and shared layout metrics.
-// [POS]: Statistics workspace. The annual calendar has its own surface and YlGnBu scale.
+// [POS]: Shared colors and panel surfaces for the statistics workspace.
+// [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
 private struct WorkspaceTone: ShapeStyle, Hashable {
@@ -63,22 +64,14 @@ enum WorkspaceStyle {
 
 struct WorkspacePanel<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
-    var preservesCalendarAppearance = false
     @ViewBuilder let content: Content
-
-    private var background: Color {
-        if preservesCalendarAppearance {
-            return scheme == .dark ? Color(red: 0.13, green: 0.14, blue: 0.155) : Color(nsColor: .controlBackgroundColor)
-        }
-        return WorkspaceStyle.surface(scheme)
-    }
 
     var body: some View {
         // Native controls use inherited foreground styles to draw their inactive bezels.
         content
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(background, in: RoundedRectangle(cornerRadius: WorkspaceStyle.panelRadius))
+            .background(WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: WorkspaceStyle.panelRadius))
             .overlay {
                 RoundedRectangle(cornerRadius: WorkspaceStyle.panelRadius)
                     .strokeBorder(.primary.opacity(scheme == .dark ? 0.05 : 0.035), lineWidth: 0.5)
