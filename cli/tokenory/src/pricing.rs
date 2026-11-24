@@ -1,5 +1,5 @@
 // [INPUT]: 读取 UsageRecord、官方费率和 SQLite 账本。
-// [OUTPUT]: 提供价格快照、逐请求及订阅等价估算，记录是否应用长上下文费率；支持首次补价与重估备份。
+// [OUTPUT]: 提供价格快照、逐请求及订阅等价估算。Antigravity 的 Claude 5.5 推理档位沿用对应模型的费率；首次补价前备份。
 // [POS]: 在采集与查询之间保存可追溯的计价依据；GPT-6.2 Ultrafast 按快照日期选择优惠价。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -66,6 +66,11 @@ impl PriceSnapshot {
         }).collect())
     }
     pub fn bundled_reference() -> Self {
+        let mut snapshot = Self::bundled_base();
+        snapshot.add_antigravity_effort_prices();
+        snapshot
+    }
+    fn bundled_base() -> Self {
         let mut p = Self::deepseek_reference();
         // Explicit published model IDs only. Provider matching is done before pricing.
         for (model, input, output, cache) in [
@@ -176,6 +181,25 @@ impl PriceSnapshot {
             },
         });
         p
+    }
+    fn add_antigravity_effort_prices(&mut self) {
+        // https://antigravity.google/docs/enterprise documents these two models and four levels.
+        for model in ["claude-opus-5-5", "claude-sonnet-5-5"] {
+            let Some(base) = self.entries.iter()
+                .find(|e| e.provider == "anthropic" && e.model == model).cloned()
+            else { continue };
+            for effort in ["low", "medium", "high", "max"] {
+                let alias = format!("{model}-{effort}");
+                if self.entries.iter().any(|e| e.provider == base.provider && e.model == alias) {
+                    continue;
+                }
+                self.entries.push(PriceEntry {
+                    model: alias,
+                    assumption: format!("{}; Antigravity {effort} effort at {model} API rates", base.assumption),
+                    ..base.clone()
+                });
+            }
+        }
     }
     fn openclaw_references() -> Vec<PriceEntry> {
         let mut entries = Vec::new();
@@ -347,7 +371,7 @@ pub fn estimate(source: &str, r: &UsageRecord, p: &PriceSnapshot) -> Estimate {
             Some("fast")
                 if official_anthropic
                     && matches!(
-                        r.model.as_str(),
+                        e.matched_key.as_str(),
                         "claude-opus-4-8" | "claude-opus-5" | "claude-opus-5-5"
                     ) =>
             {
@@ -574,8 +598,7 @@ pub fn active_snapshot(c: &rusqlite::Connection) -> Result<Option<(String, Price
         .transpose()
 }
 pub fn initialize(db: &mut Database) -> Result<()> {
-    const PREVIOUS: &str = "2026-11-20-codex-review-reference-v1";
-    const VERSION: &str = "2026-11-23-openclaw-request-and-routes-v1";
+    const VERSION: &str = "2026-11-24-antigravity-claude-effort-v1";
     let installed: Option<String> = db
         .connection
         .query_row(
@@ -588,11 +611,11 @@ pub fn initialize(db: &mut Database) -> Result<()> {
         let mut current = active_snapshot(&db.connection)?
             .map(|(_, p)| p)
             .unwrap_or_else(|| PriceSnapshot::new(vec![]));
-        let additions = if installed.as_deref() == Some(PREVIOUS) {
-            // Preserve unrelated active prices, including newer downloaded tariffs.
-            PriceSnapshot::openclaw_references()
-        } else {
-            PriceSnapshot::bundled_reference().entries
+        // Apply only missing upgrades so newer downloaded base rates stay active.
+        let additions = match installed.as_deref() {
+            Some("2026-11-23-openclaw-request-and-routes-v1") => Vec::new(),
+            Some("2026-11-20-codex-review-reference-v1") => PriceSnapshot::openclaw_references(),
+            _ => PriceSnapshot::bundled_base().entries,
         };
         for entry in additions {
             current
@@ -600,6 +623,7 @@ pub fn initialize(db: &mut Database) -> Result<()> {
                 .retain(|e| e.provider != entry.provider || e.model != entry.model);
             current.entries.push(entry);
         }
+        current.add_antigravity_effort_prices();
         current.created_at = chrono::Utc::now().to_rfc3339();
         save_snapshot(db, current)?;
         db.connection.execute("INSERT INTO app_state(key,value) VALUES ('officialCatalog',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [VERSION])?;
@@ -622,7 +646,7 @@ pub(crate) fn snapshot_with_feed(
     service: &PricingService,
     feed: Option<&crate::remote_pricing::Feed>,
 ) -> Result<PriceSnapshot> {
-    let mut bundled = PriceSnapshot::bundled_reference();
+    let mut bundled = PriceSnapshot::bundled_base();
     if let Some(feed) = feed {
         let at = chrono::DateTime::parse_from_rfc3339(&bundled.created_at)?;
         for entry in feed.prices(at) {
@@ -630,6 +654,7 @@ pub(crate) fn snapshot_with_feed(
             bundled.entries.push(entry);
         }
     }
+    bundled.add_antigravity_effort_prices();
     let mut p = bundled.clone();
     let rows = {
         let mut stmt=db.connection.prepare("SELECT provider,model,sum(input),sum(output),sum(cache_read),sum(cache_write),sum(reasoning) FROM usage_records GROUP BY provider,model")?;

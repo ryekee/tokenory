@@ -20,7 +20,7 @@ hourly.rs: 验证系统时区的小时汇总、夏令时重复小时、不同账
 identity.rs: 验证 identity 的账本接口和行为。
 ipc.rs: 在实际 worker 上验证请求、带 UTF-8 的快照分块拼接及后续请求。
 migration.rs: 验证 migration 的账本接口和行为。
-pricing.rs: 验证 pricing 的账本接口和行为，覆盖 GPT-6.2 费率、长上下文、速度及优惠截止边界、远程费率覆盖、OpenClaw 时间依据、MiMo 订阅和长上下文计价依据、免费路由、旧库的首次补价和离线回退。
+pricing.rs: 验证 pricing 的账本接口和行为，覆盖 Antigravity Claude 5.5 的推理档位及升级补价、GPT-6.2 费率、长上下文、速度及优惠截止边界、远程费率覆盖、OpenClaw 时间依据、MiMo 订阅和长上下文计价依据、免费路由、旧库的首次补价和离线回退。
 
 
 price_catalog.rs: 验证未使用供应商、峰谷与参考规则、订阅价格边界。
