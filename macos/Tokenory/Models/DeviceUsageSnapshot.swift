@@ -1,5 +1,5 @@
 // [INPUT]: One versioned, aggregate-only worker snapshot per selected Mac.
-// [OUTPUT]: Filtered Overview and activity reports for one Mac or their sum.
+// [OUTPUT]: Filtered Overview including models by tool, and activity reports for one Mac or their sum.
 // [POS]: Shared device-snapshot wire format and presentation aggregation.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -71,6 +71,7 @@ struct DeviceUsageSnapshot: Codable, Sendable {
             revision: combinedRevision(devices), summary: result.total.summary, daily: ordered(result.days),
             clients: ranked(result.clients), providers: ranked(result.providers), models: ranked(result.models),
             details: [], hourly: filter.from != nil && filter.from == filter.to ? result.hourly : nil,
+            clientModels: result.clientModels.mapValues(ranked),
             codexSubagents: agents.hasActivity ? agents : nil
         )
     }
@@ -155,6 +156,7 @@ private struct DeviceOverviewAccumulator {
     var clients: [String: DeviceUsageAccumulator] = [:]
     var providers: [String: DeviceUsageAccumulator] = [:]
     var models: [String: DeviceUsageAccumulator] = [:]
+    var clientModels: [String: [String: DeviceUsageAccumulator]] = [:]
     var hours: [String: DeviceUsageAccumulator] = [:]
     var unallocated = DeviceUsageAccumulator()
     var hourly: HourlyUsage { HourlyUsage(buckets: ordered(hours), unallocated: unallocated.summary) }
@@ -165,6 +167,7 @@ private struct DeviceOverviewAccumulator {
         clients[bucket.client, default: .init()].add(bucket)
         providers[bucket.provider, default: .init()].add(bucket)
         models[bucket.model, default: .init()].add(bucket)
+        clientModels[bucket.client, default: [:]][bucket.model, default: .init()].add(bucket)
         if let hour = bucket.hour {
             let key = "\(bucket.date)T\(String(format: "%02d", hour)):00:00+08:00"
             hours[key, default: .init()].add(bucket)

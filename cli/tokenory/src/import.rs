@@ -1,5 +1,5 @@
 // [INPUT]: 历史导入数据、覆盖选择和账本。
-// [OUTPUT]: 限时限量的预览、导入批次与可撤销的覆盖历史；应用后清除预览。
+// [OUTPUT]: 自动识别支持的文件格式、生成限时预览并保留可撤销的覆盖历史。
 // [POS]: 导入边界；实际用量和撤销历史不受预览清理影响。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 pub mod cc_switch;
@@ -152,6 +152,15 @@ pub fn preview_import(
     bytes: &[u8],
     timezone: Option<String>,
 ) -> Result<ImportPreview> {
+    let source = if source == "auto" {
+        match bytes.iter().find(|byte| !byte.is_ascii_whitespace()) {
+            Some(b'[') => "cc-switch",
+            Some(b'{') => "tokens-ci",
+            _ => bail!("choose a CC Switch rollup or tokens.ci snapshot JSON file"),
+        }
+    } else {
+        source
+    };
     let mut records = match source {
         "cc-switch" => cc_switch::parse(bytes, timezone.clone())?,
         "tokens-ci" => tokens_ci::parse(bytes, timezone.clone())?,
