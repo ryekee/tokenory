@@ -1,5 +1,5 @@
 // [INPUT]: Private-library state and deliberate user actions.
-// [OUTPUT]: iCloud sync and storage cards with live relative status and a Delete Data action with two-step confirmation.
+// [OUTPUT]: iCloud sync and storage cards with live relative status, inline errors and two-step deletion.
 // [POS]: iCloud settings section.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -58,7 +58,7 @@ struct DeviceSyncSettings: View {
                         }
                     }
                     if sync.pausing { Text(L("cloud.pausing")).font(.callout).foregroundStyle(.secondary) }
-                    if let message = sync.message { Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
+                    if let message = sync.message { WorkspaceErrorMessage(title: message) {} }
                     if let notice = sync.compatibilityNotice { Text(notice).font(.callout).foregroundStyle(.secondary) }
                 }
             }

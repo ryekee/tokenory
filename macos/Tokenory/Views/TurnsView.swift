@@ -1,5 +1,5 @@
 // [INPUT]: Lazy multi-agent turn report, shared date range and local client/model selection.
-// [OUTPUT]: Turn analytics with six-row pages, project/title/ID search and selected-turn metrics.
+// [OUTPUT]: Turn analytics with six-row pages, project/title/ID search, selected-turn metrics and retryable error cards.
 // [POS]: Native speed analysis. The chart and list share turn selection across filters and pages.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -48,29 +48,16 @@ struct TurnsView: View {
             if let data = store.turnAnalytics, !data.points.isEmpty, let displayed = store.turnsQuery,
                requestedQuery == nil || displayed == requestedQuery || waiting {
                 if let error = store.turnsError {
-                    HStack(alignment: .top) {
-                        Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(L("turns.load_failed"))
-                            DisclosureGroup(L("error.details")) { Text(error).textSelection(.enabled) }
-                        }
-                        Spacer()
-                        retryButton
-                    }.font(.caption).padding(.horizontal, 22).padding(.bottom, 12)
+                    errorCard(error).padding(.bottom, 12)
                 }
                 TurnsContent(data: data, range: DashboardDateSpan(from: displayed.from, to: displayed.to),
                              isActive: isActive, selectedID: $selectedID, order: $order, page: $page)
             } else if waiting {
                 ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = store.turnsError {
-                ContentUnavailableView {
-                    Label(L("turns.load_failed"), systemImage: "exclamationmark.circle")
-                } description: {
-                    Text(error).textSelection(.enabled)
-                } actions: {
-                    retryButton
+                ScrollView {
+                    errorCard(error).padding(.bottom, 22)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ContentUnavailableView {
                     Label(L("turns.empty"), systemImage: "stopwatch")
@@ -92,8 +79,13 @@ struct TurnsView: View {
         }
     }
 
-    private var retryButton: some View {
-        Button(L("turns.retry")) { Task { await store.loadAgentTurns(query, force: true) } }
+    private func errorCard(_ detail: String) -> some View {
+        WorkspacePanel(surface: WorkspaceStyle.warningSurface) {
+            WorkspaceErrorMessage(title: L("turns.load_failed"), detail: detail) {
+                Button(L("turns.retry")) { Task { await store.loadAgentTurns(query, force: true) } }
+            }
+        }
+        .padding(.horizontal, 22)
     }
 }
 

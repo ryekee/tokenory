@@ -1,5 +1,5 @@
 // [INPUT]: Shared, persisted HUD preferences and local audio service.
-// [OUTPUT]: Visibility, idle-hide switch, triple-click action, position and stepped audio controls with live preview.
+// [OUTPUT]: Visibility, idle-hide switch, triple-click action, position and stepped audio controls with live preview and inline errors.
 // [POS]: Settings section and its sound controls.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -86,7 +86,7 @@ struct HUDAudioControls: View {
                 }
                 .frame(maxWidth: 300)
             }
-            if let error = sound.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
+            if let error = sound.error { WorkspaceErrorMessage(title: error) {} }
         }
     }
 }

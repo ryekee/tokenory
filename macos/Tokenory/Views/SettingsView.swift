@@ -1,5 +1,5 @@
 // [INPUT]: 接收用量存储、更新服务及系统登录项状态。
-// [OUTPUT]: 提供各项设置、费率刷新后的重算预览、采集保存状态和备份管理菜单。
+// [OUTPUT]: 提供各项设置、费率刷新后的重算预览、采集和备份恢复状态及行内错误。
 // [POS]: 设置窗口入口；价格目录交给 PriceCatalogView 展示。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -264,7 +264,7 @@ struct SettingsView: View {
                         }
                     }
                     if let error = updates.startupError {
-                        Label(error, systemImage: "exclamationmark.circle").font(.callout).textSelection(.enabled)
+                        WorkspaceErrorMessage(title: error) {}
                     }
                 }
             }
@@ -352,8 +352,7 @@ struct SettingsView: View {
                         ))
                         Text(L("settings.paths_note")).font(.caption).foregroundStyle(.secondary)
                         if let conflict = duplicateScanPathClient {
-                            Text(LF("settings.duplicate_path", clientName(conflict)))
-                                .font(.caption).foregroundStyle(.red)
+                            WorkspaceErrorMessage(title: LF("settings.duplicate_path", clientName(conflict))) {}
                         }
                     }
                     .disabled(collectionStatus?.isPending == true)
@@ -364,53 +363,51 @@ struct SettingsView: View {
     }
 
     private var collectionSaveControl: some View {
-        VStack(alignment: .trailing, spacing: 8) {
-            Button(action: saveSettings) {
-                ZStack {
-                    // Keep the button width stable while the status changes.
-                    ForEach(["settings.save", "settings.saving", "settings.saved", "action.retry"], id: \.self) { key in
-                        Label(L(key), systemImage: "checkmark").hidden()
-                    }
-                    if let status = collectionStatus {
-                        switch status.phase {
-                        case .pending:
-                            HStack(spacing: 6) {
-                                ProgressView().controlSize(.small)
-                                Text(status.message)
-                            }
-                        case .succeeded:
-                            Label(status.message, systemImage: "checkmark")
-                        case .failed:
-                            Text(L("action.retry"))
-                        }
-                    } else {
-                        Text(L("settings.save"))
-                    }
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(busy || collectionStatus?.isSucceeded == true || store.settings == nil || !defaultPathsLoaded || duplicateScanPathClient != nil)
+        Group {
             if case .failed(let detail)? = collectionStatus?.phase {
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(L("settings.save_failed"))
-                    DisclosureGroup(L("error.details")) {
-                        Text(detail).font(.caption).textSelection(.enabled)
-                    }
-                }
-                .font(.callout)
+                WorkspaceErrorMessage(title: L("settings.save_failed"), detail: detail) { collectionSaveButton }
+            } else {
+                collectionSaveButton.frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private var collectionSaveButton: some View {
+        Button(action: saveSettings) {
+            ZStack {
+                // Keep the button width stable while the status changes.
+                ForEach(["settings.save", "settings.saving", "settings.saved", "action.retry"], id: \.self) { key in
+                    Label(L(key), systemImage: "checkmark").hidden()
+                }
+                if let status = collectionStatus {
+                    switch status.phase {
+                    case .pending:
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text(status.message)
+                        }
+                    case .succeeded:
+                        Label(status.message, systemImage: "checkmark")
+                    case .failed:
+                        Text(L("action.retry"))
+                    }
+                } else {
+                    Text(L("settings.save"))
+                }
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.regular)
+        .disabled(busy || collectionStatus?.isSucceeded == true || store.settings == nil || !defaultPathsLoaded || duplicateScanPathClient != nil)
     }
     private func pathEditor(text: Binding<String>) -> some View {
         let defaults = defaultScanPaths[selectedClient] ?? []
         return VStack(alignment: .leading, spacing: 0) {
             if defaultPathsFailed {
-                HStack {
-                    Text(L("settings.default_paths_failed")).foregroundStyle(.secondary)
+                WorkspaceErrorMessage(title: L("settings.default_paths_failed")) {
                     Button(L("action.retry")) { Task { await loadDefaultScanPaths() } }
                         .settingsActionForeground()
-                }.font(.caption).padding(8)
+                }.padding(8)
             } else if defaultPathsLoaded {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
@@ -546,13 +543,9 @@ struct SettingsView: View {
                 Label(status.message, systemImage: "checkmark.circle")
                     .foregroundStyle(.secondary)
             case .failed(let detail):
-                HStack(spacing: 8) {
-                    Label(status.message, systemImage: "exclamationmark.circle")
+                WorkspaceErrorMessage(title: status.message, detail: detail) {
                     Button(L("action.retry")) { retry(status.operation) }
                         .settingsActionForeground().disabled(busy)
-                }
-                DisclosureGroup(L("error.details")) {
-                    Text(detail).font(.caption).textSelection(.enabled)
                 }
             }
         }

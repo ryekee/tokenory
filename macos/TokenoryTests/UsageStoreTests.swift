@@ -1,5 +1,5 @@
 // [INPUT]: 使用真实 helper、临时源日志和 UsageStore。
-// [OUTPUT]: 验证账本状态更新、筛选请求和客户端目录。
+// [OUTPUT]: 验证账本状态更新、筛选请求、客户端目录和超时恢复。
 // [POS]: 跨 Rust 和 Swift 的集成测试边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -334,6 +334,122 @@ final class UsageStoreTests: XCTestCase {
 
         store.filter = UsageFilter(from: "2026-11-15", to: "2026-11-15")
         XCTAssertNil(store.reportLoadError)
+    }
+
+    func testScanTimeoutClearsAfterScanFinishesAndStatusResponds() async throws {
+        let (store, root) = try await makeScanRecoveryStore()
+        store.scan()
+        for _ in 0..<100 {
+            if store.error != nil { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(store.error, "Scan timed out")
+        XCTAssertEqual(store.errorAction, .refresh)
+
+        store.scan()
+        for _ in 0..<100 {
+            if FileManager.default.fileExists(atPath: root.appending(path: "scan-accepted").path) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.appending(path: "scan-accepted").path))
+        XCTAssertTrue(store.scanInProgress)
+        XCTAssertEqual(store.error, "Scan timed out", "A scan acknowledgment does not confirm completion")
+
+        await store.consume(Self.scanFinished)
+        XCTAssertEqual(store.status?.revision, 1)
+        XCTAssertNotNil(store.today)
+        XCTAssertNil(store.error)
+        XCTAssertFalse(store.scanInProgress)
+
+        store.fail(EngineError(code: "timeout", message: "Backup timed out"))
+        await store.consume(Self.scanFinished)
+        XCTAssertEqual(store.error, "Backup timed out", "Scan success is independent of backup")
+        XCTAssertEqual(store.errorAction, .acknowledge)
+    }
+
+    func testSuccessfulScanRetriesTimedOutActivityOnUnchangedLedger() async throws {
+        let (store, root) = try await makeScanRecoveryStore()
+        await store.refresh()
+        XCTAssertNotNil(store.report)
+        XCTAssertNil(store.error, "A background activity failure should not interrupt the current report")
+        XCTAssertNil(store.activity)
+
+        await store.consume(Self.scanFinished)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.appending(path: "activity-retried").path))
+        XCTAssertEqual(store.activity?.revision, 1)
+        XCTAssertNil(store.error)
+    }
+
+    func testBackgroundScanFailureDoesNotInterruptOrReplaceAnActionError() async {
+        let store = UsageStore()
+        let event = EngineEnvelope(version: 1, id: nil, result: nil, error: nil,
+                                   event: "scanFailed", payload: nil, message: "Background scan failed", revision: nil)
+        await store.consume(event)
+        XCTAssertNil(store.error)
+
+        store.fail(EngineError(code: "export", message: "Could not export"))
+        await store.consume(event)
+        XCTAssertEqual(store.error, "Could not export")
+    }
+
+    func testBackgroundTodayFailureKeepsTheCurrentDayReading() async throws {
+        let (store, root) = try await makeScanRecoveryStore()
+        let now = try XCTUnwrap(Localization.date("2026-11-25"))
+        await store.refreshToday(now: now)
+        let revision = try XCTUnwrap(store.today?.revision)
+
+        try Data().write(to: root.appending(path: "fail-today"))
+        await store.refreshToday(now: now)
+        XCTAssertEqual(store.today?.revision, revision)
+        XCTAssertEqual(store.todayUsageError, "Today timed out")
+        XCTAssertNil(store.error)
+    }
+
+    private static let scanFinished = EngineEnvelope(version: 1, id: nil, result: nil, error: nil,
+                                                     event: "scanFinished", payload: nil, message: nil, revision: nil)
+
+    private func makeScanRecoveryStore() async throws -> (UsageStore, URL) {
+        let root = FileManager.default.temporaryDirectory.appending(path: "Tokenory-recovery-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let helper = root.appending(path: "worker.py")
+        try #"""
+        #!/usr/bin/python3
+        import json, pathlib, sys
+        root = pathlib.Path(sys.argv[2])
+        seen = set()
+        for line in sys.stdin:
+            request = json.loads(line)
+            op, payload = request['operation'], request['payload']
+            response = dict(version=1, id=request['id'])
+            if op in ('scan', 'activity') and op not in seen:
+                response['error'] = dict(code='timeout', message=op.capitalize() + ' timed out')
+            elif op == 'scan':
+                (root / 'scan-accepted').touch()
+                response['result'] = dict(started=True)
+            elif op == 'status':
+                response['result'] = dict(scanning=False, dataDirectory=str(root), revision=1, refreshingPrices=False)
+            elif op == 'activity':
+                (root / 'activity-retried').touch()
+                response['result'] = dict(revision=1, daily=[], modelDays=[], **{'from':payload['from'], 'to':payload['to']})
+            elif op == 'overview' and 'timestampFromMs' in payload and (root / 'fail-today').exists():
+                response['error'] = dict(code='timeout', message='Today timed out')
+            elif op == 'overview':
+                summary = dict(tokens=0, tokenBreakdown=dict(input=0, output=0, cacheRead=0, cacheWrite=0, reasoning=0),
+                               unpricedTokens=0, costStatus='unknown', recordCount=0, activeDays=0)
+                response['result'] = dict(revision=1, summary=summary, daily=[], clients=[], providers=[], models=[], details=[])
+            elif op == 'turnAnalytics':
+                response['result'] = dict(revision=1, models=[], clients=[], capabilities=[], turns=[])
+            seen.add(op)
+            print(json.dumps(response), flush=True)
+        """#.write(to: helper, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+        let engine = EngineClient(helper: helper, directory: root)
+        addTeardownBlock {
+            await engine.stop()
+            try FileManager.default.removeItem(at: root)
+        }
+        try await engine.start()
+        return (UsageStore(engine: engine, directory: root), root)
     }
 
     func testDateSelectionKeepsPreviousReportAndOnlyRequestsNewRange() async throws {

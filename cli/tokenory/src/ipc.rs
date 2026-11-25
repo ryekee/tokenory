@@ -1,6 +1,6 @@
 // [INPUT]: 接收原生应用的 JSON 请求，读取采集和价格数据。
 // [OUTPUT]: 输出协议响应、系统时区设置、分块设备快照、有效来源、对话及回合查询、扫描状态和账本更新事件。
-// [POS]: 单写者 worker 合并日志事件与活跃文件检查，协调全量/增量采集、计价和查询。
+// [POS]: 单写者 worker 合并日志事件与活跃文件检查，协调全量/增量采集、排队手动扫描、计价和查询。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
     collector::{self, DiagnosticCache, ScanBatch},
@@ -392,6 +392,7 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
     let mut live_rescan = false;
     let mut live_due: Option<Instant> = None;
     let mut scan_is_live = false;
+    let mut manual_scan_pending = false;
     let mut overview_refresh_pending = false;
     let mut cache = None;
     let mut scan = Some(start_scan(
@@ -429,7 +430,7 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
           let before=revision(&db.connection)?;
           match r.operation.as_str() {
            "shutdown"=>{reply(&r.id,Ok(json!({"stopped":true})))?;break;},
-           "scan"=>{let started=scan.is_none();if started {scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent), None));send(json!({"version":1,"event":"scanStarted"}))?;}reply(&r.id,Ok(json!({"started":started})))?;},
+           "scan"=>{let started=scan.is_none();if started {scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent), None));send(json!({"version":1,"event":"scanStarted"}))?;}else if scan_is_live {manual_scan_pending=true;}reply(&r.id,Ok(json!({"started":started})))?;},
            "status"=>reply(&r.id,Ok(json!({"scanning":scan.is_some(),"lastScan":last_scan,"dataDirectory":db.directory,"revision":before,"refreshingPrices":price_task.is_some()})))?,
            "deviceUsageSnapshot"=>reply_snapshot(db,&config.timezone,&r.id,r.payload["stream"].as_bool() == Some(true))?,
            "refreshPrices"=>{
@@ -460,6 +461,11 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
                       if r.changed > 0 { send(json!({"version":1,"event":"todayUsageChanged","revision":r.revision,"durationMs":r.duration_ms}))?; }
                   }
                   Err(error) => { eprintln!("Live collection failed; periodic scan will retry: {error}"); }
+              }
+              if manual_scan_pending {
+                  manual_scan_pending = false;
+                  scan = Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent), None));
+                  send(json!({"version":1,"event":"scanStarted"}))?;
               }
               continue;
           }

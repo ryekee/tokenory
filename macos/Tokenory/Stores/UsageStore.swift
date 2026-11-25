@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 按系统日期刷新本机统计和当日用量，同步发布所选日期的设备汇总、明细、回合、价格及来源状态。
+// [OUTPUT]: 按系统日期刷新统计及来源，在需要操作时展示提示，确认恢复后清除相应提示。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -22,6 +22,18 @@ enum UsageDateRange: String, CaseIterable {
 @MainActor @Observable
 final class UsageStore {
     enum DateStep { case earlier, later }
+    enum ErrorAction { case refresh, reconnect, acknowledge }
+
+    private enum Recovery {
+        case scan, status, statistics, activity, todayUsage, management
+    }
+
+    private struct Failure {
+        let id = UUID()
+        let message: String
+        let recovery: Recovery?
+        let action: ErrorAction?
+    }
 
     static let shared = UsageStore()
     let engine: EngineClient
@@ -89,9 +101,13 @@ final class UsageStore {
     var dateRange: UsageDateRange = .week
     var status: EngineStatus?
     var scanning = false
+    private var scanRequested = false
+    var scanInProgress: Bool { scanning || scanRequested }
     var connected = false
     var loading = false
-    var error: String?
+    private var failure: Failure?
+    var error: String? { errorAction == nil ? nil : failure?.message }
+    var errorAction: ErrorAction? { failure?.action }
     var sources: JSONValue = .null
     private(set) var sourcesError: String?
     private var sourcesGeneration = 0
@@ -129,8 +145,16 @@ final class UsageStore {
             scheduleDayRefresh()
         }
         Task {
-            do { try await engine.start(); connected = true; error = nil; cloud.start(); await refresh() }
-            catch { fail(error) }
+            do {
+                try await engine.start()
+                connected = true
+                if errorAction != .reconnect { dismissError() }
+                cloud.start()
+                await refresh()
+            } catch {
+                connected = false
+                recordFailure(error.localizedDescription, action: .reconnect)
+            }
         }
     }
 
@@ -163,7 +187,7 @@ final class UsageStore {
     func retryReport() async {
         guard connected else {
             reportFailure = nil
-            error = nil
+            dismissError()
             start()
             return
         }
@@ -250,6 +274,7 @@ final class UsageStore {
         if selection != filter { filter = selection }
     }
     func refresh(now: Date = Date()) async {
+        let previous = failure
         updateDateRange(now: now)
         refreshGeneration += 1
         let generation = refreshGeneration
@@ -265,8 +290,9 @@ final class UsageStore {
             let (newCatalog, newStatus) = try await (all, engineStatus)
             if generation == refreshGeneration {
                 catalog = newCatalog; status = newStatus; scanning = newStatus.scanning; connected = true
+                resolveFailure(previous, for: .statistics, .status)
             }
-        } catch { if generation == refreshGeneration { fail(error) } }
+        } catch { if generation == refreshGeneration { fail(error, recovery: .statistics) } }
         _ = await (history, quick)
     }
     func refreshSelection(_ selection: UsageFilter, now: Date = Date(), forceReport: Bool = false) async {
@@ -325,6 +351,7 @@ final class UsageStore {
         guard force || (requestedActivityFilter != annual && activityFilter != annual) else { return }
         activityGeneration += 1
         let generation = activityGeneration
+        let previous = failure
         requestedActivityFilter = annual
         defer { if generation == activityGeneration { requestedActivityFilter = nil } }
         do {
@@ -334,8 +361,11 @@ final class UsageStore {
             activityCalendar = UsageActivity(report: newActivity)
             historyCache.removeAll(keepingCapacity: true)
             activity = newActivity
+            resolveFailure(previous, for: .activity)
         } catch {
-            if generation == activityGeneration, annual == annualFilter(for: filter, from: from, to: to) { fail(error) }
+            if generation == activityGeneration, annual == annualFilter(for: filter, from: from, to: to) {
+                fail(error, recovery: .activity)
+            }
         }
     }
     private func annualFilter(for selection: UsageFilter, from: String, to: String) -> UsageFilter {
@@ -359,13 +389,20 @@ final class UsageStore {
         return todayGeneration
     }
     private func loadToday(window: LocalUsageDay, generation: Int) async {
+        let previous = failure
         async let usage = engine.request("overview", payload: .encode(UsageFilter(from: window.day, to: window.day, timestampFromMs: window.startMs, timestampToMs: window.endMs)))
         async let turns = engine.request("turnAnalytics", payload: .encode(TurnQuery(from: window.day, to: window.day, timestampFromMs: window.startMs, timestampToMs: window.endMs)))
         do {
             let data = try await usage.decode(UsageReport.self)
-            if generation == todayGeneration { today = data; todayUsageError = nil }
+            if generation == todayGeneration {
+                today = data; todayUsageError = nil
+                resolveFailure(previous, for: .todayUsage)
+            }
         } catch {
-            if generation == todayGeneration { todayUsageError = error.localizedDescription; fail(error) }
+            if generation == todayGeneration {
+                todayUsageError = error.localizedDescription
+                fail(error, recovery: .todayUsage)
+            }
         }
         do {
             let data = TurnPresentation(report: try await turns.decode(TurnReport.self))
@@ -379,7 +416,7 @@ final class UsageStore {
     func restore(from file: URL) async throws {
         do { try await engine.restore(from: file) }
         catch { start(); throw error }
-        try await engine.start(); error = nil; cloud.refresh(localChanged: true); await refresh(); await loadManagement()
+        try await engine.start(); dismissError(); cloud.refresh(localChanged: true); await refresh(); await loadManagement()
     }
     func loadSources() async {
         sourcesGeneration += 1
@@ -411,7 +448,8 @@ final class UsageStore {
         }
         if generation == turnsGeneration { turnsLoading = false }
     }
-    func loadManagement() async {
+    func loadManagement(notifyOnFailure: Bool = true) async {
+        let previous = failure
         do {
             async let s = engine.request("sources"); async let p = engine.request("prices"); async let c = engine.request("settings")
             let values = try await (s, p, c)
@@ -422,29 +460,88 @@ final class UsageStore {
             sources = values.0; prices = values.1; settings = try values.2.decode(EngineSettings.self)
             usedPriceModels = Set(catalog.usedModels ?? [])
             priceProviders = PriceProviderGroup.make(catalog.catalog ?? catalog.current?.snapshot.entries ?? [])
-        } catch { fail(error) }
+            resolveFailure(previous, for: .management)
+        } catch {
+            fail(error, recovery: .management, action: notifyOnFailure ? .acknowledge : nil)
+        }
     }
     @discardableResult
     func perform(_ operation: String, payload: JSONValue = .object([:])) async throws -> JSONValue {
         return try await engine.request(operation, payload: payload)
     }
-    func scan() { Task { do { _ = try await perform("scan") } catch { fail(error) } } }
-    func fail(_ error: Error) { self.error = error.localizedDescription }
+    func scan() {
+        guard !scanRequested else { return }
+        scanRequested = true
+        Task {
+            do { _ = try await perform("scan") }
+            catch {
+                scanRequested = false
+                fail(error, recovery: .scan, action: .refresh)
+            }
+        }
+    }
+
+    func dismissError() { failure = nil }
+    func fail(_ error: Error) { recordFailure(error.localizedDescription, action: .acknowledge) }
+
+    private func fail(_ error: Error, recovery: Recovery, action: ErrorAction? = nil) {
+        let canRetry = (error as? EngineError)?.code == "timeout" || action == .refresh
+        recordFailure(error.localizedDescription, recovery: canRetry ? recovery : nil, action: action)
+    }
+
+    private func recordFailure(_ message: String, recovery: Recovery? = nil, action: ErrorAction? = nil) {
+        guard action != nil || errorAction == nil else { return }
+        failure = Failure(message: message, recovery: recovery, action: action)
+    }
+
+    private func resolveFailure(_ previous: Failure?, for recovered: Recovery...) {
+        guard let previous, let recovery = previous.recovery, recovered.contains(recovery),
+              failure?.id == previous.id else { return }
+        dismissError()
+    }
+
     func consume(_ event: EngineEnvelope) async {
         switch event.event {
-        case "ready": connected = true
+        case "ready":
+            connected = true
+            if errorAction == .reconnect { dismissError() }
         case "scanStarted": scanning = true
         case "scanFinished":
+            let userRequested = scanRequested
             scanning = false
-            do { status = try await engine.request("status").decode(EngineStatus.self) } catch { fail(error) }
-            await refreshToday()
-            if sources != .null { await loadSources() }
+            let previous = failure
+            do {
+                status = try await engine.request("status", as: EngineStatus.self)
+                resolveFailure(previous, for: .scan, .status)
+            } catch {
+                fail(error, recovery: .status, action: userRequested ? .refresh : nil)
+            }
+            if userRequested { scanRequested = false }
+            if previous?.recovery == .statistics || previous?.recovery == .activity ||
+                reportFailure?.selection == reportSelection {
+                await refresh()
+            } else {
+                await refreshToday()
+            }
+            if previous?.recovery == .management {
+                await loadManagement(notifyOnFailure: previous?.action != nil)
+            } else if sources != .null || sourcesError != nil {
+                await loadSources()
+            }
             if let query = requestedTurnQuery { await loadAgentTurns(query, force: true) }
         case "todayUsageChanged": cloud.markDirty(); await refreshToday()
         case "usageChanged": cloud.refresh(localChanged: true); await refresh()
-        case "pricesUpdated": await loadManagement()
-        case "scanFailed": scanning = false; error = event.message
-        case "stopped": connected = false; scanning = false; error = event.message
+        case "pricesUpdated": await loadManagement(notifyOnFailure: false)
+        case "scanFailed":
+            let action: ErrorAction? = scanRequested ? .refresh : nil
+            scanRequested = false
+            scanning = false
+            if let message = event.message { recordFailure(message, recovery: .scan, action: action) }
+        case "stopped":
+            connected = false
+            scanRequested = false
+            scanning = false
+            recordFailure(event.message ?? L("status.stopped"), action: .reconnect)
         default: break
         }
     }

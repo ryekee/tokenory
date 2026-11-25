@@ -1776,20 +1776,20 @@
         }
       }
     },
-    "action.dismiss_error": {
-      "comment": "Tokenory UI: action.dismiss_error. Keep product names and technical IDs unchanged.",
+    "action.got_it": {
+      "comment": "Acknowledge a message after an action fails.",
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dismiss error"
+            "value": "Got it"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "关闭错误提示"
+            "value": "知道了"
           }
         }
       }
@@ -1830,22 +1830,11 @@
         }
       }
     },
-    "error.details": {
-      "comment": "Tokenory UI: error.details. Keep product names and technical IDs unchanged.",
+    "error.refresh_failed": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Details"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "详细信息"
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "Couldn’t refresh usage" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "用量刷新失败" } }
       }
     },
     "value.unavailable": {
@@ -3512,13 +3501,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The engine timed out. Check collection status."
+            "value": "The local engine didn’t respond in time."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "引擎操作超时，请检查采集状态。"
+            "value": "本地引擎未及时响应。"
           }
         }
       }
@@ -6570,6 +6559,13 @@
         }
       }
     },
+    "action.refresh": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Refresh" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "刷新" } }
+      }
+    },
     "action.retry": {
       "extractionState": "manual",
       "localizations": {
@@ -6592,23 +6588,6 @@
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Collection · %@" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "采集 · %@" } }
-      }
-    },
-    "menu.today_refresh_failed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t refresh today’s usage"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未能刷新今日用量"
-          }
-        }
       }
     },
     "usage.report_failed": {

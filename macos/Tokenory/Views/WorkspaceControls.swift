@@ -1,5 +1,5 @@
-// [INPUT]: 接收导航项、选项、说明和折叠内容。
-// [OUTPUT]: 提供统一设置开关、操作按钮配色、导航、下拉选择、悬停、折叠和说明控件。
+// [INPUT]: 接收导航项、选项、说明、错误信息和折叠内容。
+// [OUTPUT]: 提供统一设置开关、操作按钮配色、导航、下拉选择、悬停、折叠、说明和直接显示详情的错误行。
 // [POS]: 共享控件保持同一前缘。设置操作和下拉使用系统失焦颜色，保留原生交互反馈。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -317,6 +317,7 @@ struct WorkspaceHoverStyle: ButtonStyle {
 
 struct WorkspaceDisclosureStyle: DisclosureGroupStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -339,5 +340,44 @@ struct WorkspaceDisclosureStyle: DisclosureGroupStyle {
                     .transition(.opacity)
             }
         }.clipped()
+    }
+}
+
+struct WorkspaceErrorMessage<Actions: View>: View {
+    let title: String
+    var note: String? = nil
+    var detail: String? = nil
+    @ViewBuilder let actions: Actions
+
+    var body: some View {
+        HStack(spacing: 16) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.circle")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(WorkspaceStyle.warning)
+                    .frame(width: 16, alignment: .leading)
+                    .padding(.top, 2)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let note {
+                        Text(note).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let detail {
+                        Text(detail).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .font(.callout)
+                .foregroundStyle(WorkspaceStyle.subtext)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            actions
+                .controlSize(.small)
+                .fixedSize()
+        }
+        .accessibilityElement(children: .contain)
     }
 }

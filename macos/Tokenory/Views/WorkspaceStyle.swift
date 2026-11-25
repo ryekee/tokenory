@@ -1,5 +1,5 @@
 // [INPUT]: The macOS appearance and the data role of each mark.
-// [OUTPUT]: Tokyo Neon and Tokyo Neon Light colors, dropdown colors, panel surfaces and shared layout metrics.
+// [OUTPUT]: Tokyo Neon and Tokyo Neon Light colors, warning foreground and surface, dropdown colors and shared layout metrics.
 // [POS]: Shared colors and panel surfaces for the statistics workspace.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -31,6 +31,8 @@ enum WorkspaceStyle {
 
     static let text = Color(WorkspaceTone(light: 0x231B32, dark: 0xFFFFFF))
     static let subtext = Color(WorkspaceTone(light: 0x60566E, dark: 0xC5C3C8))
+    static let warning = Color(WorkspaceTone(light: 0x9D5200, dark: 0xFFAE58))
+    static let warningSurface = Color(WorkspaceTone(light: 0xFCE7CC, dark: 0x402A19))
     static let lightFilterLabel = Color(.sRGB, red: 89 / 255, green: 99 / 255, blue: 110 / 255)
     static let darkDropdownLabel = Color(.sRGB, red: 197 / 255, green: 195 / 255, blue: 202 / 255)
     static let darkDropdownUnderlay = Color.white.opacity(0.12)
@@ -64,6 +66,7 @@ enum WorkspaceStyle {
 
 struct WorkspacePanel<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
+    var surface: Color? = nil
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -71,7 +74,7 @@ struct WorkspacePanel<Content: View>: View {
         content
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: WorkspaceStyle.panelRadius))
+            .background(surface ?? WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: WorkspaceStyle.panelRadius))
             .overlay {
                 RoundedRectangle(cornerRadius: WorkspaceStyle.panelRadius)
                     .strokeBorder(.primary.opacity(scheme == .dark ? 0.05 : 0.035), lineWidth: 0.5)

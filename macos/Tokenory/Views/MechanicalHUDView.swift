@@ -20,10 +20,10 @@ struct MechanicalHUDView: View {
 
     private var reading: HUDReading {
         HUDReading(day: (store.todayDay ?? LocalUsageDay(now: Date()).day) + ":" + (store.todayTimeZone ?? TimeZone.autoupdatingCurrent.identifier), metric: preferences.metric,
-                   summary: store.todayUsageError == nil ? store.today?.summary : nil)
+                   summary: store.today?.summary)
     }
     private var help: String {
-        if let error = store.todayUsageError { return error }
+        if store.today == nil, store.todayUsageError != nil { return L("usage.report_failed") }
         if !store.connected { return L("hud.disconnected") }
         if preferences.metric == .cost { return L(reading.partial ? "hud.partial_cost" : "cost.estimate") }
         return L("hud.today_help")

@@ -1,5 +1,5 @@
 // [INPUT]: 接收统计报告、筛选状态和记录详情。
-// [OUTPUT]: 提供主窗口导航、侧栏设置入口、统计加载提示与重试、日期工具栏、回合页和记录详情。
+// [OUTPUT]: 提供主窗口导航、侧栏设置入口、统计加载和错误卡片、日期工具栏、回合页和记录详情。
 // [POS]: 主工作区入口；宽窗口并排检查明细，窄窗口使用详情面板。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -61,8 +61,8 @@ struct DashboardView: View {
                 }
         } detail: {
             VStack(spacing: 0) {
-                if dashboardSelection == nil || store.connected || store.reportLoadError == nil {
-                    ErrorBanner().padding(.horizontal, 20)
+                if store.error != nil, dashboardSelection == nil || store.connected || store.reportLoadError == nil {
+                    ErrorBanner().padding(.horizontal, 22).padding(.top, 12)
                 }
                 ZStack {
                     // Keep the overview mounted so navigation reuses chart layouts and scroll state.
@@ -124,8 +124,8 @@ struct DashboardView: View {
                             }
                         }
                         .accessibilityValue(showsReportProgress ? L("usage.loading_stats") : "")
-                        .disabled(store.scanning || !store.connected)
-                        if !store.connected && (dashboardSelection == nil || store.reportLoadError == nil) {
+                        .disabled(store.scanInProgress || !store.connected)
+                        if !store.connected && store.errorAction != .reconnect && (dashboardSelection == nil || store.reportLoadError == nil) {
                             Button(L("action.reconnect")) { store.start() }
                         }
                     }
@@ -205,30 +205,26 @@ struct DashboardView: View {
             }
         } else if let report = store.report, allowConversationReport || store.reportFilter?.conversation == nil {
             if let error = store.reportLoadError {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(L("usage.report_failed"))
-                        if let filter = store.reportFilter {
-                            let range = filter.from.flatMap { from in filter.to.map { Localization.dateRange(from, $0) } }
-                            Text(LF("usage.previous_report", range ?? L("range.all"))).foregroundStyle(.secondary)
-                        }
-                        DisclosureGroup(L("error.details")) { Text(error).textSelection(.enabled) }
-                    }
-                    Spacer()
-                    reportRetryButton
+                let note = store.reportFilter.map { filter in
+                    let range = filter.from.flatMap { from in filter.to.map { Localization.dateRange(from, $0) } }
+                    return LF("usage.previous_report", range ?? L("range.all"))
                 }
-                .font(.callout)
+                WorkspacePanel(surface: WorkspaceStyle.warningSurface) {
+                    WorkspaceErrorMessage(title: L("usage.report_failed"), note: note, detail: error) {
+                        reportRetryButton
+                    }
+                }
                 .padding(.horizontal, 22).padding(.bottom, 12)
             }
             content(report)
         } else if let error = store.reportLoadError {
-            ContentUnavailableView {
-                Label(L("usage.report_failed"), systemImage: "exclamationmark.circle")
-            } description: {
-                Text(error).textSelection(.enabled)
-            } actions: {
-                reportRetryButton
+            ScrollView {
+                WorkspacePanel(surface: WorkspaceStyle.warningSurface) {
+                    WorkspaceErrorMessage(title: L("usage.report_failed"), detail: error) {
+                        reportRetryButton
+                    }
+                }
+                .padding(.horizontal, 22).padding(.bottom, 22)
             }
         } else {
             Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -351,9 +347,7 @@ private struct RecordDetailContent: View {
                                 .frame(maxHeight: 180)
                         }
                     } else if let snapshotError {
-                        DisclosureGroup(L("record.snapshot_failed")) {
-                            Text(snapshotError).font(.caption).textSelection(.enabled)
-                        }
+                        WorkspaceErrorMessage(title: L("record.snapshot_failed"), detail: snapshotError) {}
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

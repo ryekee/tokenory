@@ -2,7 +2,7 @@
 > L2 | Parent: ../../../AGENTS.md
 
 clients.rs: 声明客户端来源和扫描路径，包括 Copilot SDK 日志与独立的 TRAE CLI。
-codex_watch.rs: 监听 Codex 默认/额外/headless 根目录中的 `.jsonl` 和 `.jsonl.zst`，以及 Antigravity App、Insiders 和 CLI 的 SQLite 会话目录。规整 `-wal`/`-shm` 变更并轮询活跃文件/WAL 元数据以覆盖 FSEvents 合并通知。
+codex_watch.rs: 监听 Codex 默认/额外/headless 根目录中的 `.jsonl` 和 `.jsonl.zst`，以及 Antigravity App、Insiders 和 CLI 的 SQLite 会话目录。忽略只反映 SQLite 读锁的 `-shm` 通知，规整 `-wal` 等数据变更并轮询活跃文件/WAL 元数据以覆盖 FSEvents 合并通知。
 collector.rs: 只读采集源日志并更新账本及独立回合分析。支持 Codex 与 Antigravity 增量采集，Antigravity App 以 responseId 跨 RPC / SQLite 会话迁移并保留原价，增量扫描合并同名数据库副本。生成表读取不完整或 Copilot SDK 轮转日志缺失时保留已采历史。只有来自请求的时间参与小时分布。分析失败只影响诊断。Devin CLI 和 Pi 在确认是同一请求后替换旧键，沿用原价格快照。
 collector/hermes.rs: 替换 Hermes 本机会话快照时，按原用量组保留历史费用和归档时区。后续同组增加的用量沿用原费率依据。
 turn_analytics.rs / turn_analytics/: 泛化完成回合、来源能力与别名过滤；含 `antigravity.rs` 解析 Antigravity App/CLI 的 SQLite `steps` + `gen_metadata` 主链完成回合与合并工具等待；证据不足不估 token；有效来源重开回合返回精确撤销 ID。Claude 回合只在各回复报告的推理速度一致时返回速度。
@@ -12,7 +12,7 @@ config.rs: 读取系统时区用于新记录归档并保存采集配置；读取
 db.rs: 维护 SQLite schema、记录和备份；迁移/恢复包含独立回合表；一次升级仅备份一次，自动备份保留 3 份，预览保留 24 小时内最近 3 份。
 device_snapshot.rs: 从单一 SQLite 读事务导出全部有效历史、可筛选的子代理启动数和按工具、来源、供应商、模型分组的用量。云端事件按北京时间分日分小时，按日导入和近似时间保留原日期，仅聚合字段出账本。
 import.rs: 预览、提交和撤销历史导入。
-ipc.rs: 每次开始扫描时读取系统时区，向原生应用提供 worker JSON 协议、默认采集路径、有效账本的已用模型、对话目录、按会话查标题、总览子代理卡及 codexTurns / turnAnalytics 查询。列表用的 turnAnalytics 可附按工具和会话分组的本地标题，供速度页搜索。时间戳窗口查询省略标题。`dailySourceUsage` 接受空对象，一次返回全部日期的有效用量，每行仅有 date、client、source、tokens。 `deviceUsageSnapshot` 接受 `stream: true`，按同一请求 ID 返回有序 UTF-8 分块及完成帧。旧单帧请求超过 64 MiB 时返回可恢复错误。
+ipc.rs: 每次开始扫描时读取系统时区，增量采集中收到手动扫描请求时在增量批次后启动一次全量扫描。向原生应用提供 worker JSON 协议、默认采集路径、有效账本的已用模型、对话目录、按会话查标题、总览子代理卡及 codexTurns / turnAnalytics 查询。列表用的 turnAnalytics 可附按工具和会话分组的本地标题，供速度页搜索。时间戳窗口查询省略标题。`dailySourceUsage` 接受空对象，一次返回全部日期的有效用量，每行仅有 date、client、source、tokens。 `deviceUsageSnapshot` 接受 `stream: true`，按同一请求 ID 返回有序 UTF-8 分块及完成帧。旧单帧请求超过 64 MiB 时返回可恢复错误。
 lib.rs: 导出账本引擎模块。
 main.rs: 提供 CLI 命令和单写者锁；compact 回收空闲页。
 remote_pricing.rs: 拉取并校验官方远程费率表，保留最近一次有效修订。
