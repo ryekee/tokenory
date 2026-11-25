@@ -416,6 +416,95 @@ async fn discovers_antigravity_app_and_cli_dbs_dedupes_legacy_cache_and_tracks_h
 }
 
 #[tokio::test]
+#[cfg(target_os = "macos")]
+async fn closed_wal_database_does_not_trigger_repeated_live_scans() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let conv_dir = home.path().join(".gemini/antigravity/conversations");
+    fs::create_dir_all(&conv_dir).unwrap();
+    Config {
+        home_dir: home.path().into(),
+        interval_seconds: 86400,
+        ..Default::default()
+    }
+    .save(data.path())
+    .unwrap();
+    let db_path = conv_dir.join("closed-session.db");
+    let conn = create_antigravity_db(&db_path, false, true);
+    conn.execute(
+        "INSERT INTO gen_metadata (idx, data) VALUES (0, ?1)",
+        params![build_gen_row(
+            "gemini-3.5-flash-high",
+            250,
+            0,
+            50,
+            0,
+            "resp-closed"
+        )],
+    )
+    .unwrap();
+    drop(conn);
+
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("tokenory"))
+        .args([
+            "--data-dir",
+            data.path().to_str().unwrap(),
+            "worker",
+            "--stdio",
+        ])
+        .env("XDG_CACHE_HOME", data.path().join("cache"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .unwrap();
+    let input = child.stdin.take().unwrap();
+    let output = child.stdout.take().unwrap();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(output).lines() {
+            if tx
+                .send(serde_json::from_str::<Value>(&line.unwrap()).unwrap())
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+    let deadline = Instant::now() + Duration::from_secs(12);
+    loop {
+        let message = rx
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .unwrap();
+        if message["event"] == "scanFinished" {
+            break;
+        }
+    }
+    let ledger = Connection::open_with_flags(
+        data.path().join("tokenory.sqlite3"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .unwrap();
+    // Opening a closed WAL database may create a WAL once. Allow that initial
+    // event to settle, then ensure reading cannot sustain a scan loop.
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let count_scans = || -> i64 {
+        ledger
+            .query_row("SELECT count(*) FROM scan_runs", [], |row| row.get(0))
+            .unwrap()
+    };
+    let initial_count = count_scans();
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let final_count = count_scans();
+    drop(input);
+    assert!(child.wait().unwrap().success());
+    assert_eq!(
+        final_count, initial_count,
+        "reading an unchanged WAL database must not start live scans"
+    );
+}
+
+#[tokio::test]
 async fn live_changes_and_worker_watch_antigravity_insiders_wal_updates_in_real_time() {
     let home = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();

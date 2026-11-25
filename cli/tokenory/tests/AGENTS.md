@@ -2,7 +2,7 @@
 > L2 | Parent: ../../../AGENTS.md
 
 activity.rs: 验证有效来源、维度与对话筛选、对话搜索、分页独立、未知费用和工具/模型分组下的 Fast tokens 与已知估算费用。
-antigravity.rs: 验证 Antigravity App、Insiders 和 CLI SQLite 直读、旧缓存去重、模型枚举不计入 input、小时分布、会话标题、完成回合与工具等待、子代理排除以及 WAL 实时监听推送。回归覆盖旧缓存通知、跨会话账本迁移、历史计价继承、回退时间不分配小时，以及多库与部分读取保护。
+antigravity.rs: 验证 Antigravity App、Insiders 和 CLI SQLite 直读、旧缓存去重、模型枚举不计入 input、小时分布、会话标题、完成回合与工具等待、子代理排除以及 WAL 实时监听推送。回归覆盖空闲 WAL 数据库不重复扫描、旧缓存通知、跨会话账本迁移、历史计价继承、回退时间不分配小时，以及多库与部分读取保护。
 storage_retention.rs: 验证自动备份轮替、手工备份保留、预览过期及 ID 不重用、压缩后账本与撤销历史不变、连续升级只备份一次。
 backup_restore.rs: 验证 backup_restore 的账本接口和行为。
 cli.rs: 验证 cli 的账本接口和行为。
@@ -18,7 +18,7 @@ coverage.rs: 验证 coverage 的账本接口和行为，包括更换和撤销选
 history_import.rs: 验证 history_import 的账本接口和行为。
 hourly.rs: 验证系统时区的小时汇总、夏令时重复小时、不同账本时区在北京午夜附近的设备快照、历史导入保留日期及子代理时间。
 identity.rs: 验证 identity 的账本接口和行为。
-ipc.rs: 在实际 worker 上验证请求、带 UTF-8 的快照分块拼接及后续请求。
+ipc.rs: 在实际 worker 上验证请求、增量采集中排队手动扫描、带 UTF-8 的快照分块拼接及后续请求。
 migration.rs: 验证 migration 的账本接口和行为。
 pricing.rs: 验证 pricing 的账本接口和行为，覆盖 Antigravity Claude 5.5 的推理档位及升级补价、GPT-6.2 费率、长上下文、速度及优惠截止边界、远程费率覆盖、OpenClaw 时间依据、MiMo 订阅和长上下文计价依据、免费路由、旧库的首次补价和离线回退。
 

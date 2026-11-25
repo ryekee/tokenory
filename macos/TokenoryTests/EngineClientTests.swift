@@ -75,6 +75,49 @@ final class EngineClientTests: XCTestCase {
         XCTAssertTrue(snapshot.buckets.isEmpty)
         XCTAssertTrue(snapshot.subagentStarts.isEmpty)
     }
+
+    func testTimeoutIdentifiesOrdinaryAndSnapshotOperations() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let helper = directory.appendingPathComponent("worker")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try #"""
+        #!/bin/sh
+        while IFS= read -r line; do
+            id=${line#*'"id":"'}
+            id=${id%%'"'*}
+            case "$line" in
+                *'"operation":"status"'*)
+                    printf '{"version":1,"id":"%s","result":{"revision":7}}\n' "$id"
+                    ;;
+            esac
+        done
+        """#.write(to: helper, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: helper.path)
+        let engine = EngineClient(helper: helper, directory: directory, requestTimeout: .milliseconds(500))
+        addTeardownBlock {
+            await engine.stop()
+            try FileManager.default.removeItem(at: directory)
+        }
+        try await engine.start()
+
+        do {
+            _ = try await engine.request("activity")
+            XCTFail("The silent worker must time out")
+        } catch let error as EngineError {
+            XCTAssertEqual(error.code, "timeout")
+            XCTAssertEqual(error.operation, "activity")
+        }
+        do {
+            _ = try await engine.deviceUsageSnapshot()
+            XCTFail("A silent snapshot must time out")
+        } catch let error as EngineError {
+            XCTAssertEqual(error.code, "timeout")
+            XCTAssertEqual(error.operation, "deviceUsageSnapshot")
+        }
+        let status = try await engine.request("status")
+        XCTAssertEqual(status["revision"].int, 7)
+    }
+
     func testRealProtocolSummaryDecodesInt64AndUnknownCost() throws {
         let data = Data(#"{"revision":1,"summary":{"tokens":8694071481,"tokenBreakdown":{"input":10003733,"output":44047254,"cacheRead":8434857502,"cacheWrite":205162992,"reasoning":0},"knownEstimatedCostUsd":null,"unpricedTokens":8694071481,"costStatus":"unknown","recordCount":165,"activeDays":96,"requests":40573},"daily":[],"clients":[],"providers":[],"models":[],"details":[]}"#.utf8)
         let report = try JSONDecoder().decode(UsageReport.self, from: data)

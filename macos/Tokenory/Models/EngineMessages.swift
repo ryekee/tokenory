@@ -1,5 +1,5 @@
 // [INPUT]: 接收 worker 的 JSON 数据流和协议字段。
-// [OUTPUT]: 类型化报告、设备快照分块、Codex 子代理统计、Fast 用量和费用、对话身份与标题及增量分行器。
+// [OUTPUT]: 类型化报告、请求错误、设备快照分块、Codex 子代理统计、Fast 用量和费用、对话身份与标题及增量分行器。
 // [POS]: 原生 IPC 的解析边界；已扫描的数据不重复遍历。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -56,7 +56,14 @@ struct SnapshotChunk: Decodable, Sendable {
 struct EngineError: Decodable, Error, LocalizedError, Sendable {
     let code: String
     let message: String
+    let operation: String?
     var errorDescription: String? { message }
+
+    init(code: String, message: String, operation: String? = nil) {
+        self.code = code
+        self.message = message
+        self.operation = operation
+    }
 }
 struct EngineRequest: Encodable { let version = 1; let id: String; let operation: String; let payload: JSONValue }
 struct UsageFilter: Codable, Sendable, Equatable {

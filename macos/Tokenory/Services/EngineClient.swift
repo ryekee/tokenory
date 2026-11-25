@@ -1,10 +1,13 @@
 // [INPUT]: Native requests and the bundled worker's JSON lines.
-// [OUTPUT]: Typed results, complete device snapshots, events and worker errors.
+// [OUTPUT]: Typed results, complete device snapshots, events and operation-specific timeout diagnostics.
 // [POS]: Process and request lifecycle at the native IPC boundary.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
+import OSLog
 
 actor EngineClient {
+    private static let logger = Logger(subsystem: "ee.ryek.tokenory", category: "EngineIPC")
+
     private struct SnapshotRequest {
         let continuation: CheckedContinuation<Data, Error>
         var data = Data()
@@ -23,9 +26,11 @@ actor EngineClient {
     private var lastDiagnostic = ""
     private let helper: URL
     private let directory: URL
+    private let requestTimeout: Duration
 
-    init(helper: URL, directory: URL) {
+    init(helper: URL, directory: URL, requestTimeout: Duration = .seconds(180)) {
         self.helper = helper; self.directory = directory
+        self.requestTimeout = requestTimeout
         (events, eventSink) = AsyncStream.makeStream()
     }
 
@@ -97,9 +102,10 @@ actor EngineClient {
         data.append(10)
         try input.write(contentsOf: data)
         let id = request.id
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(180))
-            await self?.expire(id)
+        let operation = request.operation
+        Task { [weak self, requestTimeout] in
+            do { try await Task.sleep(for: requestTimeout) } catch { return }
+            await self?.expire(id, operation: operation)
         }
     }
 
@@ -172,10 +178,14 @@ actor EngineClient {
     private func cancelSnapshot(_ id: String) {
         pendingSnapshots.removeValue(forKey: id)?.continuation.resume(throwing: CancellationError())
     }
-    private func expire(_ id: String) {
-        let error = EngineError(code: "timeout", message: L("error.timeout"))
-        pending.removeValue(forKey: id)?.resume(throwing: error)
-        pendingSnapshots.removeValue(forKey: id)?.continuation.resume(throwing: error)
+    private func expire(_ id: String, operation: String) {
+        let request = pending.removeValue(forKey: id)
+        let snapshot = pendingSnapshots.removeValue(forKey: id)
+        guard request != nil || snapshot != nil else { return }
+        Self.logger.error("Engine request timed out: operation=\(operation, privacy: .public) id=\(id, privacy: .public)")
+        let error = EngineError(code: "timeout", message: L("error.timeout"), operation: operation)
+        request?.resume(throwing: error)
+        snapshot?.continuation.resume(throwing: error)
     }
     private func failPending(_ error: EngineError) {
         for continuation in pending.values { continuation.resume(throwing: error) }

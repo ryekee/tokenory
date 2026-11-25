@@ -15,6 +15,76 @@ use tokenory::{
 };
 
 #[test]
+#[cfg(target_os = "macos")]
+fn manual_scan_waits_for_running_incremental_collection() {
+    let data = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let sessions = home.path().join(".codex/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    tokenory::config::Config {
+        home_dir: home.path().into(),
+        interval_seconds: 86400,
+        ..Default::default()
+    }.save(data.path()).unwrap();
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("tokenory"))
+        .args(["--data-dir", data.path().to_str().unwrap(), "worker", "--stdio"])
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit())
+        .spawn().unwrap();
+    let mut input = child.stdin.take().unwrap();
+    let output = child.stdout.take().unwrap();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(output).lines() {
+            if tx.send(serde_json::from_str::<Value>(&line.unwrap()).unwrap()).is_err() { break; }
+        }
+    });
+    let deadline = std::time::Instant::now() + Duration::from_secs(40);
+    let receive = || rx.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now())).expect("worker response timeout");
+    while receive()["event"] != "scanFinished" {}
+
+    // A large changed rollout keeps the incremental scan in flight long enough
+    // to send the manual request while it runs.
+    let path = sessions.join("rollout-live.jsonl");
+    let mut file = std::fs::File::create(&path).unwrap();
+    let line = format!("{}\n", " ".repeat(4095));
+    for _ in 0..16_384 { file.write_all(line.as_bytes()).unwrap(); }
+    drop(file);
+    let mut in_live_scan = false;
+    while std::time::Instant::now() < deadline {
+        writeln!(input, "{}", json!({"version":1,"id":"status","operation":"status"})).unwrap();
+        input.flush().unwrap();
+        loop {
+            let message = receive();
+            if message["id"] == "status" {
+                in_live_scan = message["result"]["scanning"] == true;
+                break;
+            }
+        }
+        if in_live_scan { break; }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(in_live_scan, "fixture must enter an incremental scan");
+    writeln!(input, "{}", json!({"version":1,"id":"scan","operation":"scan"})).unwrap();
+    input.flush().unwrap();
+    let mut replied = false;
+    let mut started = false;
+    let mut completed = false;
+    while !completed {
+        let message = receive();
+        if message["id"] == "scan" {
+            assert_eq!(message["result"]["started"], false, "manual request must arrive during the incremental scan");
+            replied = true;
+        }
+        if message["event"] == "scanStarted" { started = true; }
+        if message["event"] == "scanFinished" { completed = true; }
+    }
+    assert!(replied, "manual request must receive a reply");
+    assert!(started, "queued manual scan must publish scanStarted");
+    drop(input);
+    assert!(child.wait().unwrap().success());
+}
+
+#[test]
 fn worker_streams_a_complete_snapshot_and_stays_available() {
     let data = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();

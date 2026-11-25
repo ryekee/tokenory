@@ -25,9 +25,9 @@ final class PresentationDataTests: XCTestCase {
     @MainActor func testWorkspacePaletteMatchesApprovedLightAndDarkRoles() {
         let roles: [(ColorScheme, [UInt32])] = [
             (.light, [0xF6F8FA, 0xFFFFFF, 0x231B32, 0x60566E, 0x008CE0, 0x00A677,
-                      0xE10067, 0xBF8A00, 0x5260BD, 0xC31978, 0x716B80, 0x2E579E]),
+                      0xE10067, 0xBF8A00, 0x5260BD, 0xC31978, 0x716B80, 0x2E579E, 0x9D5200, 0xFCE7CC]),
             (.dark, [0x100E18, 0x20182C, 0xFFFFFF, 0xC5C3C8, 0x00B0FF, 0x69F0AE,
-                     0xFF4081, 0xFFEA00, 0x5C6BC0, 0xF50057, 0xA19EA6, 0xFF4081])
+                     0xFF4081, 0xFFEA00, 0x5C6BC0, 0xF50057, 0xA19EA6, 0xFF4081, 0xFFAE58, 0x402A19])
         ]
         let filterLabel = WorkspaceStyle.lightFilterLabel.resolve(in: EnvironmentValues())
         XCTAssertEqual(filterLabel.red, 89 / 255, accuracy: 0.001)
@@ -40,7 +40,8 @@ final class PresentationDataTests: XCTestCase {
                           WorkspaceStyle.text, WorkspaceStyle.subtext, WorkspaceStyle.localUsage,
                           WorkspaceStyle.otherDevices(scheme), WorkspaceStyle.costColor(scheme),
                           WorkspaceStyle.fastUsage(scheme), WorkspaceStyle.cacheRead,
-                          WorkspaceStyle.cacheWrite, WorkspaceStyle.reasoningTokens, WorkspaceStyle.selection]
+                          WorkspaceStyle.cacheWrite, WorkspaceStyle.reasoningTokens, WorkspaceStyle.selection,
+                          WorkspaceStyle.warning, WorkspaceStyle.warningSurface]
             for (color, rgb) in zip(colors, expected) {
                 let resolved = color.resolve(in: environment)
                 let actual = UInt32((resolved.red * 255).rounded()) << 16

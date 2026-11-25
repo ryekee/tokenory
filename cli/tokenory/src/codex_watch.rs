@@ -1,5 +1,5 @@
 // [INPUT]: Codex live/archived rollouts, Antigravity roots including Insiders, and filesystem notifications.
-// [OUTPUT]: Changed log/SQLite paths or a rescan request; no usage estimates.
+// [OUTPUT]: Changed log/SQLite paths or a rescan request, excluding SQLite SHM notifications; no usage estimates.
 // [POS]: Live ingestion trigger; periodic scans remain the recovery path.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::config::Config;
@@ -199,6 +199,15 @@ pub fn start(config: &Config) -> Result<(RecommendedWatcher, UnboundedReceiver<C
                 }
                 let mut paths = Vec::new();
                 for path in event.paths {
+                    // SQLite readers update shared-memory locks even when the data is
+                    // unchanged. React to database and WAL changes, not those locks.
+                    if path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .is_some_and(|name| name.ends_with(".db-shm"))
+                    {
+                        continue;
+                    }
                     if let Some((_, target)) = watch.classify_file(&path) {
                         if target.is_file() {
                             paths.push(target);

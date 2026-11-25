@@ -1,5 +1,5 @@
 // [INPUT]: Typed usage summaries and today-only turn statistics.
-// [OUTPUT]: Locale-aware formats and compact units, device legend and focus-aware toolbar switch, source and Fast shares, and three-column menu summary.
+// [OUTPUT]: Locale-aware formats and compact units, device legend and focus-aware toolbar switch, source and Fast shares, a three-column menu summary and dismissible warning panel.
 // [POS]: Shared native usage presentation; speed does not depend on dashboard filters.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -84,17 +84,34 @@ struct MenuBarSummary: View {
 }
 struct ErrorBanner: View {
     @Environment(UsageStore.self) private var store
+
     var body: some View {
-        if let error = store.error {
-            HStack(alignment: .top) {
-                Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L("error.operation")).font(.callout)
-                    DisclosureGroup(L("error.details")) { Text(error).font(.caption).textSelection(.enabled) }
+        if let error = store.error, let action = store.errorAction {
+            WorkspacePanel(surface: WorkspaceStyle.warningSurface) {
+                WorkspaceErrorMessage(title: title(for: action), detail: error) {
+                    Group {
+                        switch action {
+                        case .refresh:
+                            Button(L("action.refresh"), action: store.scan)
+                                .disabled(store.scanInProgress)
+                        case .reconnect:
+                            Button(L("action.reconnect"), action: store.start)
+                        case .acknowledge:
+                            Button(L("action.got_it"), action: store.dismissError)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .settingsActionForeground()
                 }
-                Spacer()
-                Button { store.error = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel(L("action.dismiss_error"))
-            }.padding(12).background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8)).padding(.top, 8)
+            }
+        }
+    }
+
+    private func title(for action: UsageStore.ErrorAction) -> String {
+        switch action {
+        case .refresh: L("error.refresh_failed")
+        case .reconnect: L("status.stopped")
+        case .acknowledge: L("error.operation")
         }
     }
 }

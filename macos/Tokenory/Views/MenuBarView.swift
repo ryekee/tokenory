@@ -1,5 +1,5 @@
 // [INPUT]: Today-only usage and weighted turn speed, independent of dashboard filters.
-// [OUTPUT]: Compact Tokens / cost / speed summary, retry after a failed read, source usage and HUD visibility.
+// [OUTPUT]: Compact Tokens / cost / speed summary with cached usage, first-read retry, source usage and HUD visibility.
 // [POS]: Menu bar popover; missing speed remains unavailable.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -25,11 +25,11 @@ struct MenuBarView: View {
             } else if store.todayUsageError == nil && (store.connected || store.error == nil) {
                 ProgressView(L("usage.loading")).frame(maxWidth: .infinity, minHeight: 60)
             }
-            if let error = store.todayUsageError, store.connected {
-                HStack {
-                    Label(L(store.today == nil ? "usage.report_failed" : "menu.today_refresh_failed"),
-                          systemImage: "exclamationmark.circle").font(.callout).help(error)
-                    Spacer()
+            if store.today == nil, let error = store.todayUsageError, store.connected {
+                WorkspaceErrorMessage(
+                    title: L("usage.report_failed"),
+                    detail: error
+                ) {
                     if retrying {
                         ProgressView().controlSize(.small)
                     } else {
@@ -46,9 +46,11 @@ struct MenuBarView: View {
                 Text(LF("menu.collection_status", store.statusText)).font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button { store.connected ? store.scan() : store.start() } label: { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(.plain).disabled(store.scanning).help(store.connected ? L("action.scan") : L("action.reconnect"))
+                    .buttonStyle(.plain).disabled(store.scanInProgress).help(store.connected ? L("action.scan") : L("action.reconnect"))
             }
-            if !store.connected, let error = store.error { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(3) }
+            if !store.connected, let error = store.error {
+                WorkspaceErrorMessage(title: error) {}.lineLimit(3).help(error)
+            }
             Button { hud.enabled.toggle() } label: {
                 HStack(spacing: 6) {
                     Text(L("hud.show"))

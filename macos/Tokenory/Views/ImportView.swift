@@ -233,16 +233,17 @@ struct SourcesView: View {
                     } label: {
                         Label(L("action.scan"), systemImage: "arrow.clockwise")
                     }
-                    .settingsActionForeground().disabled(!store.connected || store.scanning)
+                    .settingsActionForeground().disabled(!store.connected || store.scanInProgress)
                 }
                 Divider()
                 if let error = store.sourcesError {
-                    HStack(spacing: 10) {
-                        Label(L(store.sources == .null ? "source.load_failed" : "source.refresh_failed"),
-                              systemImage: "exclamationmark.circle").help(error)
+                    WorkspaceErrorMessage(
+                        title: L(store.sources == .null ? "source.load_failed" : "source.refresh_failed"),
+                        detail: error
+                    ) {
                         Button(L("action.retry")) { Task { await loadSources() } }
                             .settingsActionForeground().disabled(sourceLoading)
-                    }.font(.callout).padding(.vertical, 4)
+                    }
                 } else if store.sources == .null {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
@@ -288,7 +289,7 @@ struct SourcesView: View {
                     Text(LF("source.files", scan.files, scan.records))
                         .font(.caption).foregroundStyle(.secondary)
                     ForEach(scan.errors, id: \.self) { error in
-                        Text(error).font(.caption).foregroundStyle(.orange).textSelection(.enabled)
+                        Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     }
                 }
                 if group.coverage.isEmpty {
@@ -328,7 +329,7 @@ struct SourcesView: View {
     private func scanLabel(_ scan: SourceStatus) -> some View {
         Text(L(scan.status == "ok" ? "source.ok" : scan.status == "partial" ? "status.partial" : "source.empty"))
             .font(.caption)
-            .foregroundStyle(scan.status == "partial" || !scan.errors.isEmpty ? Color.orange : Color.secondary)
+            .foregroundStyle(scan.status == "partial" || !scan.errors.isEmpty ? WorkspaceStyle.warning : Color.secondary)
     }
 
     private func coverageRow(_ source: JSONValue) -> some View {
