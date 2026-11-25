@@ -2,7 +2,7 @@
 Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 
 ## 模块地图
-- `macos/Tokenory/`：原生菜单栏和统计窗口。通过 IPC 调用 Rust worker。超时记录在 macOS 统一日志的 `ee.ryek.tokenory / EngineIPC`。后台读取保留可用读数和内部诊断，需要重试或确认的错误卡片使用警告底色和文字按钮。
+- `macos/Tokenory/`：原生菜单栏和统计窗口。通过 IPC 调用 Rust worker。超时记录在 macOS 统一日志的 `ee.ryek.tokenory / EngineIPC`。后台读取保留可用读数和内部诊断，需要重试或确认的错误卡片使用警告底色和文字按钮。总览包含洞察、原位日期检查、固定图表读数及工具下的模型聚合。历史导入由 worker 识别格式，保存与重估在原有卡片内反馈。
 - `macos/TokenoryTests/`：原生状态、展示和协议测试。
 - `cli/tokenory/`：本地账本、采集、导入、计价和 IPC。SQLite 实时监听跳过共享内存通知，手动扫描可在增量采集结束后执行。Codex 子代理活动与用量查询在 `src/codex_subagents`；data 保存离线全量目录。
 - 多 Mac 同步：`cli/tokenory/src/device_snapshot.rs` 导出有效账本的用量汇总。原生代码位于 `macos/Tokenory/`，其中 `Models/DeviceUsageSnapshot.swift` 按设备计算总览与活动图，`Services/DeviceCloudSync.swift` 管理私有库的设备授权、快照替换和撤回，`Stores/DeviceSyncStore.swift` 对接本机 worker、云端和界面。
