@@ -1,5 +1,5 @@
 // [INPUT]: 接收 worker 的 JSON 数据流和协议字段。
-// [OUTPUT]: 类型化报告、请求错误、设备快照分块、Codex 子代理统计、Fast 用量和费用、对话身份与标题及增量分行器。
+// [OUTPUT]: 类型化报告、工具下的模型汇总、请求错误、设备快照分块、Codex 子代理统计、Fast 用量和费用、对话身份与标题及增量分行器。
 // [POS]: 原生 IPC 的解析边界；已扫描的数据不重复遍历。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -66,7 +66,7 @@ struct EngineError: Decodable, Error, LocalizedError, Sendable {
     }
 }
 struct EngineRequest: Encodable { let version = 1; let id: String; let operation: String; let payload: JSONValue }
-struct UsageFilter: Codable, Sendable, Equatable {
+struct UsageFilter: Codable, Sendable, Hashable {
     var from: String?; var to: String?; var client: String?; var provider: String?; var model: String?; var source: String?
     var timestampFromMs: Int64? = nil; var timestampToMs: Int64? = nil
     var conversation: UsageConversation.ID? = nil
@@ -118,7 +118,9 @@ struct UsageDetail: Decodable, Identifiable, Sendable {
 struct UsageReport: Decodable, Sendable {
     let revision: Int64; let summary: UsageSummary; let daily: [UsageGroup]; let clients: [UsageGroup]; let providers: [UsageGroup]; let models: [UsageGroup]; let details: [UsageDetail]
     let hourly: HourlyUsage?
+    var clientModels: [String: [UsageGroup]]? = nil
     var codexSubagents: CodexSubagentReport? = nil
+    var antigravitySubagents: CodexSubagentReport? = nil
 }
 struct CodexSubagentReport: Decodable, Sendable {
     let starts: Int64

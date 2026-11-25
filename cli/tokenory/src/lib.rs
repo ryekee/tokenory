@@ -22,6 +22,7 @@ pub mod price_catalog;
 
 pub mod codex_turns;
 pub mod codex_subagents;
+pub mod antigravity_subagents;
 
 pub mod turn_analytics;
 

@@ -69,14 +69,14 @@ pub struct Cost {
 }
 
 impl Cost {
-    fn accumulate(&mut self, known: Option<f64>, unpriced_tokens: i64) {
+    pub(crate) fn accumulate(&mut self, known: Option<f64>, unpriced_tokens: i64) {
         if let Some(known) = known {
             *self.known_estimated_cost_usd.get_or_insert(0.0) += known;
         }
         self.unpriced_tokens += unpriced_tokens;
     }
 
-    fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.accumulate(other.known_estimated_cost_usd, other.unpriced_tokens);
     }
 }

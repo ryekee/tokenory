@@ -1,5 +1,5 @@
 // [INPUT]: Validated filters, the effective ledger view, and local Codex/Antigravity title indexes including Insiders.
-// [OUTPUT]: Effective usage reports with Fast and Codex subagent subsets, archived day totals, searchable conversations, and system-local hourly activity.
+// [OUTPUT]: Effective usage reports with tool/model breakdowns, Fast and Codex subagent subsets, archived day totals, searchable conversations, and system-local hourly activity.
 // [POS]: Read-only aggregation boundary; never aggregate paginated details.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -13,7 +13,7 @@ use rusqlite::functions::FunctionFlags;
 use rusqlite::{params_from_iter, types::Null, Connection, Row, ToSql};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fs::File,
     io::{BufRead, BufReader},
     path::Path,
@@ -312,7 +312,11 @@ pub struct Report {
     pub models: Vec<Group>,
     pub details: Vec<Detail>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_models: Option<BTreeMap<String, Vec<Group>>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub codex_subagents: Option<crate::codex_subagents::Report>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub antigravity_subagents: Option<crate::codex_subagents::Report>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -414,6 +418,30 @@ fn grouped(c: &Connection, f: &Filter, column: &str) -> Result<Vec<Group>> {
         )?
         .collect::<rusqlite::Result<_>>()?)
 }
+
+fn models_by_client(c: &Connection, f: &Filter) -> Result<BTreeMap<String, Vec<Group>>> {
+    let sql = format!(
+        "SELECT client,model,{SUMMARY_SQL} FROM effective_usage{WHERE_SQL}
+         GROUP BY client,model ORDER BY client,sum(tokens) DESC,model"
+    );
+    let mut statement = c.prepare(&sql)?;
+    let rows = statement.query_map(params_from_iter(f.sql_parameters()), |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            Group {
+                key: row.get(1)?,
+                summary: read_summary(row, 2)?,
+            },
+        ))
+    })?;
+    let mut groups = BTreeMap::<String, Vec<Group>>::new();
+    for row in rows {
+        let (client, model) = row?;
+        groups.entry(client).or_default().push(model);
+    }
+    Ok(groups)
+}
+
 fn hourly(c: &Connection, f: &Filter) -> Result<Option<HourlyReport>> {
     if f.timestamp_from_ms.is_some() || f.from.is_none() || f.from != f.to {
         return Ok(None);
@@ -489,18 +517,19 @@ fn hourly_aggregate(c: &Connection, f: &Filter, include_day: bool) -> Result<Hou
     Ok(HourlyReport { buckets, unallocated })
 }
 pub fn report(db: &mut Database, f: &Filter) -> Result<Report> {
-    usage_report(db, f, false)
+    usage_report(db, f, None)
 }
 
 pub fn overview(db: &mut Database, f: &Filter, home: &Path) -> Result<Report> {
-    let mut report = usage_report(db, f, true)?;
+    let mut report = usage_report(db, f, Some(home))?;
     if let Some(subagents) = &mut report.codex_subagents {
         crate::codex_subagents::add_titles(subagents, home);
     }
     Ok(report)
 }
 
-fn usage_report(db: &mut Database, f: &Filter, include_subagents: bool) -> Result<Report> {
+fn usage_report(db: &mut Database, f: &Filter, overview_home: Option<&Path>) -> Result<Report> {
+    let include_overview_fields = overview_home.is_some();
     f.validate()?;
     let tx = db.connection.transaction()?;
     let summary = tx.query_row(
@@ -545,8 +574,18 @@ fn usage_report(db: &mut Database, f: &Filter, include_subagents: bool) -> Resul
         providers: grouped(&tx, f, "provider")?,
         models: grouped(&tx, f, "model")?,
         details,
-        codex_subagents: if include_subagents {
+        client_models: if include_overview_fields {
+            Some(models_by_client(&tx, f)?)
+        } else {
+            None
+        },
+        codex_subagents: if include_overview_fields {
             crate::codex_subagents::query(&tx, f)?
+        } else {
+            None
+        },
+        antigravity_subagents: if let Some(home) = overview_home {
+            crate::antigravity_subagents::query(&tx, f, home)?
         } else {
             None
         },
