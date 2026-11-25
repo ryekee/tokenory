@@ -15,8 +15,16 @@ struct MechanicalHUDView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openWindow) private var openWindow
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
-    @State private var animator = HUDAnimator()
+    @State private var animator: HUDAnimator
     @State private var pendingDashboardOpen: Task<Void, Never>?
+
+    init(canPlaySound: @escaping () -> Bool, dismiss: @escaping () -> Void,
+         openStatistics: (() -> Void)? = nil, animator: HUDAnimator? = nil) {
+        self.canPlaySound = canPlaySound
+        self.dismiss = dismiss
+        self.openStatistics = openStatistics
+        _animator = State(initialValue: animator ?? HUDAnimator())
+    }
 
     private var reading: HUDReading {
         HUDReading(day: (store.todayDay ?? LocalUsageDay(now: Date()).day) + ":" + (store.todayTimeZone ?? TimeZone.autoupdatingCurrent.identifier), metric: preferences.metric,
@@ -31,16 +39,24 @@ struct MechanicalHUDView: View {
 
     var body: some View {
         VStack(spacing: 11) {
-            readout
+            HUDReadoutView(
+                animator: animator,
+                reading: reading,
+                help: help,
+                canPlaySound: canPlaySound,
+                revealDashboard: revealDashboard,
+                dismiss: dismiss,
+                clickGesture: clickGesture
+            )
             HStack(spacing: 12) {
                 HStack(spacing: 5) {
                     Button { preferences.metric = .tokens } label: { HUDTokenSymbol().frame(width: 18, height: 18) }
                         .buttonStyle(HUDMechanicalButton(selected: preferences.metric == .tokens))
-                        .help(L("usage.tokens")).accessibilityLabel(L("usage.tokens"))
+                        .accessibilityLabel(L("usage.tokens"))
                         .accessibilityAddTraits(preferences.metric == .tokens ? .isSelected : [])
                     Button { preferences.metric = .cost } label: { Image(systemName: "dollarsign.circle").font(.system(size: 17)) }
                         .buttonStyle(HUDMechanicalButton(selected: preferences.metric == .cost))
-                        .help(L("hud.cost")).accessibilityLabel(L("hud.cost"))
+                        .accessibilityLabel(L("hud.cost"))
                         .accessibilityAddTraits(preferences.metric == .cost ? .isSelected : [])
                 }
                 .padding(4)
@@ -54,11 +70,12 @@ struct MechanicalHUDView: View {
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
                 Button { preferences.soundEnabled.toggle(); HUDSound.shared.preview(preferences: preferences) } label: {
-                    Image(systemName: preferences.soundEnabled ? "speaker.wave.2" : "speaker.slash").font(.system(size: 13))
+                    Image(systemName: preferences.soundEnabled ? "speaker.wave.2" : "speaker.slash")
+                        .font(.system(size: 13))
+                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                 }
                 .buttonStyle(HUDMechanicalButton(selected: preferences.soundEnabled, round: true))
                 .accessibilityLabel(L(preferences.soundEnabled ? "hud.mute" : "hud.unmute"))
-                .help(L(preferences.soundEnabled ? "hud.mute" : "hud.unmute"))
                 .accessibilityAddTraits(preferences.soundEnabled ? .isSelected : [])
             }.padding(.horizontal, 6)
         }
@@ -77,22 +94,6 @@ struct MechanicalHUDView: View {
         .environment(\.locale, Locale(identifier: language == AppLanguage.system.rawValue ? Localization.identifier : language))
         .onChange(of: reading, initial: true) { _, next in animator.receive(next, animated: !reduceMotion) }
         .onChange(of: reduceMotion) { _, enabled in if enabled { animator.settle(); HUDSound.shared.stop() } }
-        .task(id: animator.generation) {
-            guard animator.isRolling else { HUDSound.shared.stop(); return }
-            let generation = animator.generation
-            let start = ProcessInfo.processInfo.systemUptime
-            while !Task.isCancelled, animator.isRolling, animator.generation == generation {
-                if animator.advance(elapsed: ProcessInfo.processInfo.systemUptime - start), canPlaySound() {
-                    HUDSound.shared.tick(preferences: preferences)
-                }
-                do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
-            }
-            // Let the final short click finish unless another reading has resumed the rollers.
-            if !animator.isRolling {
-                try? await Task.sleep(for: .milliseconds(45))
-                if !Task.isCancelled, !animator.isRolling { HUDSound.shared.stop() }
-            }
-        }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
             animator.settle()
         }
@@ -123,8 +124,68 @@ struct MechanicalHUDView: View {
             dismiss()
         })
     }
+}
 
-    private var readout: some View {
+// Isolate per-frame drum position observation and TimelineView ticks from the outer enamel case.
+private struct HUDReadoutView<ClickGesture: Gesture>: View {
+    let animator: HUDAnimator
+    let reading: HUDReading
+    let help: String
+    let canPlaySound: () -> Bool
+    let revealDashboard: () -> Void
+    let dismiss: () -> Void
+    let clickGesture: ClickGesture
+    @Environment(HUDPreferences.self) private var preferences
+    @State private var rollStartGeneration: Int?
+    @State private var rollStartUptime: TimeInterval = 0
+    @State private var stopSoundTask: Task<Void, Never>?
+
+    var body: some View {
+        TimelineView(.animation(paused: !animator.isRolling)) { context in
+            drums
+                .onChange(of: context.date) { _, _ in
+                    guard animator.isRolling else { return }
+                    let now = ProcessInfo.processInfo.systemUptime
+                    if rollStartGeneration != animator.generation {
+                        rollStartGeneration = animator.generation
+                        rollStartUptime = now
+                    }
+                    if animator.advance(elapsed: max(0, now - rollStartUptime)), canPlaySound() {
+                        HUDSound.shared.tick(preferences: preferences)
+                    }
+                }
+        }
+        .onChange(of: animator.generation, initial: true) { _, _ in
+            stopSoundTask?.cancel()
+            stopSoundTask = nil
+            if animator.isRolling {
+                if rollStartGeneration != animator.generation {
+                    rollStartGeneration = animator.generation
+                    rollStartUptime = ProcessInfo.processInfo.systemUptime
+                }
+            } else {
+                rollStartGeneration = nil
+                HUDSound.shared.stop()
+            }
+        }
+        .onChange(of: animator.isRolling) { _, rolling in
+            stopSoundTask?.cancel()
+            stopSoundTask = nil
+            if !rolling {
+                // Let the final short click finish unless another reading has resumed the rollers.
+                stopSoundTask = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(45))
+                    if !Task.isCancelled, !animator.isRolling { HUDSound.shared.stop() }
+                }
+            }
+        }
+        .onDisappear {
+            stopSoundTask?.cancel()
+            stopSoundTask = nil
+        }
+    }
+
+    private var drums: some View {
         // SwiftUI can evaluate an old child after the animator clears or resizes its array.
         let positions = animator.positions
         return HStack(spacing: 2) {
@@ -156,7 +217,6 @@ struct MechanicalHUDView: View {
         .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.28), lineWidth: 1).allowsHitTesting(false))
         .contentShape(RoundedRectangle(cornerRadius: 15))
         .gesture(clickGesture)
-        .help(help)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L(preferences.metric == .tokens ? "hud.today_tokens" : "hud.today_cost"))
         .accessibilityValue((reading.partial ? "≈ " : "") + (animator.reading?.formatted ?? "—"))
@@ -198,14 +258,26 @@ struct HUDMechanicalButton: ButtonStyle {
     var selected: Bool
     var round = false
     func makeBody(configuration: Configuration) -> some View {
-        let down = selected || configuration.isPressed
-        configuration.label
-            .frame(width: round ? 28 : 37, height: 27)
-            .foregroundStyle(down ? Color(red: 0.97, green: 0.86, blue: 0.66) : Color(red: 0.46, green: 0.23, blue: 0.10))
-            .background(LinearGradient(colors: down ? [Color(red: 0.57, green: 0.29, blue: 0.11), Color(red: 0.72, green: 0.41, blue: 0.17)] : [Color(red: 1, green: 0.83, blue: 0.55), Color(red: 0.94, green: 0.64, blue: 0.29)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: round ? 14 : 7))
-            .overlay(RoundedRectangle(cornerRadius: round ? 14 : 7).stroke(down ? .black.opacity(0.3) : .white.opacity(0.45), lineWidth: 1))
-            .shadow(color: .black.opacity(down ? 0 : 0.3), radius: 1, y: 2)
-            .offset(y: down ? 1 : 0)
+        StyledButton(configuration: configuration, selected: selected, round: round)
+    }
+
+    private struct StyledButton: View {
+        let configuration: Configuration
+        let selected: Bool
+        let round: Bool
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            let down = selected || configuration.isPressed
+            configuration.label
+                .frame(width: round ? 28 : 37, height: 27)
+                .foregroundStyle(down ? Color(red: 0.97, green: 0.86, blue: 0.66) : Color(red: 0.46, green: 0.23, blue: 0.10))
+                .background(LinearGradient(colors: down ? [Color(red: 0.57, green: 0.29, blue: 0.11), Color(red: 0.72, green: 0.41, blue: 0.17)] : [Color(red: 1, green: 0.83, blue: 0.55), Color(red: 0.94, green: 0.64, blue: 0.29)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: round ? 14 : 7))
+                .overlay(RoundedRectangle(cornerRadius: round ? 14 : 7).stroke(down ? .black.opacity(0.3) : .white.opacity(0.45), lineWidth: 1))
+                .shadow(color: .black.opacity(down ? 0 : 0.3), radius: 1, y: 2)
+                .offset(y: down ? 1 : 0)
+                .animation(DashboardMotion.animation(DashboardMotion.press, reduceMotion: reduceMotion), value: down)
+        }
     }
 }
 
