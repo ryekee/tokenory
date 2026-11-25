@@ -1,5 +1,5 @@
 // [INPUT]: Versioned aggregate snapshots for two devices.
-// [OUTPUT]: Checks replacement, additive totals, filters and unique day/model counts.
+// [OUTPUT]: Checks replacement, additive totals, filtered model totals by tool, and unique day/model counts.
 // [POS]: Snapshot wire format and shared Overview calculations.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import XCTest
@@ -67,6 +67,32 @@ final class DeviceUsageSnapshotTests: XCTestCase {
         XCTAssertEqual(activity.modelDays.first?.date, secondDay)
         XCTAssertEqual(activity.hourly?.buckets.first?.key, "10")
         XCTAssertEqual(DeviceUsageSnapshot.overview(devices: devices, filter: .init(source: "tokens-ci")).summary.tokens, 0)
+    }
+
+    func testModelsByToolUseFilteredBucketsAcrossDevices() throws {
+        let first = snapshot([
+            bucket(firstDay, hour: 11, tokens: 30, cost: 0.3, child: true),
+            bucket(secondDay, hour: 8, tokens: 300, cost: 3.0)
+        ])
+        let second = snapshot([
+            bucket(firstDay, hour: nil, tokens: 20, cost: nil),
+            bucket(firstDay, hour: 13, tokens: 15, cost: 0.0, client: "other")
+        ])
+        let devices = ["a": first, "b": second]
+        let report = DeviceUsageSnapshot.overview(devices: devices, filter: .init(from: firstDay, to: firstDay))
+        let model = try XCTUnwrap(report.clientModels?["codex"]?.first)
+        XCTAssertEqual(model.key, "model")
+        XCTAssertEqual(model.summary.tokens, 50)
+        XCTAssertEqual(model.summary.activeDays, 1)
+        XCTAssertEqual(model.summary.costStatus, "partial")
+        XCTAssertEqual(model.summary.knownEstimatedCostUsd, 0.3)
+        XCTAssertEqual(model.summary.unpricedTokens, 20)
+        XCTAssertEqual(model.summary.fastTokens, 30)
+        XCTAssertEqual(model.summary.fastEstimatedCostUsd, 0.3)
+        XCTAssertEqual(report.clientModels?["other"]?.first?.summary.tokens, 15)
+        let imported = DeviceUsageSnapshot.overview(devices: devices, filter: .init(source: "tokens-ci"))
+        XCTAssertEqual(imported.clientModels?["codex"]?.first?.summary.tokens, 20)
+        XCTAssertNil(imported.clientModels?["other"])
     }
 
     func testFutureSnapshotSchemaIsRejected() {

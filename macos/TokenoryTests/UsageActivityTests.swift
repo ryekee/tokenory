@@ -59,6 +59,50 @@ final class UsageActivityTests: XCTestCase {
         XCTAssertEqual(activity.peak?.key, "2026-11-03")
         XCTAssertEqual(activity.topWeekday, 1)
     }
+    func testActivityStreakAndAverageUseOnlyDaysWithTokens() {
+        let activity = UsageActivity(report: report)
+        XCTAssertEqual(activity.streak.current, 0)
+        XCTAssertEqual(activity.streak.longest, 1)
+        XCTAssertEqual(activity.averageActiveDayTokens, 45)
+    }
+
+    func testInsightsSeparateActiveDaysFromCalendarDaysAndRequireCompleteCosts() {
+        let now = Localization.date("2026-11-04")!
+        let filter = UsageFilter(from: "2026-11-01", to: "2026-11-30")
+        let known = OverviewInsights(summary: summary(30, 3), filter: filter,
+                                     calendar: Localization.reportingCalendar, now: now)
+        XCTAssertEqual(known.activeDayTokens, 30)
+        XCTAssertEqual(known.activeDayCost, 3)
+        XCTAssertEqual(known.cachedInputShare, 0)
+        XCTAssertEqual(known.periodDays, 4)
+        XCTAssertEqual(known.monthlyPace, 22.5)
+        XCTAssertEqual(known.costPerMillion, 100_000)
+
+        let unknown = OverviewInsights(summary: summary(60, nil), filter: filter,
+                                       calendar: Localization.reportingCalendar, now: now)
+        XCTAssertEqual(unknown.activeDayTokens, 60)
+        XCTAssertNil(unknown.activeDayCost)
+        XCTAssertNil(unknown.monthlyPace)
+        XCTAssertNil(unknown.costPerMillion)
+        let singleDay = OverviewInsights(summary: summary(30, 3), filter: UsageFilter(from: "2026-11-04", to: "2026-11-04"),
+                                         calendar: Localization.reportingCalendar, now: now)
+        XCTAssertNil(singleDay.monthlyPace)
+    }
+
+    func testChartPinSurvivesHoverAndTogglesOffOnTheSameMark() {
+        var inspection = ChartInspection<Int>()
+        inspection.hovered = 2
+        XCTAssertEqual(inspection.selection, 2)
+        inspection.togglePin(2)
+        inspection.hovered = 3
+        XCTAssertEqual(inspection.selection, 2)
+        inspection.togglePin(2)
+        XCTAssertNil(inspection.selection)
+        inspection.togglePin(3)
+        inspection.clear()
+        XCTAssertNil(inspection.selection)
+    }
+
     func testHistoryKeepsClientIdentityAndRawTotalsAcrossAverageAndReverse() {
         let daily = UsageHistory(report: report, metric: .tokens, average: false)
         let average = UsageHistory(report: report, metric: .tokens, average: true)

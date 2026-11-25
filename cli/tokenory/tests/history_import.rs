@@ -21,6 +21,23 @@ fn import(db: &mut Database, rows: serde_json::Value) -> String {
         .batch_id
 }
 #[test]
+fn import_detects_cc_switch_and_rejects_unrelated_json() {
+    let t = tempfile::tempdir().unwrap();
+    let mut db = Database::open(t.path()).unwrap();
+    let bytes = format!("  \n{}", json!([row("2026-04-08", "model-a", 400)]));
+    let preview = preview_import(&mut db, "auto", bytes.as_bytes(), None).unwrap();
+    assert_eq!(preview.source, "cc-switch");
+    assert_eq!(preview.tokens, 1020);
+
+    for unknown in [b"true".as_slice(), b"{\"unrelated\": []}", b"[{}]"] {
+        assert!(preview_import(&mut db, "auto", unknown, None).is_err());
+    }
+    assert_eq!(
+        report(&mut db, &Filter::default()).unwrap().summary.tokens,
+        0
+    );
+}
+#[test]
 fn tokens_ci_review_import_counts_all_tokens_and_keeps_the_source_estimate() {
     let t = tempfile::tempdir().unwrap();
     let mut db = Database::open(t.path()).unwrap();
@@ -37,11 +54,12 @@ fn tokens_ci_review_import_counts_all_tokens_and_keeps_the_source_estimate() {
     });
     let p = preview_import(
         &mut db,
-        "tokens-ci",
+        "auto",
         &serde_json::to_vec(&export).unwrap(),
         Some("Asia/Shanghai".into()),
     )
     .unwrap();
+    assert_eq!(p.source, "tokens-ci");
     assert_eq!((p.tokens, p.unpriced_tokens), (100, 50));
     apply_import(&mut db, &p.id, &ApplyOptions::default()).unwrap();
     let report = report(&mut db, &Filter::default()).unwrap();

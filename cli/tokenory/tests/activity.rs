@@ -1,6 +1,6 @@
 use chrono::TimeZone;
 use serde_json::json;
-use tokenory::{db::{put_record, Database}, queries::{activity, conversations, report, ConversationId, ConversationQuery, Filter}, usage::UsageRecord};
+use tokenory::{db::{put_record, Database}, queries::{activity, conversations, overview, report, ConversationId, ConversationQuery, Filter}, usage::UsageRecord};
 
 #[test]
 fn conversation_selection_is_client_scoped_and_precedes_pagination() {
@@ -188,6 +188,61 @@ fn activity_uses_effective_rows_and_preserves_unknown_costs() {
     assert!(activity(&mut db, &filter).is_err());
     filter.from = Some("2024-01-01".into());
     assert!(activity(&mut db, &filter).is_err());
+}
+
+#[test]
+fn overview_models_by_client_use_the_filtered_ledger_before_pagination() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = Database::open(root.path()).unwrap();
+    for (key, date, client, provider, model, tokens, cost) in [
+        ("fast", "2026-11-01", "codex", "provider", "shared", 120, Some(0.75)),
+        ("pending", "2026-11-01", "codex", "provider", "shared", 80, None),
+        ("other-model", "2026-11-02", "codex", "provider", "other", 30, Some(0.0)),
+        ("other-client", "2026-11-01", "claude", "provider", "shared", 50, Some(1.0)),
+        ("excluded", "2026-11-01", "codex", "other-provider", "shared", 300, Some(3.0)),
+        ("too-new", "2026-11-03", "codex", "provider", "shared", 400, Some(4.0)),
+    ] {
+        let row: UsageRecord = serde_json::from_value(json!({
+            "key": key, "date": date, "client": client, "provider": provider, "model": model,
+            "tokens": {"input": tokens, "output": 0, "cacheRead": 0, "cacheWrite": 0, "reasoning": 0},
+            "estimatedCostUsd": cost,
+            "metadata": if key == "fast" {
+                json!({"inferenceSpeed": {"speed": "fast", "source": "selected"}})
+            } else {
+                json!({})
+            },
+        })).unwrap();
+        put_record(&db.connection, "local", "", &row).unwrap();
+    }
+    db.connection.execute_batch(
+        "INSERT INTO coverage_choices VALUES
+         ('2026-11-01','codex','local',''), ('2026-11-01','claude','local',''),
+         ('2026-11-02','codex','local',''), ('2026-11-03','codex','local','');"
+    ).unwrap();
+
+    let filter = Filter {
+        to: Some("2026-11-02".into()),
+        provider: Some("provider".into()),
+        offset: 10,
+        limit: Some(1),
+        ..Default::default()
+    };
+    let result = overview(&mut db, &filter, root.path()).unwrap();
+    assert!(result.details.is_empty());
+    let payload = serde_json::to_value(&result).unwrap();
+    let groups = result.client_models.unwrap();
+    assert_eq!(groups["codex"].iter().map(|group| group.key.as_str()).collect::<Vec<_>>(), ["shared", "other"]);
+    let shared = &groups["codex"][0].summary;
+    assert_eq!(shared.tokens, 200);
+    assert_eq!(shared.cost_status, "partial");
+    assert_eq!(shared.known_estimated_cost_usd, Some(0.75));
+    assert_eq!(shared.unpriced_tokens, 80);
+    assert_eq!(shared.fast_tokens, Some(120));
+    assert_eq!(shared.fast_estimated_cost_usd, Some(0.75));
+    assert_eq!(groups["claude"][0].summary.tokens, 50);
+    assert_eq!(payload["clientModels"]["codex"][1]["summary"]["knownEstimatedCostUsd"], 0.0);
+    let records = serde_json::to_value(report(&mut db, &filter).unwrap()).unwrap();
+    assert!(records.get("clientModels").is_none());
 }
 
 #[test]

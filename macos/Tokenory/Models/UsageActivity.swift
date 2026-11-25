@@ -1,5 +1,5 @@
 // [INPUT]: Effective daily ledger aggregates in Beijing reporting dates.
-// [OUTPUT]: Calendar cells, habits and aligned model history with optional costs and a padded stacked peak.
+// [OUTPUT]: Calendar cells, insights, habits and aligned model history with optional costs and a padded stacked peak.
 // [POS]: Pure presentation data; totals remain raw when averages or order change.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -27,6 +27,20 @@ struct UsageActivity {
     let leadingDays: Int
     let weekdayTokens: [Int64]
     var activeDays: Int { days.filter { $0.tokens > 0 }.count }
+    var streak: (current: Int, longest: Int) {
+        var current = 0
+        var longest = 0
+        for day in days {
+            current = day.tokens > 0 ? current + 1 : 0
+            longest = max(longest, current)
+        }
+        return (current, longest)
+    }
+    var averageActiveDayTokens: Double? {
+        let active = days.filter { $0.tokens > 0 }
+        guard !active.isEmpty else { return nil }
+        return active.reduce(0.0) { $0 + Double($1.tokens) } / Double(active.count)
+    }
     var peak: ActivityDay? { days.filter { $0.tokens > 0 }.max { $0.tokens < $1.tokens } }
     var topWeekday: Int? {
         guard let highest = weekdayTokens.max(), highest > 0 else { return nil }
@@ -56,6 +70,36 @@ struct UsageActivity {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = Localization.reportingCalendar.timeZone; f.dateFormat = "yyyy-MM-dd"
         return f.string(from: date)
+    }
+}
+
+struct OverviewInsights {
+    let activeDayTokens: Int64?
+    let activeDayCost: Double?
+    let cachedInputShare: Double?
+    let costPerMillion: Double?
+    let monthlyPace: Double?
+    let periodDays: Int?
+
+    init(summary: UsageSummary, filter: UsageFilter, calendar: Calendar, now: Date = .now) {
+        activeDayTokens = summary.activeDays > 0 ? Int64(exactly: (Double(summary.tokens) / Double(summary.activeDays)).rounded()) : nil
+        let mix = summary.tokenBreakdown
+        let inputTokens = Double(mix.input) + Double(mix.cacheRead) + Double(mix.cacheWrite)
+        cachedInputShare = inputTokens > 0 ? Double(mix.cacheRead) / inputTokens : nil
+        let completeCost = summary.costStatus == "complete" && summary.unpricedTokens == 0 && (summary.partialDays ?? 0) == 0
+            ? summary.knownEstimatedCostUsd : nil
+        activeDayCost = summary.activeDays > 0 ? completeCost.map { $0 / Double(summary.activeDays) } : nil
+        costPerMillion = summary.tokens > 0 ? completeCost.map { $0 / Double(summary.tokens) * 1_000_000 } : nil
+        if let from = filter.from.flatMap({ Localization.date($0, timeZone: calendar.timeZone) }),
+           let to = filter.to.flatMap({ Localization.date($0, timeZone: calendar.timeZone) }),
+           let days = calendar.dateComponents([.day], from: from, to: min(to, calendar.startOfDay(for: now))).day,
+           days >= 1 {
+            periodDays = days + 1
+            monthlyPace = completeCost.map { $0 / Double(days + 1) * 30 }
+        } else {
+            periodDays = nil
+            monthlyPace = nil
+        }
     }
 }
 
