@@ -2895,13 +2895,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "These dates already have records. Choose which source to count. Both copies are kept."
+            "value": "Existing records are counted for overlapping dates unless you choose this import. Both copies are kept."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这些日期已有记录，请选择计入总数的来源。两份数据都会保留。"
+            "value": "重叠日期默认计入已有记录。可改用本次导入，两份数据都会保留。"
           }
         }
       }
@@ -4481,7 +4481,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activity"
+            "value": "Activity calendar"
           }
         },
         "zh-Hans": {
@@ -4595,13 +4595,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "View day"
+            "value": "Open day overview"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "查看当日"
+            "value": "查看当日总览"
           }
         }
       }
@@ -4646,13 +4646,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usage over time"
+            "value": "Model history"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "用量走势"
+            "value": "模型历史"
           }
         }
       }
@@ -4799,13 +4799,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coding patterns"
+            "value": "Usage habits"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "编码习惯"
+            "value": "使用习惯"
           }
         }
       }
@@ -5612,13 +5612,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use Left and Right to inspect a time bucket or turn. Press Return to select it."
+            "value": "Use Left and Right to inspect a time bucket or turn. Press Return to select it or Escape to clear the chart selection."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按左右方向键查看时段或回合，按回车选中。"
+            "value": "按左右方向键查看时段或回合，按回车选中，按 Esc 清除图表选择。"
           }
         }
       }
@@ -7073,11 +7073,32 @@
         }
       }
     },
+    "subagents.card_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Subagents" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "子代理" } }
+      }
+    },
+    "subagents.supported_only_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Currently tracks subagents from Codex and Antigravity only." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "目前仅支持统计 Codex 和 Antigravity 的子代理。" } }
+      }
+    },
     "subagents.title": {
       "extractionState": "manual",
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Codex subagents" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "Codex 子代理" } }
+      }
+    },
+    "subagents.antigravity_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Antigravity subagents" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "Antigravity 子代理" } }
       }
     },
     "subagents.basis": {
@@ -7190,6 +7211,188 @@
             "value": "没有匹配的对话"
           }
         }
+      }
+    },
+    "overview.insights": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Insights" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "洞察" } }
+      }
+    },
+    "overview.tools_models": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Tools & models" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "工具与模型" } }
+      }
+    },
+    "overview.clear_chart_selection": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Clear selected period" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "清除所选时段" } }
+      }
+    },
+    "overview.requests": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Requests" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "请求数" } }
+      }
+    },
+    "insight.streak": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Current streak" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "连续活跃" } }
+      }
+    },
+    "insight.days": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%lld days" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "%lld 天" } }
+      }
+    },
+    "insight.longest": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "12-month best · %lld days" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "近一年最长 %lld 天" } }
+      }
+    },
+    "insight.monthly_pace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "30-day cost estimate" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "30 天费用折算" } }
+      }
+    },
+    "insight.pace_basis": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Based on %lld days" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "按所选范围的 %lld 天折算" } }
+      }
+    },
+    "insight.active_day": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Per active day" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "每活跃日平均用量" } }
+      }
+    },
+    "insight.active_day_cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Est. cost %@ / active day" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "估算费用 %@ / 活跃日" } }
+      }
+    },
+    "insight.cached_input": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Cached input share" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "输入缓存读取占比" } }
+      }
+    },
+    "insight.cached_input_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Cache reads divided by input, cache reads and cache writes." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "缓存读取量除以普通输入、缓存读取和缓存写入的合计。" } }
+      }
+    },
+    "insight.cost_per_million": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%@ per 1M Tokens" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "%@ / 百万 Tokens" } }
+      }
+    },
+    "activity.close_day": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Close day details" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "收起当日详情" } }
+      }
+    },
+    "activity.no_day_usage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No usage on this day" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "当天暂无用量" } }
+      }
+    },
+    "activity.vs_average": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%@× the active-day average" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "活跃日平均用量的 %@ 倍" } }
+      }
+    },
+    "activity.average_basis": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Average over active days in this calendar." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "按本活动日历内有用量的日期计算。" } }
+      }
+    },
+    "export.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Export failed" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "导出失败" } }
+      }
+    },
+    "import.formats_hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Choose a CC Switch export or a tokens.ci snapshot." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "请选择 CC Switch 导出文件或 tokens.ci 快照。" } }
+      }
+    },
+    "import.preview_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Couldn’t preview the file" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法预览文件" } }
+      }
+    },
+    "import.apply_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Import failed" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "导入失败" } }
+      }
+    },
+    "import.undo_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Couldn’t undo the import" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法撤销导入" } }
+      }
+    },
+    "import.undo_complete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Import undone" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已撤销导入" } }
+      }
+    },
+    "price.refresh_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Couldn’t refresh rates" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法刷新费率" } }
+      }
+    },
+    "price.apply_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Couldn’t apply the new estimates" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法应用新的估算费用" } }
       }
     }
   },

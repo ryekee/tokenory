@@ -68,6 +68,12 @@ final class DeviceSyncStore {
     @ObservationIgnored private var pending = false
 
     var localName: String { service.deviceName }
+    var hasLocalSnapshot: Bool { snapshots[service.deviceID] != nil }
+    func instantLocalOverview(for filter: UsageFilter) -> UsageReport? {
+        guard filter.conversation == nil, filter.source == nil,
+              let localSnapshot = snapshots[service.deviceID] else { return nil }
+        return DeviceUsageSnapshot.overview(devices: [service.deviceID: localSnapshot], filter: filter)
+    }
     func name(_ id: String) -> String { sources.first { $0.id == id }?.name ?? id }
     func overview(for filter: UsageFilter?) -> UsageReport? { projection?.filter == filter ? projection?.overview : nil }
     func remote(for filter: UsageFilter?) -> [String: UsageReport] { projection?.filter == filter ? projection?.remote ?? [:] : [:] }
@@ -122,6 +128,9 @@ final class DeviceSyncStore {
         #endif
     }
 
+    @ObservationIgnored private var projectionCache: [UsageFilter: DeviceProjection] = [:]
+    @ObservationIgnored private var projectionCacheVersion = -1
+
     /// Publish the matching local report and device breakdown in a single main-actor turn.
     func select(_ filter: UsageFilter, from: String, to: String,
                 whileCurrent: () -> Bool = { true }, commit: () -> Void = {}) async {
@@ -132,11 +141,17 @@ final class DeviceSyncStore {
         annualFilter.limit = UsageFilter().limit
         while whileCurrent() {
             let version = snapshotVersion
+            if projectionCacheVersion != version {
+                projectionCache.removeAll(keepingCapacity: true)
+                projectionCacheVersion = version
+            }
             let old = projection
             let reusable = old?.snapshotVersion == version && old?.annual.filter == annualFilter
             let next: DeviceProjection?
             if reusable, old?.filter == filter {
                 next = old
+            } else if let cached = projectionCache[filter], cached.snapshotVersion == version, cached.annual.filter == annualFilter {
+                next = cached
             } else if let localSnapshot = snapshots[service.deviceID], snapshots.count > 1 {
                 let all = snapshots, id = service.deviceID
                 let cachedAnnual = reusable ? old?.annual : nil
@@ -156,6 +171,10 @@ final class DeviceSyncStore {
             }
             guard whileCurrent() else { return }
             guard version == snapshotVersion else { continue }
+            if let next {
+                if projectionCache.count >= 16 { projectionCache.removeAll(keepingCapacity: true) }
+                projectionCache[filter] = next
+            }
             selection = filter
             year = (from, to)
             if !reusable, next != nil || projection != nil { annualVersion += 1 }

@@ -64,6 +64,9 @@ final class UsageStore {
     var activity: ActivityReport?
     var activityCalendar: UsageActivity?
     @ObservationIgnored private var historyCache: [HistorySelection: UsageHistory] = [:]
+    @ObservationIgnored private var reportCache: [UsageFilter: UsageReport] = [:]
+    @ObservationIgnored private var reportCacheRevision: Int64?
+    @ObservationIgnored private var prefetchTask: Task<Void, Never>?
     private struct HistorySelection: Hashable {
         let revision: Int64
         let localOnly: Bool
@@ -294,6 +297,47 @@ final class UsageStore {
             }
         } catch { if generation == refreshGeneration { fail(error, recovery: .statistics) } }
         _ = await (history, quick)
+        if generation == refreshGeneration {
+            prefetchPresetRanges(now: now)
+        }
+    }
+    private func cacheReport(_ selected: UsageReport, for selection: UsageFilter) {
+        if reportCacheRevision != selected.revision {
+            reportCache.removeAll(keepingCapacity: true)
+            reportCacheRevision = selected.revision
+        }
+        if reportCache.count >= 24 { reportCache.removeAll(keepingCapacity: true) }
+        reportCache[selection] = selected
+    }
+    private func prefetchPresetRanges(now: Date) {
+        prefetchTask?.cancel()
+        guard connected, let expectedRevision = reportCacheRevision else { return }
+        let calendar = Localization.reportingCalendar
+        let today = calendar.startOfDay(for: now)
+        let base = filter
+        let presets: [UsageDateRange] = [.today, .week, .month, .all]
+        let candidates: [UsageFilter] = presets.compactMap { preset in
+            var selection = base
+            selection.conversation = nil
+            selection.offset = 0
+            selection.to = preset == .all ? nil : Self.day(now)
+            selection.from = preset.dayCount
+                .flatMap { calendar.date(byAdding: .day, value: 1 - $0, to: today) }
+                .map(Self.day)
+            return reportCache[selection] == nil ? selection : nil
+        }
+        guard !candidates.isEmpty else { return }
+        prefetchTask = Task(priority: .utility) { [weak self] in
+            for candidate in candidates {
+                guard !Task.isCancelled, let self, self.connected, self.reportCacheRevision == expectedRevision else { return }
+                if self.reportCache[candidate] != nil { continue }
+                guard let prefetched = try? await self.engine.request("overview", payload: .encode(candidate), as: UsageReport.self) else {
+                    continue
+                }
+                guard !Task.isCancelled, self.reportCacheRevision == expectedRevision, prefetched.revision == expectedRevision else { return }
+                self.cacheReport(prefetched, for: candidate)
+            }
+        }
     }
     func refreshSelection(_ selection: UsageFilter, now: Date = Date(), forceReport: Bool = false) async {
         guard selection == reportSelection else { return }
@@ -315,13 +359,51 @@ final class UsageStore {
         let generation = reportGeneration
         requestedReportFilter = selection
         reportFailure = nil
-        loading = true
         defer {
             if generation == reportGeneration { requestedReportFilter = nil; loading = false }
         }
+        if !force, let cached = reportCache[selection] {
+            if selection.conversation != nil {
+                report = cached
+                reportFilter = selection
+                return
+            }
+            let year = Self.reportingYear(ending: now)
+            await cloud.select(selection, from: year.from, to: year.to, whileCurrent: {
+                self.reportGeneration == generation && self.reportSelection == selection
+            }) {
+                self.report = cached
+                self.reportFilter = selection
+            }
+            return
+        }
+        if !force, !recordsAreActive, selection.conversation == nil, selection.source == nil,
+           let instantLocal = cloud.instantLocalOverview(for: selection) {
+            let year = Self.reportingYear(ending: now)
+            await cloud.select(selection, from: year.from, to: year.to, whileCurrent: {
+                self.reportGeneration == generation && self.reportSelection == selection
+            }) {
+                self.report = instantLocal
+                self.reportFilter = selection
+            }
+            guard generation == reportGeneration, selection == reportSelection else { return }
+            // Silently fetch exact local report (records, local-TZ hourly, Codex subagent details) without re-triggering range animations.
+            do {
+                let selected = try await engine.request("overview", payload: .encode(selection), as: UsageReport.self)
+                guard generation == reportGeneration, selection == reportSelection else { return }
+                cacheReport(selected, for: selection)
+                report = selected
+                reportFilter = selection
+            } catch {
+                // Keep the instant snapshot reading visible; background refinement failure stays silent.
+            }
+            return
+        }
+        loading = true
         do {
             let selected = try await engine.request("overview", payload: .encode(selection), as: UsageReport.self)
             guard generation == reportGeneration, selection == reportSelection else { return }
+            cacheReport(selected, for: selection)
             if selection.conversation != nil {
                 report = selected
                 reportFilter = selection

@@ -1,5 +1,5 @@
 // [INPUT]: 当前日期范围的报表和明细操作。
-// [OUTPUT]: 按筛选范围显示记录和合计，窄布局使用简体中文短日期。
+// [OUTPUT]: 显示当前筛选的记录和合计，数据缩减时自动回到有效页。
 // [POS]: 主工作区明细页；保留记录身份与分页。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -35,14 +35,30 @@ struct RecordsView: View {
     }
     private var page: Int { displayedFilter.offset / displayedFilter.limit }
     private var pageCount: Int { max(1, (Int(report.summary.recordCount) + displayedFilter.limit - 1) / displayedFilter.limit) }
-    private var pageItems: [Int] {
-        let candidates = Set([0, pageCount - 1, page - 1, page, page + 1].filter { $0 >= 0 && $0 < pageCount }).sorted()
-        var result: [Int] = []
-        for candidate in candidates {
-            if let previous = result.last, candidate - previous > 1 { result.append(-1) }
-            result.append(candidate)
+    private var replacementPage: Int? {
+        guard isActive, displayedFilter == store.reportSelection, !store.loading, page >= pageCount else { return nil }
+        return pageCount - 1
+    }
+    enum PageItem: Hashable {
+        case page(Int)
+        case leadingEllipsis
+        case trailingEllipsis
+
+        static func make(page: Int, pageCount: Int) -> [Self] {
+            let candidates = Set([0, pageCount - 1, page - 1, page, page + 1].filter { $0 >= 0 && $0 < pageCount }).sorted()
+            var result: [Self] = []
+            for candidate in candidates {
+                if let previous = result.last, case .page(let prev) = previous, candidate - prev > 1 {
+                    result.append(prev == 0 ? .leadingEllipsis : .trailingEllipsis)
+                }
+                result.append(.page(candidate))
+            }
+            return result
         }
-        return result
+    }
+
+    private var pageItems: [PageItem] {
+        PageItem.make(page: page, pageCount: pageCount)
     }
     var body: some View {
         let days = Set(report.details.map(\.date))
@@ -79,15 +95,14 @@ struct RecordsView: View {
                                                     Text(dates[detail.date]!)
                                                     BrandLabel(name: detail.client, kind: .tool, title: clientName(detail.client))
                                                     HStack(spacing: 5) {
-                                                        BrandLabel(name: detail.model, kind: .model).fontWeight(.medium).help(detail.model)
+                                                        BrandLabel(name: detail.model, kind: .model).fontWeight(.medium)
                                                         if let mode = detail.inferenceSpeed, mode.isFast {
                                                             FastModeMark(helpText: mode.fastHelp)
                                                         }
                                                     }
                                                     Text(compactTokens(detail.total)).monospacedDigit()
-                                                        .help(detail.total.formatted(.number.locale(Localization.locale)))
                                                     Text(usd(detail.estimatedCostUsd))
-                                                        .monospacedDigit().help(usd(detail.estimatedCostUsd))
+                                                        .monospacedDigit()
                                                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
                                                 }
                                                 .font(.callout).frame(height: 38).contentShape(Rectangle())
@@ -107,40 +122,54 @@ struct RecordsView: View {
                     }.frame(width: max(550, geometry.size.width), height: geometry.size.height)
                 }
             }
-            if report.summary.recordCount > 0 {
+            if !report.details.isEmpty {
                 Divider()
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 16) { rangeLabel; Spacer(minLength: 8); pageSize; pageButtons }
-                    VStack(spacing: 10) {
-                        HStack { rangeLabel; Spacer(); pageSize }
-                        HStack { Spacer(); pageButtons }
+                Group {
+                    if pageCount > 1 {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 16) { rangeLabel; Spacer(minLength: 8); pageSize; pageButtons }
+                            VStack(spacing: 10) {
+                                HStack { rangeLabel; Spacer(); pageSize }
+                                HStack { Spacer(); pageButtons }
+                            }
+                        }
+                    } else {
+                        HStack {
+                            rangeLabel
+                            Spacer()
+                            if report.summary.recordCount > 50 { pageSize }
+                        }
                     }
                 }.padding(12)
             }
         }
         .background(WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: 12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onChange(of: replacementPage, initial: true) { _, page in
+            if let page { go(to: page) }
+        }
     }
 
     private func reportHeader(_ layout: TableLayout) -> some View {
         let summary = report.summary
+        let range = isActive ? DashboardDateSpan(from: displayedFilter.from, to: displayedFilter.to) : nil
         let tokenTotal = summary.tokens.formatted(.number.locale(Localization.locale))
         let costTotal = usd(summary.knownEstimatedCostUsd)
         return HStack(spacing: layout.spacing) {
             DashboardRollingValue(text: LF("usage.record_count", summary.recordCount),
                                   value: Double(summary.recordCount),
-                                  range: isActive ? DashboardDateSpan(from: displayedFilter.from, to: displayedFilter.to) : nil,
+                                  range: range,
                                   style: .headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if summary.recordCount > 0 {
-                Text(tokenTotal)
+                DashboardRollingValue(text: tokenTotal, value: Double(summary.tokens), range: range, style: .calloutMedium)
                     .accessibilityLabel(L("usage.tokens"))
                     .accessibilityValue(tokenTotal)
                     .frame(width: layout.tokens, alignment: .trailing)
-                Text(summary.knownEstimatedCostUsd == nil ? "—" : costTotal)
+                DashboardRollingValue(text: summary.knownEstimatedCostUsd == nil ? "—" : costTotal,
+                                      value: summary.knownEstimatedCostUsd, range: range, style: .calloutMedium)
                     .accessibilityLabel(L(summary.costStatus == "partial" ? "cost.known" : "cost.estimate"))
                     .accessibilityValue(costTotal)
-                    .help(summary.unpricedTokens > 0 ? LF("usage.unpriced", compactTokens(summary.unpricedTokens)) : costTotal)
                     .frame(width: layout.cost, alignment: .trailing)
                 Color.clear.frame(width: layout.arrow, height: 1).accessibilityHidden(true)
             }
@@ -151,19 +180,23 @@ struct RecordsView: View {
         .frame(height: 50)
     }
 
-    private var emptyRecords: some View {
+    @ViewBuilder private var emptyRecords: some View {
         let hasOtherPages = report.summary.recordCount > 0
         let title = hasOtherPages ? "record.empty_page" : hasDimensions ? "record.no_matches" : "usage.empty"
-        return ContentUnavailableView {
-            Label(L(title), systemImage: hasDimensions ? "line.3.horizontal.decrease.circle" : "list.bullet.rectangle")
-        } actions: {
-            if displayedFilter == store.reportSelection && !store.loading {
-                if hasOtherPages {
-                    Button(L("record.first_page")) { go(to: 0) }
-                } else if hasDimensions {
-                    Button(L("record.clear_filters"), action: store.clearRecordFilters)
-                } else {
-                    Button(L("record.change_dates"), action: openDatePicker)
+        if hasOtherPages && (replacementPage != nil || store.loading) {
+            ProgressView().controlSize(.small).accessibilityLabel(L("usage.loading"))
+        } else {
+            ContentUnavailableView {
+                Label(L(title), systemImage: hasDimensions ? "line.3.horizontal.decrease.circle" : "list.bullet.rectangle")
+            } actions: {
+                if displayedFilter == store.reportSelection && !store.loading {
+                    if hasOtherPages {
+                        Button(L("record.first_page")) { go(to: 0) }
+                    } else if hasDimensions {
+                        Button(L("record.clear_filters"), action: store.clearRecordFilters)
+                    } else {
+                        Button(L("record.change_dates"), action: openDatePicker)
+                    }
                 }
             }
         }
@@ -202,10 +235,11 @@ struct RecordsView: View {
     private var pageButtons: some View {
         HStack(spacing: 3) {
             pageArrow("chevron.left", title: L("action.previous"), destination: page - 1).disabled(page == 0 || store.loading)
-            ForEach(Array(pageItems.enumerated()), id: \.offset) { _, number in
-                if number == -1 {
+            ForEach(pageItems, id: \.self) { item in
+                switch item {
+                case .leadingEllipsis, .trailingEllipsis:
                     Text("…").foregroundStyle(.secondary).frame(width: 20)
-                } else {
+                case .page(let number):
                     Button { go(to: number) } label: {
                         Text("\(number + 1)").monospacedDigit()
                             .fontWeight(number == page ? .semibold : .regular)
@@ -223,11 +257,15 @@ struct RecordsView: View {
             }
             pageArrow("chevron.right", title: L("action.next"), destination: page + 1).disabled(page == pageCount - 1 || store.loading)
         }.font(.callout).fixedSize()
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: page)
+            .animation(DashboardMotion.animation(DashboardMotion.pagination, reduceMotion: reduceMotion), value: page)
     }
     private func pageArrow(_ icon: String, title: String, destination: Int) -> some View {
         Button { go(to: destination) } label: { Image(systemName: icon).frame(width: 28, height: 28).contentShape(Rectangle()) }
-            .buttonStyle(WorkspaceHoverStyle()).help(title).accessibilityLabel(title)
+            .buttonStyle(WorkspaceHoverStyle()).accessibilityLabel(title)
     }
-    private func go(to page: Int) { store.filter.offset = page * store.filter.limit }
+    private func go(to page: Int) {
+        guard (0..<pageCount).contains(page) else { return }
+        let offset = page * store.filter.limit
+        if store.filter.offset != offset { store.filter.offset = offset }
+    }
 }

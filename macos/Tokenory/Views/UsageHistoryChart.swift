@@ -8,6 +8,7 @@ struct UsageHistoryChart: View {
     let report: ActivityReport
     let localOnly: Bool
     @Environment(UsageStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var metric: UsageMetric = .tokens
     @State private var average = true
     @State private var client = ""
@@ -23,7 +24,7 @@ struct UsageHistoryChart: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(L("history.title")).font(.headline)
+                        Text(L("history.title")).font(.headline).accessibilityAddTraits(.isHeader)
                         Text(L("activity.year")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                     }
                     Spacer()
@@ -32,7 +33,7 @@ struct UsageHistoryChart: View {
                             .font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                         Text(metric == .tokens ? compactTokens(Int64(data.total ?? 0)) : usd(data.total))
                             .font(DisplayNumberFont.font(for: .title3))
-                    }.help(data.unpricedTokens > 0 ? LF("usage.unpriced", compactTokens(data.unpricedTokens)) : L("history.total_help"))
+                    }
                 }.foregroundStyle(WorkspaceStyle.text)
                 ViewThatFits(in: .horizontal) {
                     HStack { metricControls; Spacer(); filterControls }.frame(maxWidth: .infinity, alignment: .leading)
@@ -41,18 +42,26 @@ struct UsageHistoryChart: View {
                 if data.series.isEmpty {
                     Text(L("usage.empty")).font(.callout).foregroundStyle(WorkspaceStyle.subtext)
                 } else {
-                    HistoryPlot(data: data).frame(height: 240)
+                    HistoryPlot(data: data, scope: HistoryPlotScope(metric: metric, average: average, client: client, localOnly: localOnly))
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)], alignment: .leading, spacing: 10) {
                         ForEach(expandedLegend ? legend : Array(legend.prefix(6))) { series in
                             HStack(spacing: 6) {
                                 Circle().fill(historyColor(series)).frame(width: 7, height: 7)
                                 Text(series.model).lineLimit(1).truncationMode(.middle)
-                            }.font(.caption).foregroundStyle(WorkspaceStyle.subtext).help(clientName(series.client) + " · " + series.model)
+                            }.font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+                                .transition(.opacity)
                         }
                     }
                     if data.series.count > 6 {
-                        Button(L(expandedLegend ? "action.show_less" : "action.show_all")) { expandedLegend.toggle() }
-                            .buttonStyle(.plain).font(.caption).foregroundStyle(WorkspaceStyle.selection)
+                        Button {
+                            DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                                expandedLegend.toggle()
+                            }
+                        } label: {
+                            Text(L(expandedLegend ? "action.show_less" : "action.show_all"))
+                                .padding(.horizontal, 6).padding(.vertical, 3)
+                        }
+                        .buttonStyle(WorkspaceHoverStyle()).font(.caption).foregroundStyle(WorkspaceStyle.selection)
                     }
                 }
             }
@@ -66,7 +75,7 @@ struct UsageHistoryChart: View {
             Picker(L("history.display"), selection: $average) {
                 Text(L("history.average")).tag(true)
                 Text(L("history.daily")).tag(false)
-            }.labelsHidden().pickerStyle(.segmented).tint(WorkspaceStyle.selection).fixedSize().help(L("history.average_help"))
+            }.labelsHidden().pickerStyle(.segmented).tint(WorkspaceStyle.selection).fixedSize()
         }
     }
     private var filterControls: some View {
@@ -128,16 +137,25 @@ struct HistoryAxisScale {
     }
 }
 
+private struct HistoryPlotScope: Hashable {
+    let metric: UsageMetric
+    let average: Bool
+    let client: String
+    let localOnly: Bool
+}
+
 private struct HistoryPlot: View {
     let data: UsageHistory
+    let scope: HistoryPlotScope
     private let axis: HistoryAxisScale
     private let rowCount: Int
     private let readoutWidth: CGFloat
-    @State private var selectedIndex: Int?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var inspection = ChartInspection<String>()
     @State private var tooltipPointer = TooltipPointer()
-    @State private var keyboardSelection = false
-    init(data: UsageHistory) {
+    init(data: UsageHistory, scope: HistoryPlotScope) {
         self.data = data
+        self.scope = scope
         axis = HistoryAxisScale(paddedMaximum: data.maximum, metric: data.metric)
         let limit = min(6, data.series.count)
         var count = 0
@@ -153,6 +171,21 @@ private struct HistoryPlot: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            plot.frame(height: 240)
+            if let index = selectedIndex, inspection.pinned == data.days[index].key {
+                PinnedChartReadout(clear: {
+                    DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                        inspection.clear()
+                    }
+                }) { readout(index) }
+                .transition(.opacity)
+            }
+        }
+        .onChange(of: scope) { _, _ in inspection.clear() }
+    }
+
+    private var plot: some View {
         GeometryReader { geometry in
             let axisWidth: CGFloat = 70
             let axisGap: CGFloat = 9
@@ -173,31 +206,49 @@ private struct HistoryPlot: View {
                     Spacer()
                     if let last = data.days.last { Text(Localization.day(last.key)) }
                 }.font(.caption2).foregroundStyle(WorkspaceStyle.subtext).frame(width: width).offset(y: height + 10)
-                let index = selectedIndex.flatMap { data.days.indices.contains($0) ? $0 : nil }
+                let index = selectedIndex
                 let mark = index.map { CGRect(x: data.position(of: $0, width: width), y: 0, width: 1, height: height) }
                 if let mark {
-                    ChartHoverRule(x: mark.minX, plot: CGRect(x: 0, y: 0, width: width, height: height), opacity: 0.7)
+                    ChartHoverRule(x: mark.minX, plot: CGRect(x: 0, y: 0, width: width, height: height), opacity: inspection.pinned == nil ? 0.7 : 0.95)
                 }
                 Rectangle().fill(.clear).contentShape(Rectangle()).frame(width: width, height: height)
                     .onContinuousHover { phase in
                         switch phase {
-                        case .active(let point): select(point, width: width)
-                        case .ended: selectedIndex = nil
+                        case .active(let point):
+                            tooltipPointer.move(to: point)
+                            let next = dayKey(at: point, width: width)
+                            if inspection.hovered != next { inspection.hovered = next }
+                        case .ended: inspection.hovered = nil
                         }
-                    }.onTapGesture { select($0, width: width) }
-                    .selectedTooltip(avoiding: mark, pointer: tooltipPointer, keyboardAnchor: keyboardSelection ? mark.map { CGPoint(x: $0.midX, y: $0.midY) } : nil) {
+                    }.onTapGesture { point in
+                        DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                            inspection.togglePin(dayKey(at: point, width: width))
+                        }
+                    }
+                    .selectedTooltip(avoiding: inspection.pinned == nil ? mark : nil, pointer: tooltipPointer) {
                         if let index { readout(index) }
                     }
             }
         }.focusable()
             .onKeyPress(.leftArrow) { move(-1); return .handled }
             .onKeyPress(.rightArrow) { move(1); return .handled }
-            .onKeyPress(.escape) { selectedIndex = nil; return .handled }
+            .onKeyPress(.escape) {
+                guard inspection.selection != nil else { return .ignored }
+                DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                    inspection.clear()
+                }
+                return .handled
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(L("history.title"))
             .accessibilityValue(accessibilityReadout)
             .accessibilityAdjustableAction { direction in move(direction == .increment ? 1 : -1) }
     }
+    private var selectedIndex: Int? {
+        guard let key = inspection.selection else { return nil }
+        return data.days.firstIndex { $0.key == key }
+    }
+
     private var accessibilityReadout: String {
         guard let index = selectedIndex, data.days.indices.contains(index) else { return value(data.total) }
         return Localization.day(data.days[index].key) + ": " + data.series.map { $0.model + " " + value($0.values[index]) }.joined(separator: ", ")
@@ -206,16 +257,17 @@ private struct HistoryPlot: View {
         if data.metric == .cost { return usd(amount) }
         return amount.map { compactTokens(Int64($0.rounded())) } ?? "—"
     }
-    private func select(_ point: CGPoint, width: CGFloat) {
-        tooltipPointer.move(to: point)
-        let x = point.x
-        keyboardSelection = false
-        selectedIndex = min(max(0, Int((x / width * CGFloat(max(0, data.days.count - 1))).rounded())), max(0, data.days.count - 1))
+    private func dayKey(at point: CGPoint, width: CGFloat) -> String? {
+        guard !data.days.isEmpty, point.x >= 0, point.x <= width else { return nil }
+        let index = Int((point.x / width * CGFloat(data.days.count - 1)).rounded())
+        return data.days[index].key
     }
     private func move(_ delta: Int) {
         guard !data.days.isEmpty else { return }
-        keyboardSelection = true
-        selectedIndex = min(max(0, (selectedIndex ?? (delta > 0 ? -1 : data.days.count)) + delta), data.days.count - 1)
+        let index = min(max(0, (selectedIndex ?? (delta > 0 ? -1 : data.days.count)) + delta), data.days.count - 1)
+        DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+            inspection.pinned = data.days[index].key
+        }
     }
     private func readout(_ index: Int) -> some View {
         let ranked = data.series.filter { $0.values[index] == nil || ($0.values[index] ?? 0) > 0 }.sorted { ($0.values[index] ?? -1) > ($1.values[index] ?? -1) }

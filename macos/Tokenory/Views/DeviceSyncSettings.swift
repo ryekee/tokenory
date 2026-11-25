@@ -6,6 +6,7 @@ import SwiftUI
 
 struct DeviceSyncSettings: View {
     @Environment(UsageStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var choosingDeletionScope = false
     @State private var deletion: Scope?
     private enum Scope: Identifiable {
@@ -43,24 +44,44 @@ struct DeviceSyncSettings: View {
                             Task { if on { await sync.enable() } else { await sync.stop() } }
                         })).disabled(sync.managing)
                     }
-                    HStack {
-                        if sync.busy || sync.managing { ProgressView().controlSize(.small) }
-                        if let date = sync.lastContact {
-                            TimelineView(.periodic(from: .now, by: 30)) { context in
-                                Text(LF("cloud.last", relativeSyncTime(date, now: context.date)))
-                                    .font(.callout).foregroundStyle(.secondary)
+                    if sync.enabled || sync.busy || sync.managing || sync.lastContact != nil {
+                        HStack(spacing: 8) {
+                            if let date = sync.lastContact {
+                                TimelineView(.periodic(from: .now, by: 30)) { context in
+                                    Text(LF("cloud.last", relativeSyncTime(date, now: context.date)))
+                                        .font(.callout).foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            ProgressView().controlSize(.small)
+                                .frame(width: 16, height: 16)
+                                .opacity(sync.busy || sync.managing ? 1 : 0)
+                                .accessibilityHidden(!(sync.busy || sync.managing))
+                            if sync.enabled {
+                                Button(L("cloud.refresh")) { sync.refresh(localChanged: true) }
+                                    .settingsActionForeground().disabled(sync.busy || sync.managing)
                             }
                         }
-                        Spacer()
-                        if sync.enabled {
-                            Button(L("cloud.refresh")) { sync.refresh(localChanged: true) }
-                                .settingsActionForeground().disabled(sync.busy || sync.managing)
-                        }
+                        .transition(.opacity)
                     }
-                    if sync.pausing { Text(L("cloud.pausing")).font(.callout).foregroundStyle(.secondary) }
-                    if let message = sync.message { WorkspaceErrorMessage(title: message) {} }
-                    if let notice = sync.compatibilityNotice { Text(notice).font(.callout).foregroundStyle(.secondary) }
+                    if sync.pausing {
+                        Text(L("cloud.pausing")).font(.callout).foregroundStyle(.secondary)
+                            .transition(.opacity)
+                    }
+                    if let message = sync.message {
+                        WorkspaceErrorMessage(title: message) {}
+                            .transition(.opacity)
+                    }
+                    if let notice = sync.compatibilityNotice {
+                        Text(notice).font(.callout).foregroundStyle(.secondary)
+                            .transition(.opacity)
+                    }
                 }
+                .clipped()
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: sync.enabled || sync.busy || sync.managing || sync.lastContact != nil)
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: sync.pausing)
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: sync.message != nil)
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: sync.compatibilityNotice != nil)
             }
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 14) {
@@ -78,15 +99,20 @@ struct DeviceSyncSettings: View {
                             if sync.hasUnconfirmedDeviceDeletion {
                                 Button(L("cloud.checkDeviceDeletion")) { Task { await sync.confirmPreviousDeletion(all: false) } }
                                     .settingsActionForeground()
+                                    .transition(.opacity)
                             }
                             if sync.hasUnconfirmedAllDeletion {
                                 Button(L("cloud.checkAllDeletion")) { Task { await sync.confirmPreviousDeletion(all: true) } }
                                     .settingsActionForeground()
+                                    .transition(.opacity)
                             }
                         }
                         .disabled(sync.managing)
                     }
                 }
+                .clipped()
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: sync.hasUnconfirmedDeviceDeletion)
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: sync.hasUnconfirmedAllDeletion)
             }
         }
         .confirmationDialog(L("cloud.choose_delete_scope"), isPresented: $choosingDeletionScope, titleVisibility: .visible) {

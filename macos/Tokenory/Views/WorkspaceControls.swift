@@ -1,5 +1,5 @@
 // [INPUT]: 接收导航项、选项、说明、错误信息和折叠内容。
-// [OUTPUT]: 提供统一设置开关、操作按钮配色、导航、下拉选择、悬停、折叠、说明和直接显示详情的错误行。
+// [OUTPUT]: 统一下拉选择和可清除搜索，以及设置、导航、悬停、折叠、说明和错误反馈。
 // [POS]: 共享控件保持同一前缘。设置操作和下拉使用系统失焦颜色，保留原生交互反馈。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -35,12 +35,14 @@ private struct SettingsActionForeground: ViewModifier {
 struct WorkspaceInfoPopover<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showing = false
 
     var body: some View {
         Button { showing.toggle() } label: {
             Image(systemName: "info.circle")
                 .foregroundStyle(showing ? WorkspaceStyle.selection : Color.secondary)
+                .animation(DashboardMotion.animation(DashboardMotion.state, reduceMotion: reduceMotion), value: showing)
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }
@@ -66,7 +68,6 @@ struct WorkspaceDropdownTrigger: View {
     let value: String
     let width: CGFloat
     var brand: (name: String, kind: BrandKind)? = nil
-    var help: String? = nil
     var flexibleWidth = false
     let action: () -> Void
 
@@ -108,7 +109,6 @@ struct WorkspaceDropdownTrigger: View {
         }
         .accessibilityLabel(label)
         .accessibilityValue(value)
-        .help(help ?? value)
     }
 }
 
@@ -122,6 +122,17 @@ struct WorkspaceDropdownSearchField: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
             TextField(prompt, text: $text).textFieldStyle(.plain).focused(focus).onSubmit(submit)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                    focus.wrappedValue = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20).contentShape(Rectangle())
+                }
+                .buttonStyle(WorkspaceHoverStyle())
+                .accessibilityLabel(L("turns.clear_search"))
+            }
         }.padding(14)
     }
 }
@@ -241,7 +252,6 @@ struct WorkspaceDropdown<Value: Hashable>: View {
                 }
                 .focused($focusedOption, equals: option)
                 .onKeyPress(.return) { select(option); return .handled }
-                .help(title(option))
                 .id(option)
             }
             if let noResults { Text(noResults).font(.caption).foregroundStyle(.secondary).padding(16) }
@@ -249,7 +259,7 @@ struct WorkspaceDropdown<Value: Hashable>: View {
     }
 
     private func select(_ value: Value) {
-        selection = value
+        if value != selection { selection = value }
         showing = false
     }
 }
@@ -270,7 +280,7 @@ struct WorkspaceTabs<ID: Hashable>: View {
         VStack(spacing: 4) {
             ForEach(items) { item in
                 Button {
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { selection = item.id }
+                    selection = item.id
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: item.icon).frame(width: 18)
@@ -290,12 +300,11 @@ struct WorkspaceTabs<ID: Hashable>: View {
                 .accessibilityAddTraits(selection == item.id ? [.isSelected] : [])
             }
         }
+        .animation(DashboardMotion.animation(DashboardMotion.tab, reduceMotion: reduceMotion), value: selection)
         .onMoveCommand { direction in
             guard let current = items.firstIndex(where: { $0.id == selection }) else { return }
             let delta = direction == .up ? -1 : direction == .down ? 1 : 0
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                selection = items[min(max(current + delta, 0), items.count - 1)].id
-            }
+            selection = items[min(max(current + delta, 0), items.count - 1)].id
         }
         .padding(12)
     }
@@ -305,11 +314,14 @@ struct WorkspaceHoverStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View { StyledButton(configuration: configuration) }
     private struct StyledButton: View {
         let configuration: Configuration
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var hovered = false
         var body: some View {
             configuration.label
                 .background(.primary.opacity(configuration.isPressed ? 0.1 : hovered ? 0.045 : 0),
                             in: RoundedRectangle(cornerRadius: 8))
+                .animation(DashboardMotion.animation(DashboardMotion.hover, reduceMotion: reduceMotion), value: hovered)
+                .animation(DashboardMotion.animation(DashboardMotion.press, reduceMotion: reduceMotion), value: configuration.isPressed)
                 .onHover { hovered = $0 }
         }
     }
@@ -321,7 +333,9 @@ struct WorkspaceDisclosureStyle: DisclosureGroupStyle {
     func makeBody(configuration: Configuration) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { configuration.isExpanded.toggle() }
+                DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                    configuration.isExpanded.toggle()
+                }
             } label: {
                 HStack(spacing: 9) {
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
@@ -329,17 +343,20 @@ struct WorkspaceDisclosureStyle: DisclosureGroupStyle {
                     configuration.label
                     Spacer(minLength: 0)
                 }
-                .frame(minHeight: 32).contentShape(Rectangle())
+                .padding(.horizontal, 12).padding(.vertical, 12)
+                .frame(minHeight: 36).contentShape(Rectangle())
             }
             .buttonStyle(WorkspaceHoverStyle())
+            .padding(.horizontal, -12)
             .accessibilityValue(L(configuration.isExpanded ? "state.expanded" : "state.collapsed"))
             if configuration.isExpanded {
                 configuration.content.frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 21)
                     .padding(.top, 8)
+                    .clipped()
                     .transition(.opacity)
             }
-        }.clipped()
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 // [INPUT]: Shared usage filters and the Records conversation selection.
-// [OUTPUT]: Single-row dimension controls ranked by scoped ledger Tokens for tools/providers and by name for models, plus a title-aware conversation picker.
+// [OUTPUT]: Single-row dimension controls and title-aware conversation lookup; one filter change resets pagination atomically.
 // [POS]: Filter toolbar; the conversation lookup runs only while its popover is open.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -83,8 +83,10 @@ struct UsageFiltersView: View {
         Binding(
             get: { store.filter[keyPath: keyPath] ?? "" },
             set: { value in
-                store.filter[keyPath: keyPath] = value.isEmpty ? nil : value
-                store.filter.offset = 0
+                var filter = store.filter
+                filter[keyPath: keyPath] = value.isEmpty ? nil : value
+                filter.offset = 0
+                store.filter = filter
             }
         )
     }
@@ -116,9 +118,11 @@ private struct ConversationPicker: View {
     @State private var showing = false
     @State private var search = ""
     @State private var completedLookup: ConversationLookup?
+    @State private var loading = false
     @State private var options: [UsageConversation] = []
     @State private var failed = false
     @FocusState private var searchFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var lookup: ConversationLookup {
         var filter = store.filter
@@ -131,22 +135,31 @@ private struct ConversationPicker: View {
         let title = selected.map(conversationName) ?? L("record.conversations_all")
         WorkspaceDropdownTrigger(
             label: L("record.conversation"), value: title, width: 148,
-            brand: selected.map { ($0.id.client, .tool) }, help: selected.map(conversationHelp), flexibleWidth: true
+            brand: selected.map { ($0.id.client, .tool) }, flexibleWidth: true
         ) {
             search = ""
             completedLookup = nil
+            loading = false
             showing = true
         }
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             let request = lookup
+            let refreshing = completedLookup != nil && (loading || completedLookup != request)
             VStack(spacing: 0) {
-                WorkspaceDropdownSearchField(prompt: L("record.conversation_search"), text: $search, focus: $searchFocused) {
-                    if completedLookup == request, let first = options.first { select(first) }
+                HStack(spacing: 0) {
+                    WorkspaceDropdownSearchField(prompt: L("record.conversation_search"), text: $search, focus: $searchFocused) {
+                        if completedLookup == request, let first = options.first { select(first) }
+                    }
+                    if refreshing {
+                        ProgressView().controlSize(.small)
+                            .padding(.trailing, 14)
+                            .accessibilityLabel(L("usage.loading"))
+                    }
                 }
                 Divider()
                 option(nil).padding(6)
                 Divider()
-                if completedLookup != request {
+                if completedLookup == nil {
                     ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(16)
                         .accessibilityLabel(L("usage.loading"))
                 } else if failed {
@@ -158,9 +171,13 @@ private struct ConversationPicker: View {
                     Text(L("record.conversations_empty")).foregroundStyle(.secondary).padding(16)
                 } else if options.count <= 4 {
                     conversationRows
+                        .opacity(refreshing ? 0.65 : 1)
+                        .animation(DashboardMotion.animation(DashboardMotion.state, reduceMotion: reduceMotion), value: refreshing)
                 } else {
                     ScrollView { conversationRows }
                         .frame(height: 300)
+                        .opacity(refreshing ? 0.65 : 1)
+                        .animation(DashboardMotion.animation(DashboardMotion.state, reduceMotion: reduceMotion), value: refreshing)
                 }
             }
             .frame(width: 385)
@@ -189,7 +206,6 @@ private struct ConversationPicker: View {
                 Text(L("record.conversations_all"))
             }
         }
-        .help(conversation.map(conversationHelp) ?? L("record.conversations_all"))
     }
 
     private func select(_ conversation: UsageConversation?) {
@@ -213,10 +229,6 @@ private struct ConversationPicker: View {
         return context.compactMap { $0 }.joined(separator: " · ")
     }
 
-    private func conversationHelp(_ conversation: UsageConversation) -> String {
-        "\(conversationName(conversation))\n\(conversation.id.sessionId)"
-    }
-
     private func lastActivity(_ conversation: UsageConversation) -> String {
         if let timestamp = conversation.lastTimestampMs {
             return TurnFormat.timestamp(Date(timeIntervalSince1970: Double(timestamp) / 1000))
@@ -226,7 +238,7 @@ private struct ConversationPicker: View {
 
     private func load(_ request: ConversationLookup) async {
         guard !Task.isCancelled, showing, lookup == request else { return }
-        completedLookup = nil
+        loading = true
         do {
             if !request.search.isEmpty { try await Task.sleep(for: .milliseconds(180)) }
             let matches = try await store.findConversations(request)
@@ -239,5 +251,6 @@ private struct ConversationPicker: View {
             failed = true
         }
         completedLookup = request
+        loading = false
     }
 }

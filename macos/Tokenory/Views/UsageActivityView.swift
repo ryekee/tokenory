@@ -1,5 +1,5 @@
 // [INPUT]: Combined annual activity, per-device calendars and day navigation callback.
-// [OUTPUT]: Fixed YlGnBu calendar with a theme-accent cell outline, isolated hover readout and direct day navigation.
+// [OUTPUT]: Fixed YlGnBu calendar with a theme-accent cell outline, isolated hover, inline day details and explicit day navigation.
 // [POS]: Native overview history section; no palette customization.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -13,6 +13,8 @@ struct UsageActivityView: View {
     let selectDay: (String) -> Void
     @Environment(UsageStore.self) private var store
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var inspectedDay: String?
     @State private var hover = ActivityHover()
     @State private var tooltipPointer = TooltipPointer()
     private var palette: [Color] {
@@ -24,7 +26,7 @@ struct UsageActivityView: View {
         WorkspacePanel {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Text(L("activity.title")).font(.headline)
+                    Text(L("activity.title")).font(.headline).accessibilityAddTraits(.isHeader)
                     Text(L("activity.year")).font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Text(LF("activity.days", activity.activeDays)).font(.caption).foregroundStyle(.secondary)
@@ -37,8 +39,15 @@ struct UsageActivityView: View {
                     ForEach(0..<4) { i in RoundedRectangle(cornerRadius: 2).fill(palette[i]).frame(width: 9, height: 9) }
                     Text(L("activity.high"))
                 }.font(.caption2).foregroundStyle(.secondary)
-
+                if let inspectedDay, let day = activity.days.first(where: { $0.key == inspectedDay }) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Divider()
+                        dayDetail(day)
+                    }
+                    .transition(.opacity)
+                }
             }
+            .clipped()
         }
     }
     private func calendar(_ activity: UsageActivity) -> some View {
@@ -81,13 +90,24 @@ struct UsageActivityView: View {
                                     let i = week * 7 + weekday - activity.leadingDays
                                     if activity.days.indices.contains(i) {
                                         let day = activity.days[i]
-                                        Button { hover.index = nil; selectDay(day.key) } label: {
-                                            RoundedRectangle(cornerRadius: 2)
-                                                .fill(fill(day))
+                                        Button {
+                                            hover.index = nil
+                                            DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                                                inspectedDay = inspectedDay == day.key ? nil : day.key
+                                            }
+                                        } label: {
+                                            let shape = RoundedRectangle(cornerRadius: 2)
+                                            shape.fill(fill(day))
+                                                .overlay {
+                                                    if inspectedDay == day.key {
+                                                        shape.strokeBorder(WorkspaceStyle.selection, lineWidth: 2)
+                                                    }
+                                                }
                                                 .frame(width: cell, height: 11)
                                         }.buttonStyle(.plain)
                                             .accessibilityLabel(day.label)
                                             .accessibilityValue(day.tokens.formatted() + " tokens")
+                                            .accessibilityAddTraits(inspectedDay == day.key ? .isSelected : [])
                                     } else { Color.clear.frame(width: cell, height: 11) }
                                 }
                             }
@@ -102,7 +122,8 @@ struct UsageActivityView: View {
                             let row = Int(floor((point.y - 19) / 14))
                             let index = column * 7 + row - activity.leadingDays
                             let box = CGRect(x: CGFloat(column) * (cell + 3), y: 19 + CGFloat(row) * 14, width: cell, height: 11)
-                            let next = (0..<7).contains(row) && activity.days.indices.contains(index) && box.contains(point) ? index : nil
+                            let next = (0..<7).contains(row) && activity.days.indices.contains(index)
+                                && box.contains(point) && activity.days[index].key != inspectedDay ? index : nil
                             if hover.index != next { hover.index = next }
                         case .ended: hover.index = nil
                         }
@@ -118,6 +139,81 @@ struct UsageActivityView: View {
             }.scrollIndicators(.hidden)
         }.frame(height: 114)
     }
+    private func dayDetail(_ day: ActivityDay) -> some View {
+        let toolTokens = report.modelDays.lazy.filter { $0.date == day.key }.reduce(into: [String: Int64]()) {
+            $0[$1.client, default: 0] += $1.summary.tokens
+        }
+        let topTools = toolTokens.filter { $0.value > 0 }.sorted {
+            $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
+        }.prefix(3)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(day.label).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                if day.summary != nil {
+                    Button(L("activity.open_day")) { selectDay(day.key) }
+                }
+                Button {
+                    DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                        inspectedDay = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark").frame(width: 22, height: 22)
+                }
+                .buttonStyle(WorkspaceHoverStyle())
+                .accessibilityLabel(L("activity.close_day"))
+            }
+            if let summary = day.summary {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 22) { dayMetrics(day, summary: summary) }.fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .leading, spacing: 5) { dayMetrics(day, summary: summary) }
+                }
+                if !topTools.isEmpty {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 18) { toolMetrics(Array(topTools)) }.fixedSize(horizontal: true, vertical: false)
+                        VStack(alignment: .leading, spacing: 5) { toolMetrics(Array(topTools)) }
+                    }
+                }
+            } else {
+                Text(L("activity.no_day_usage")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+            }
+        }
+    }
+
+    @ViewBuilder private func dayMetrics(_ day: ActivityDay, summary: UsageSummary) -> some View {
+        dayMetric("usage.tokens", compactTokens(day.tokens))
+        dayMetric(summary.costStatus == "partial" ? "cost.known" : "cost.estimate", usd(day.cost))
+        if let requests = summary.requests {
+            dayMetric("overview.requests", requests.formatted(.number.locale(Localization.locale)))
+        }
+        if let average = activity.averageActiveDayTokens {
+            let multiple = (Double(day.tokens) / average).formatted(.number.precision(.fractionLength(0...2)).locale(Localization.locale))
+            Text(LF("activity.vs_average", multiple)).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+        }
+    }
+
+    @ViewBuilder private func toolMetrics(_ tools: [(key: String, value: Int64)]) -> some View {
+        ForEach(tools, id: \.key) { tool in
+            HStack(spacing: 5) {
+                BrandIcon(name: tool.key, kind: .tool, size: 14).accessibilityHidden(true)
+                Text(clientName(tool.key))
+                Text(compactTokens(tool.value)).monospacedDigit()
+            }
+            .font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func dayMetric(_ title: String, _ value: String) -> some View {
+        HStack(spacing: 5) {
+            Text(L(title)).foregroundStyle(WorkspaceStyle.subtext)
+            Text(value).foregroundStyle(WorkspaceStyle.text).monospacedDigit()
+        }
+        .font(.caption)
+        .accessibilityElement(children: .combine)
+    }
+
     private func weekdayName(_ day: Int, short: Bool) -> String {
         let calendar = Localization.reportingCalendar
         return (short ? calendar.veryShortWeekdaySymbols : calendar.weekdaySymbols)[(day + 1) % 7]

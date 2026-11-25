@@ -11,7 +11,45 @@ struct DashboardDateSpan: Equatable {
 }
 
 enum DashboardMotion {
-    static let grow = Animation.easeOut(duration: 0.34)
+    static let tabDuration: TimeInterval = 0.20
+    static let disclosureDuration: TimeInterval = 0.20
+    static let paginationDuration: TimeInterval = 0.18
+    static let panelDuration: TimeInterval = 0.20
+    static let hoverDuration: TimeInterval = 0.12
+    static let pressDuration: TimeInterval = 0.08
+    static let stateDuration: TimeInterval = 0.15
+    static let loadDuration: TimeInterval = 0.18
+    static let growDuration: TimeInterval = 0.40
+    static let lineRevealDuration: TimeInterval = 0.44
+    static let hudShowDuration: TimeInterval = 0.16
+    static let hudHideDuration: TimeInterval = 0.14
+
+    static let tab = Animation.easeOut(duration: tabDuration)
+    static let disclosure = Animation.easeOut(duration: disclosureDuration)
+    static let pagination = Animation.easeOut(duration: paginationDuration)
+    static let panel = Animation.easeOut(duration: panelDuration)
+    static let hover = Animation.easeOut(duration: hoverDuration)
+    static let press = Animation.easeOut(duration: pressDuration)
+    static let state = Animation.easeOut(duration: stateDuration)
+    static let load = Animation.easeOut(duration: loadDuration)
+    static let grow = Animation.timingCurve(0.22, 0.72, 0.22, 1, duration: growDuration)
+    static let lineReveal = Animation.easeInOut(duration: lineRevealDuration)
+    static var rangeTimingFunction: CAMediaTimingFunction {
+        CAMediaTimingFunction(controlPoints: 0.22, 0.72, 0.22, 1)
+    }
+
+    static func animation(_ animation: Animation, reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : animation
+    }
+
+    @discardableResult
+    static func withAnimation<Result>(
+        _ animation: Animation,
+        reduceMotion: Bool,
+        _ body: () throws -> Result
+    ) rethrows -> Result {
+        try SwiftUI.withAnimation(self.animation(animation, reduceMotion: reduceMotion), body)
+    }
 }
 
 struct DashboardPlotPresence: Equatable {
@@ -187,12 +225,13 @@ struct DashboardOdometer {
 
 struct DashboardRollingValue: View {
     enum Style {
-        case headline, callout, caption2, displayNumber(CGFloat)
+        case headline, callout, calloutMedium, caption2, displayNumber(CGFloat)
 
         @MainActor var font: Font {
             switch self {
             case .headline: .headline
             case .callout: .callout
+            case .calloutMedium: .callout.weight(.medium)
             case .caption2: .caption2
             case .displayNumber(let size): DisplayNumberFont.font(size: size)
             }
@@ -202,6 +241,7 @@ struct DashboardRollingValue: View {
             switch self {
             case .headline: .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
             case .callout: .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+            case .calloutMedium: .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
             case .caption2: .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
             case .displayNumber(let size): DisplayNumberFont.native(size: size)
             }
@@ -215,260 +255,119 @@ struct DashboardRollingValue: View {
     var secondary = false
     var themed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var roll: Roll?
 
-    private struct Reading: Equatable {
-        let text: String
-        let value: Double?
-        let range: DashboardDateSpan?
+    private struct Glyph: Identifiable {
+        enum ID: Hashable { case digit(Int), grouping(Int), literal(Character, Int) }
+        let id: ID
+        let char: Character
+    }
+
+    private static func drumDigit(_ character: Character) -> Int? {
+        guard let ascii = character.asciiValue, (48...57).contains(ascii) else { return nil }
+        return Int(ascii - 48)
+    }
+
+    private var glyphs: [Glyph] {
+        let integer = text.prefix { $0 != "." }
+        var place = integer.compactMap(Self.drumDigit).count
+        var seen: [Character: Int] = [:]
+        var groupingSeen: Set<Int> = []
+        return text.map { ch in
+            if Self.drumDigit(ch) != nil {
+                place -= 1
+                return Glyph(id: .digit(place), char: ch)
+            }
+            if ch == ",", place > 0, groupingSeen.insert(place).inserted {
+                return Glyph(id: .grouping(place), char: ch)
+            }
+            let count = seen[ch, default: 0]
+            seen[ch] = count + 1
+            return Glyph(id: .literal(ch, count), char: ch)
+        }
     }
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            styledText(text).opacity(roll == nil ? 1 : 0)
-            if let roll {
-                styledText(roll.odometer?.targetText ?? roll.from)
-                    .hidden()
-                    .accessibilityHidden(true)
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            ForEach(glyphs) { glyph in
+                if let digit = Self.drumDigit(glyph.char), !reduceMotion {
+                    DigitDrum(digit: digit, reading: value, range: range)
+                } else {
+                    Text(verbatim: String(glyph.char))
+                        .contentTransition(.opacity)
+                }
             }
         }
-            .overlay(alignment: .leading) {
-                if let roll {
-                    Playback(roll: roll, font: style.drumFont, color: playbackColor) {
-                        if self.roll?.id == roll.id { self.roll = nil }
+        .font(style.font)
+        .monospacedDigit()
+        .foregroundColor(themed ? (secondary ? WorkspaceStyle.subtext : WorkspaceStyle.text) : nil)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: text))
+    }
+
+    private struct DigitDrum: View {
+        let digit: Int
+        let reading: Double?
+        let range: DashboardDateSpan?
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @State private var position: Double
+
+        init(digit: Int, reading: Double?, range: DashboardDateSpan?) {
+            self.digit = digit
+            self.reading = reading
+            self.range = range
+            _position = State(initialValue: Double(digit))
+        }
+
+        private struct Reading: Equatable {
+            let digit: Int
+            let value: Double?
+            let range: DashboardDateSpan?
+        }
+
+        var body: some View {
+            // The invisible glyph sets both width and baseline in the caller's font.
+            Text("0").hidden()
+                .overlay {
+                    Color.clear.modifier(DrumFaceModifier(position: position))
+                }
+                .clipped()
+                .onChange(of: Reading(digit: digit, value: reading, range: range)) { old, new in
+                    guard !reduceMotion,
+                          let newRange = new.range, let oldRange = old.range, newRange != oldRange,
+                          let oldValue = old.value, let newValue = new.value, oldValue != newValue else {
+                        position = Double(new.digit)
+                        return
                     }
-                    .id(roll.id)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+                    let end = Int(position.rounded())
+                    let forward = ((new.digit - end) % 10 + 10) % 10
+                    let distance = newValue >= oldValue ? forward : (forward == 0 ? 0 : forward - 10)
+                    withAnimation(DashboardMotion.grow) {
+                        position += Double(distance)
+                    }
+                }
+                .onChange(of: reduceMotion) { _, enabled in
+                    if enabled { position = Double(digit) }
+                }
+        }
+
+        private struct DrumFaceModifier: ViewModifier, Animatable {
+            nonisolated var position: Double
+            nonisolated var animatableData: Double {
+                get { position }
+                set { position = newValue }
+            }
+
+            func body(content: Content) -> some View {
+                GeometryReader { box in
+                    let index = Int(floor(position))
+                    let offset = CGFloat(position - Double(index))
+                    VStack(spacing: 0) {
+                        Text(verbatim: String((index % 10 + 10) % 10)).frame(height: box.size.height)
+                        Text(verbatim: String(((index + 1) % 10 + 10) % 10)).frame(height: box.size.height)
+                    }
+                    .offset(y: -offset * box.size.height)
                 }
             }
-            .accessibilityRepresentation { Text(text) }
-            .onChange(of: Reading(text: text, value: value, range: range)) { old, new in
-                if old.range == new.range && old.text == new.text { return }
-                guard !reduceMotion, let range = new.range, let oldRange = old.range, range != oldRange,
-                      old.value != nil, new.value != nil, old.text != new.text else {
-                    roll = nil
-                    return
-                }
-                roll = Roll(from: old.text, to: new.text)
-            }
-            .onChange(of: reduceMotion) { _, enabled in if enabled { roll = nil } }
-    }
-
-    private func styledText(_ string: String) -> some View {
-        Text(string).font(style.font).monospacedDigit()
-            .foregroundColor(themed ? (secondary ? WorkspaceStyle.subtext : WorkspaceStyle.text) : nil)
-    }
-
-    private var playbackColor: NSColor {
-        if themed { return NSColor(secondary ? WorkspaceStyle.subtext : WorkspaceStyle.text) }
-        return secondary ? .secondaryLabelColor : .labelColor
-    }
-
-    private struct Roll {
-        let id = UUID()
-        let from: String
-        let to: String
-        let odometer: DashboardOdometer?
-
-        init(from: String, to: String) {
-            self.from = from
-            self.to = to
-            self.odometer = DashboardOdometer(from: from, to: to)
-        }
-    }
-
-    private struct Playback: NSViewRepresentable {
-        let roll: Roll
-        let font: NSFont
-        let color: NSColor
-        let finished: () -> Void
-        func makeNSView(context: Context) -> DrumView {
-            DrumView(roll: roll, font: font, color: color, finished: finished)
-        }
-        func updateNSView(_ view: DrumView, context: Context) {}
-    }
-
-    private final class DrumView: NSView {
-        private final class DigitAtlas {
-            let image: CGImage
-            let width: CGFloat
-
-            init(image: CGImage, width: CGFloat) {
-                self.image = image
-                self.width = width
-            }
-        }
-
-        private static let curve = (0...96).map { HUDRoll.curve(Double($0) / 96).progress }
-        private static let atlases: NSCache<NSString, DigitAtlas> = {
-            let cache = NSCache<NSString, DigitAtlas>()
-            cache.totalCostLimit = 4 * 1024 * 1024
-            return cache
-        }()
-        // A wheel starts within the first ten rows and travels at most this many extra teeth.
-        private static let atlasRows = 10 + Int(DashboardOdometer.maximumDirectTicks)
-        private let roll: Roll
-        private let font: NSFont
-        private let color: NSColor
-        private let finished: () -> Void
-        private var started = false
-        override var isFlipped: Bool { true }
-
-        init(roll: Roll, font: NSFont, color: NSColor, finished: @escaping () -> Void) {
-            self.roll = roll; self.font = font; self.color = color; self.finished = finished
-            super.init(frame: .zero)
-            wantsLayer = true
-            layerContentsRedrawPolicy = .onSetNeedsDisplay
-        }
-
-        required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
-
-        override func layout() {
-            super.layout()
-            guard !started, let layer, bounds.width > 0, bounds.height > 0 else { return }
-            started = true
-            effectiveAppearance.performAsCurrentDrawingAppearance {
-                mountStrips(in: layer)
-            }
-        }
-
-        private func mountStrips(in layer: CALayer) {
-            let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
-            let scale = window?.backingScaleFactor ?? 2
-            let height = bounds.height
-            let rowHeight = font.ascender - font.descender + font.leading
-            let textY = ((height - rowHeight) * 0.5 * scale).rounded() / scale
-
-            func glyph(_ string: String, width: CGFloat) -> CATextLayer {
-                let text = CATextLayer()
-                text.string = NSAttributedString(string: string, attributes: attributes)
-                text.contentsScale = scale
-                text.frame = CGRect(x: 0, y: textY, width: width, height: rowHeight.rounded(.up))
-                return text
-            }
-
-            func fittedBand(width: CGFloat) -> CALayer {
-                let band = CALayer()
-                band.anchorPoint = .zero
-                band.frame = CGRect(x: 0, y: 0, width: width, height: height)
-                band.setAffineTransform(CGAffineTransform(scaleX: min(1, bounds.width / max(1, width)), y: 1))
-                layer.addSublayer(band)
-                return band
-            }
-
-            let now = CACurrentMediaTime()
-            func fadeLabel(_ string: String, from: Float, to: Float, delay: TimeInterval, duration: TimeInterval) {
-                let width = ceil((string as NSString).size(withAttributes: attributes).width)
-                let band = fittedBand(width: width)
-                band.addSublayer(glyph(string, width: width))
-                band.opacity = to
-                let fade = CABasicAnimation(keyPath: "opacity")
-                fade.fromValue = from
-                fade.toValue = to
-                fade.beginTime = band.convertTime(now, from: nil) + delay
-                fade.duration = duration
-                fade.fillMode = .backwards
-                band.add(fade, forKey: "fade")
-            }
-
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            CATransaction.setCompletionBlock { [weak self] in
-                Task { @MainActor in self?.finished() }
-            }
-            defer { CATransaction.commit() }
-            layer.isGeometryFlipped = true
-            guard let odometer = roll.odometer,
-                  let atlas = digitAtlas(height: height, scale: scale, attributes: attributes) else {
-                fadeLabel(roll.from, from: 1, to: 0, delay: 0, duration: 0.18)
-                fadeLabel(roll.to, from: 0, to: 1, delay: 0, duration: 0.18)
-                return
-            }
-
-            let widths = odometer.columns.map { column -> CGFloat in
-                switch column {
-                case .literal(let character): return (String(character) as NSString).size(withAttributes: attributes).width
-                case .wheel: return atlas.width
-                }
-            }
-            let band = fittedBand(width: widths.reduce(0, +))
-            let intro = roll.from == odometer.startText ? 0 : 0.14
-            // The HUD curve peaks at 2.083× average speed. Cap the peak at 18 teeth/s.
-            let duration = max(0.46, Double(odometer.ticks) * 2.0834 / 18)
-            let outro = roll.to == odometer.targetText ? 0 : 0.12
-            let total = intro + duration + outro
-            if intro > 0 || outro > 0 {
-                let fade = CAKeyframeAnimation(keyPath: "opacity")
-                fade.values = (intro > 0 ? [0] : []) + [1, 1] + (outro > 0 ? [0] : [])
-                let times = (intro > 0 ? [0.0] : []) + [intro / total, (intro + duration) / total] + (outro > 0 ? [1.0] : [])
-                fade.keyTimes = times.map { NSNumber(value: $0) }
-                fade.beginTime = band.convertTime(now, from: nil)
-                fade.duration = total
-                band.opacity = outro > 0 ? 0 : 1
-                band.add(fade, forKey: "fade")
-            }
-
-            let positions = Self.curve.map { odometer.position(at: $0) }
-            var x: CGFloat = 0
-            for (column, width) in zip(odometer.columns, widths) {
-                let cell = CALayer()
-                cell.frame = CGRect(x: x, y: 0, width: width, height: height)
-                cell.masksToBounds = true
-                band.addSublayer(cell)
-                x += width
-                switch column {
-                case .literal(let character):
-                    cell.addSublayer(glyph(String(character), width: width))
-                case .wheel(let place):
-                    let first = positions[0].wheel(at: place, relativeTo: odometer.rollStart)
-                    let last = positions[positions.count - 1].wheel(at: place, relativeTo: odometer.rollStart)
-                    let atlasOrigin = floor(min(first, last) / 10) * 10
-                    let strip = CALayer()
-                    strip.anchorPoint = .zero
-                    strip.frame = CGRect(x: 0, y: -(last - atlasOrigin) * height,
-                                         width: width, height: CGFloat(Self.atlasRows) * height)
-                    strip.contents = atlas.image
-                    strip.contentsScale = scale
-                    cell.addSublayer(strip)
-                    guard first != last else { continue }
-                    let slide = CAKeyframeAnimation(keyPath: "position.y")
-                    slide.values = positions.map { -($0.wheel(at: place, relativeTo: odometer.rollStart) - atlasOrigin) * height }
-                    slide.beginTime = strip.convertTime(now, from: nil) + intro
-                    slide.duration = duration
-                    slide.fillMode = .backwards
-                    strip.add(slide, forKey: "roll")
-                }
-            }
-            if intro > 0 { fadeLabel(roll.from, from: 1, to: 0, delay: 0, duration: intro) }
-            if outro > 0 { fadeLabel(roll.to, from: 0, to: 1, delay: intro + duration, duration: outro) }
-        }
-
-        private func digitAtlas(height: CGFloat, scale: CGFloat,
-                                attributes: [NSAttributedString.Key: Any]) -> DigitAtlas? {
-            let key = "\(font.fontName)|\(font.pointSize)|\(height)|\(scale)|\(effectiveAppearance.name.rawValue)|\(color)" as NSString
-            if let atlas = Self.atlases.object(forKey: key) { return atlas }
-            let width = ("0" as NSString).size(withAttributes: attributes).width
-            let stripHeight = height * CGFloat(Self.atlasRows)
-            guard let bitmap = NSBitmapImageRep(
-                bitmapDataPlanes: nil, pixelsWide: Int(ceil(width * scale)), pixelsHigh: Int(ceil(stripHeight * scale)),
-                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
-                bytesPerRow: 0, bitsPerPixel: 0
-            ), let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = context
-            context.cgContext.scaleBy(x: scale, y: scale)
-            let textHeight = ("0" as NSString).size(withAttributes: attributes).height
-            let inset = ((height - textHeight) * 0.5 * scale).rounded() / scale
-            for row in 0..<Self.atlasRows {
-                let y = CGFloat(Self.atlasRows - 1 - row) * height + inset
-                (String(row % 10) as NSString).draw(at: CGPoint(x: 0, y: y), withAttributes: attributes)
-            }
-            NSGraphicsContext.restoreGraphicsState()
-            guard let image = bitmap.cgImage else { return nil }
-            let atlas = DigitAtlas(image: image, width: width)
-            Self.atlases.setObject(atlas, forKey: key, cost: bitmap.bytesPerRow * bitmap.pixelsHigh)
-            return atlas
         }
     }
 }

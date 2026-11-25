@@ -13,7 +13,7 @@ struct UsageHabitsView: View {
         WorkspacePanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(L("habits.title")).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                    Text(L("habits.title")).font(.headline).accessibilityAddTraits(.isHeader).foregroundStyle(WorkspaceStyle.text)
                     Spacer()
                     Text(L("activity.year")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                 }
