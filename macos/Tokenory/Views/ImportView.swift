@@ -1,10 +1,20 @@
 // [INPUT]: 接收导入预览、采集状态和来源覆盖记录。
-// [OUTPUT]: 「选择文件」菜单选择导入格式，再预览文件；按设备展示来源，提供 JSON 或 CSV 导出。
+// [OUTPUT]: 自动识别导入格式，预览和提交结果留在卡片内；按设备展示来源，提供 JSON 或 CSV 导出。
 // [POS]: 设置中的数据页内联导入预览、冲突选择和批次历史；来源页按设备展示用量。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
+import Observation
 import SwiftUI
 import UniformTypeIdentifiers
+
+private func sourceDisplayName(_ source: String) -> String {
+    switch source {
+    case "local": L("source.local")
+    case "cc-switch": "CC Switch"
+    case "tokens-ci": "tokens.ci"
+    default: source
+    }
+}
 
 @MainActor
 enum FilePanels {
@@ -17,20 +27,42 @@ enum FilePanels {
         return panel.runModal() == .OK ? panel.url : nil
     }
 }
+@MainActor @Observable
+final class ImportDraft {
+    enum Operation {
+        case preview, apply, undo
+
+        var failureTitle: String {
+            switch self {
+            case .preview: L("import.preview_failed")
+            case .apply: L("import.apply_failed")
+            case .undo: L("import.undo_failed")
+            }
+        }
+    }
+
+    var preview: ImportPreview?
+    var previewFile: URL?
+    var acceptedDates = false
+    var acceptedPartial = false
+    var choices: [String: String] = [:]
+    var operation: Operation?
+    var failure: (operation: Operation, detail: String)?
+    var notice: String?
+
+    var busy: Bool { operation != nil }
+}
+
 struct ImportView: View {
-    private struct PendingUndo: Identifiable {
+    private struct PendingUndo {
         let id: String
         let source: String
         let dates: String
     }
 
     @Environment(UsageStore.self) private var store
-    @State private var preview: ImportPreview?
-    @State private var acceptedDates = false
-    @State private var acceptedPartial = false
-    @State private var choices: [String: String] = [:]
-    @Binding var busy: Bool
-    @State private var notice: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Bindable var draft: ImportDraft
     @State private var pendingUndo: PendingUndo?
 
     var body: some View {
@@ -38,42 +70,71 @@ struct ImportView: View {
             HStack(spacing: 12) {
                 Text(L("nav.imports")).font(.headline)
                 Spacer()
-                if busy { ProgressView().controlSize(.small) }
-                Menu(L("import.choose")) {
-                    Button("CC Switch") { choose(source: "cc-switch") }
-                    Button(L("import.tokens_ci")) { choose(source: "tokens-ci") }
+                ProgressView().controlSize(.small)
+                    .frame(width: 16, height: 16)
+                    .opacity(draft.operation == .preview || draft.operation == .undo ? 1 : 0)
+                    .accessibilityHidden(!(draft.operation == .preview || draft.operation == .undo))
+                Button(L("import.choose"), action: choose).settingsActionForeground().fixedSize()
+            }
+            if let notice = draft.notice {
+                Label(notice, systemImage: "checkmark.circle").font(.callout).foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
+            if let failure = draft.failure, failure.operation != .apply {
+                WorkspaceErrorMessage(title: failure.operation.failureTitle,
+                                      note: failure.operation == .preview ? L("import.formats_hint") : nil,
+                                      detail: failure.detail) {}
+                    .transition(.opacity)
+            }
+            if let preview = draft.preview {
+                VStack(alignment: .leading, spacing: 14) {
+                    Divider()
+                    previewDetails(preview)
                 }
-                .settingsActionForeground().fixedSize()
+                .transition(.opacity)
             }
-            if let notice { Text(notice).font(.callout).foregroundStyle(.secondary) }
-            if let preview {
+            if !store.sources["batches"].array.isEmpty {
                 Divider()
-                previewDetails(preview)
+                DisclosureGroup(L("import.batches")) { batchHistory }
             }
-            Divider()
-            DisclosureGroup(L("import.batches")) { batchHistory }
         }
-        .disabled(busy)
-        .alert(item: $pendingUndo) { batch in
-            Alert(title: Text(L("import.confirm_undo")),
-                  message: Text(LF("import.undo_scope", batch.source, batch.dates)),
-                  primaryButton: .destructive(Text(L("import.undo"))) { undo(batch.id) },
-                  secondaryButton: .cancel(Text(L("action.cancel"))))
+        .clipped()
+        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: draft.notice)
+        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: draft.failure != nil)
+        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: draft.preview != nil)
+        .disabled(draft.busy)
+        .alert(L("import.confirm_undo"), isPresented: Binding(
+            get: { pendingUndo != nil },
+            set: { if !$0 { pendingUndo = nil } }
+        ), presenting: pendingUndo) { batch in
+            Button(L("action.cancel"), role: .cancel) {}.keyboardShortcut(.defaultAction)
+            Button(L("import.undo"), role: .destructive) { undo(batch.id) }
+        } message: { batch in
+            Text(LF("import.undo_scope", batch.source, batch.dates))
         }
     }
 
     private func previewDetails(_ preview: ImportPreview) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(L("import.preview")).font(.headline)
+            HStack {
+                Text(L("import.preview")).font(.headline)
+                Spacer()
+                Text(sourceDisplayName(preview.source)).font(.caption).foregroundStyle(.secondary)
+            }
+            if let file = draft.previewFile {
+                Text(verbatim: file.lastPathComponent)
+                    .font(.callout).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle)
+            }
             Text("\(Text(preview.tokens.formatted(.number.locale(Localization.locale))).font(DisplayNumberFont.font(for: .title2))) tokens")
                 .font(.title2)
             Text(LF("import.summary", Localization.dateRange(preview.start, preview.end), preview.dayCount, preview.rowCount))
                 .font(.callout).foregroundStyle(.secondary)
             if preview.sourceTimezone == nil {
-                Toggle(L("import.keep_dates"), isOn: $acceptedDates).toggleStyle(.checkbox).controlSize(.small)
+                Toggle(L("import.keep_dates"), isOn: $draft.acceptedDates).toggleStyle(.checkbox).controlSize(.small)
             }
             if !preview.partialDates.isEmpty {
-                Toggle(LF("import.partial_dates", preview.partialDates.map(Localization.day).formatted(.list(type: .and).locale(Localization.locale))), isOn: $acceptedPartial)
+                Toggle(LF("import.partial_dates", preview.partialDates.map(Localization.day).formatted(.list(type: .and).locale(Localization.locale))), isOn: $draft.acceptedPartial)
                     .toggleStyle(.checkbox).controlSize(.small)
             }
             if !preview.conflicts.isEmpty {
@@ -81,9 +142,9 @@ struct ImportView: View {
                 Text(L("import.conflicts"))
                 if preview.conflicts.count > 1 {
                     HStack {
-                        Button(L("import.keep_all")) { for c in preview.conflicts { choices[c.id] = "existing" } }
+                        Button(L("import.keep_all")) { for c in preview.conflicts { draft.choices[c.id] = "existing" } }
                             .settingsActionForeground()
-                        Button(L("import.replace_all")) { for c in preview.conflicts { choices[c.id] = "imported" } }
+                        Button(L("import.replace_all")) { for c in preview.conflicts { draft.choices[c.id] = "imported" } }
                             .settingsActionForeground()
                     }
                 }
@@ -97,41 +158,58 @@ struct ImportView: View {
                         }
                         Spacer()
                         VStack(alignment: .leading, spacing: 2) {
-                            sourceChoice(LF("import.existing", conflict.existingSource), value: "existing", id: conflict.id)
+                            sourceChoice(LF("import.existing", sourceDisplayName(conflict.existingSource)), value: "existing", id: conflict.id)
                             sourceChoice(L("import.incoming"), value: "imported", id: conflict.id)
                         }.accessibilityElement(children: .contain)
                     }
                 }
             }
-            HStack {
+            if let failure = draft.failure, failure.operation == .apply {
+                WorkspaceErrorMessage(title: failure.operation.failureTitle, detail: failure.detail) {
+                    if let file = draft.previewFile {
+                        Button(L("import.preview")) { readPreview(file) }.settingsActionForeground()
+                    }
+                }
+                .transition(.opacity)
+            }
+            HStack(spacing: 8) {
                 Spacer()
-                Button(L("action.cancel")) { self.preview = nil }
+                Button(L("action.cancel")) { draft.preview = nil; draft.previewFile = nil; draft.failure = nil }
                     .settingsActionForeground()
+                ProgressView().controlSize(.small)
+                    .frame(width: 16, height: 16)
+                    .opacity(draft.operation == .apply ? 1 : 0)
+                    .accessibilityHidden(draft.operation != .apply)
                 Button(L("import.apply")) { apply(preview) }
                     .buttonStyle(.borderedProminent)
-                    .disabled((!acceptedDates && preview.sourceTimezone == nil)
-                              || (!acceptedPartial && !preview.partialDates.isEmpty)
-                              || preview.conflicts.contains { choices[$0.id] == nil })
+                    .disabled((!draft.acceptedDates && preview.sourceTimezone == nil)
+                              || (!draft.acceptedPartial && !preview.partialDates.isEmpty))
             }
         }
     }
 
     private func sourceChoice(_ title: String, value: String, id: String) -> some View {
-        let selected = choices[id] == value
-        return Button { choices[id] = value } label: {
-            Label(title, systemImage: selected ? "largecircle.fill.circle" : "circle")
-                .font(.callout)
-                .foregroundStyle(selected ? WorkspaceStyle.selection : .primary)
-                .padding(.vertical, 3)
-                .contentShape(Rectangle())
+        let selected = draft.choices[id] == value
+        return Button { draft.choices[id] = value } label: {
+            HStack(spacing: 6) {
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                Text(title)
+            }
+            .font(.callout)
+            .foregroundStyle(selected ? WorkspaceStyle.selection : .primary)
+            .animation(DashboardMotion.animation(DashboardMotion.state, reduceMotion: reduceMotion), value: selected)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(WorkspaceHoverStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder private var batchHistory: some View {
         ForEach(store.sources["batches"].array, id: \.self) { batch in
-            let source = batch["preview"]["source"].string ?? ""
+            let source = sourceDisplayName(batch["preview"]["source"].string ?? "")
             let dates = Localization.dateRange(batch["preview"]["start"].string ?? "", batch["preview"]["end"].string ?? "")
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -146,35 +224,63 @@ struct ImportView: View {
                 }
             }.padding(.vertical, 4)
         }
-        if store.sources != .null && store.sources["batches"].array.isEmpty {
-            Text(L("import.no_batches")).font(.callout).foregroundStyle(.secondary)
-        }
     }
-    private func choose(source: String) {
-        guard let file = FilePanels.open() else { return }
-        busy = true; notice = nil; preview = nil
+
+    private func choose() {
+        guard !draft.busy, let file = FilePanels.open() else { return }
+        readPreview(file)
+    }
+
+    private func readPreview(_ file: URL) {
+        guard !draft.busy else { return }
+        draft.operation = .preview; draft.notice = nil; draft.failure = nil
+        draft.preview = nil; draft.previewFile = nil
+        draft.choices = [:]; draft.acceptedDates = false; draft.acceptedPartial = false
         Task {
-            defer { busy = false }
+            defer { draft.operation = nil }
             do {
-                preview = try await store.perform("importPreview", payload: .object(["source": .string(source), "path": .string(file.path)])).decode(ImportPreview.self)
-                choices = [:]; acceptedDates = false; acceptedPartial = false
-            } catch { store.fail(error) }
+                let preview = try await store.perform("importPreview", payload: .object(["source": .string("auto"), "path": .string(file.path)])).decode(ImportPreview.self)
+                draft.preview = preview
+                draft.previewFile = file
+                draft.choices = Dictionary(uniqueKeysWithValues: preview.conflicts.map { ($0.id, "existing") })
+            } catch {
+                draft.failure = (.preview, file.lastPathComponent + "\n" + error.localizedDescription)
+            }
         }
     }
     private func apply(_ p: ImportPreview) {
-        busy = true
+        guard !draft.busy else { return }
+        draft.operation = .apply; draft.notice = nil; draft.failure = nil
         Task {
-            defer { busy = false }
+            defer { draft.operation = nil }
             do {
-                let result = try await store.perform("importApply", payload: .object(["id": .string(p.id), "options": .object(["acceptOriginalDates": .bool(acceptedDates), "acceptPartialDates": .bool(acceptedPartial), "resolutions": .object(choices.mapValues(JSONValue.string))])]))
-                notice = result["alreadyImported"].bool == true ? L("import.duplicate") : L("import.complete")
-                preview = nil; await store.loadManagement(); await store.refresh()
-            } catch { store.fail(error) }
+                let result = try await store.perform("importApply", payload: .object(["id": .string(p.id), "options": .object([
+                    "acceptOriginalDates": .bool(draft.acceptedDates), "acceptPartialDates": .bool(draft.acceptedPartial),
+                    "resolutions": .object(draft.choices.mapValues(JSONValue.string))
+                ])]))
+                await store.loadManagement(notifyOnFailure: false)
+                await store.refresh()
+                draft.notice = result["alreadyImported"].bool == true ? L("import.duplicate") : L("import.complete")
+                draft.preview = nil; draft.previewFile = nil
+            } catch {
+                draft.failure = (.apply, error.localizedDescription)
+            }
         }
     }
     private func undo(_ id: String) {
-        busy = true
-        Task { defer { busy = false }; do { _ = try await store.perform("importUndo", payload: .object(["id": .string(id)])); await store.loadManagement(); await store.refresh() } catch { store.fail(error) } }
+        guard !draft.busy else { return }
+        draft.operation = .undo; draft.notice = nil; draft.failure = nil
+        Task {
+            defer { draft.operation = nil }
+            do {
+                _ = try await store.perform("importUndo", payload: .object(["id": .string(id)]))
+                await store.loadManagement(notifyOnFailure: false)
+                await store.refresh()
+                draft.notice = L("import.undo_complete")
+            } catch {
+                draft.failure = (.undo, error.localizedDescription)
+            }
+        }
     }
 }
 struct LocalSourceGroup: Identifiable {
@@ -197,9 +303,18 @@ struct LocalSourceGroup: Identifiable {
     }
 }
 
+@MainActor @Observable
+final class SourceExportState {
+    var inProgress = false
+    var notice: String?
+    var failure: String?
+}
+
 struct SourcesView: View {
     @Environment(UsageStore.self) private var store
-    @State private var notice: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let exportState: SourceExportState
+    let exportAllowed: Bool
     @State private var sourceLoading = true
 
     private var localGroups: [LocalSourceGroup] {
@@ -231,7 +346,22 @@ struct SourcesView: View {
                     Button {
                         store.scan()
                     } label: {
-                        Label(L("action.scan"), systemImage: "arrow.clockwise")
+                        ZStack {
+                            Label(L("action.scan"), systemImage: "arrow.clockwise").hidden()
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text(L("status.scanning"))
+                            }.hidden()
+                            if store.scanInProgress {
+                                HStack(spacing: 6) {
+                                    ProgressView().controlSize(.small)
+                                    Text(L("status.scanning"))
+                                }
+                            } else {
+                                Label(L("action.scan"), systemImage: "arrow.clockwise")
+                            }
+                        }
+                        .animation(DashboardMotion.animation(DashboardMotion.state, reduceMotion: reduceMotion), value: store.scanInProgress)
                     }
                     .settingsActionForeground().disabled(!store.connected || store.scanInProgress)
                 }
@@ -244,6 +374,7 @@ struct SourcesView: View {
                         Button(L("action.retry")) { Task { await loadSources() } }
                             .settingsActionForeground().disabled(sourceLoading)
                     }
+                    .transition(.opacity)
                 } else if store.sources == .null {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
@@ -260,11 +391,13 @@ struct SourcesView: View {
                         }
                     }
                 }
-                if store.sources != .null, store.status?.lastScan == nil {
-                    Text(L(store.scanning ? "source.scanning" : "source.scan_pending"))
+                if store.sources != .null, store.status?.lastScan == nil, !store.scanInProgress {
+                    Text(L("source.scan_pending"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
+            .clipped()
+            .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: store.sourcesError != nil)
         }
     }
 
@@ -334,7 +467,7 @@ struct SourcesView: View {
 
     private func coverageRow(_ source: JSONValue) -> some View {
         let sourceName = source["source"].string ?? ""
-        let title = sourceName == "local" ? L("source.local") : sourceName == "cc-switch" ? "CC Switch" : sourceName == "tokens-ci" ? "tokens.ci" : sourceName
+        let title = sourceDisplayName(sourceName)
         return ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 12) {
                 coverageIdentity(title: title, source: source)
@@ -416,32 +549,47 @@ struct SourcesView: View {
     }
 
     private var exportControls: some View {
-        HStack(alignment: .top, spacing: 20) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L("export.scope_note")).foregroundStyle(.secondary)
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
-                    exportScopeRow("field.date", exportDateRange)
-                    if let client = store.filter.client { exportScopeRow("field.tool", clientName(client)) }
-                    if let provider = store.filter.provider { exportScopeRow("field.provider", provider) }
-                    if let model = store.filter.model { exportScopeRow("field.model", model) }
-                    if let source = store.filter.source { exportScopeRow("field.source", exportSource(source)) }
-                    if let start = store.filter.timestampFromMs { exportScopeRow("export.time_from", exportTime(start)) }
-                    if let end = store.filter.timestampToMs { exportScopeRow("export.time_to", exportTime(end)) }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L("export.scope_note")).foregroundStyle(.secondary)
+                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
+                        exportScopeRow("field.date", exportDateRange)
+                        if let client = store.filter.client { exportScopeRow("field.tool", clientName(client)) }
+                        if let provider = store.filter.provider { exportScopeRow("field.provider", provider) }
+                        if let model = store.filter.model { exportScopeRow("field.model", model) }
+                        if let source = store.filter.source { exportScopeRow("field.source", sourceDisplayName(source)) }
+                        if let start = store.filter.timestampFromMs { exportScopeRow("export.time_from", exportTime(start)) }
+                        if let end = store.filter.timestampToMs { exportScopeRow("export.time_to", exportTime(end)) }
+                    }
+                    .textSelection(.enabled)
+                    Text(L("export.note")).foregroundStyle(.secondary)
                 }
-                .textSelection(.enabled)
-                Text(L("export.note")).foregroundStyle(.secondary)
+                .font(.caption)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                        .frame(width: 16, height: 16)
+                        .opacity(exportState.inProgress ? 1 : 0)
+                        .accessibilityHidden(!exportState.inProgress)
+                    Menu(L("export.action")) {
+                        Button("JSON") { export("json") }
+                        Button("CSV") { export("csv") }
+                    }
+                    .settingsActionForeground().fixedSize().disabled(!exportAllowed || !store.connected)
+                }
             }
-            .font(.caption)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            VStack(alignment: .trailing, spacing: 6) {
-                Menu(L("export.action")) {
-                    Button("JSON") { export("json") }
-                    Button("CSV") { export("csv") }
-                }
-                .settingsActionForeground().fixedSize()
-                if let notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
+            if let failure = exportState.failure {
+                WorkspaceErrorMessage(title: L("export.failed"), detail: failure) {}
+                    .transition(.opacity)
+            } else if let notice = exportState.notice {
+                Label(notice, systemImage: "checkmark.circle").font(.callout).foregroundStyle(.secondary)
+                    .transition(.opacity)
             }
         }
+        .clipped()
+        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: exportState.failure != nil)
+        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: exportState.notice)
     }
 
     private func exportScopeRow(_ key: String, _ value: String) -> some View {
@@ -460,15 +608,6 @@ struct SourcesView: View {
         }
     }
 
-    private func exportSource(_ source: String) -> String {
-        switch source {
-        case "local": L("source.local")
-        case "cc-switch": "CC Switch"
-        case "tokens-ci": "tokens.ci"
-        default: source
-        }
-    }
-
     private func exportTime(_ milliseconds: Int64) -> String {
         Date(timeIntervalSince1970: Double(milliseconds) / 1000)
             .formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: Localization.locale,
@@ -482,9 +621,21 @@ struct SourcesView: View {
     }
 
     private func export(_ format: String) {
+        guard exportAllowed, !exportState.inProgress else { return }
         let filter = store.filter
         guard let file = FilePanels.save(name: "Tokenory-\(UsageStore.day(Date())).\(format)") else { return }
-        Task { do { _ = try await store.perform("export", payload: .object(["path": .string(file.path), "format": .string(format), "filter": try .encode(filter)])); notice = L("export.done") } catch { store.fail(error) } }
+        exportState.inProgress = true; exportState.notice = nil; exportState.failure = nil
+        Task {
+            defer { exportState.inProgress = false }
+            do {
+                _ = try await store.perform("export", payload: .object([
+                    "path": .string(file.path), "format": .string(format), "filter": try .encode(filter)
+                ]))
+                exportState.notice = L("export.done")
+            } catch {
+                exportState.failure = error.localizedDescription
+            }
+        }
     }
 }
 extension JSONValue: Hashable {

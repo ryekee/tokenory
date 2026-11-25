@@ -6,6 +6,22 @@ import AppKit
 import SwiftUI
 import Charts
 
+struct ChartInspection<Mark: Equatable> {
+    var hovered: Mark?
+    var pinned: Mark?
+    var selection: Mark? { pinned ?? hovered }
+
+    mutating func togglePin(_ mark: Mark?) {
+        pinned = pinned == mark ? nil : mark
+        hovered = nil
+    }
+
+    mutating func clear() {
+        hovered = nil
+        pinned = nil
+    }
+}
+
 struct UsageTrendChart: View {
     let report: UsageReport
     private let sources: [DeviceBuckets]
@@ -16,9 +32,8 @@ struct UsageTrendChart: View {
     let filter: UsageFilter
     let animateRangeChanges: Bool
     let openDatePicker: () -> Void
-    @State private var selectedDate: Date?
+    @State private var inspection = ChartInspection<Date>()
     @State private var tooltipPointer = TooltipPointer()
-    @State private var keyboardSelection = false
     @State private var transition = DashboardPlotTransition()
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -57,9 +72,15 @@ struct UsageTrendChart: View {
         let unallocatedTokens = report.hourly?.unallocated.tokens ?? 0
         VStack(alignment: .leading, spacing: 12) {
             if report.summary.recordCount > 0 {
-                HStack {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(L(hourly ? "usage.hourly" : "usage.trend")).font(.headline).foregroundStyle(WorkspaceStyle.text)
-                    Spacer()
+                        .accessibilityAddTraits(.isHeader)
+                    if unallocatedTokens > 0 {
+                        Text(LF("usage.hourly_unallocated", compactTokens(unallocatedTokens)))
+                            .font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
                     if hasHourlyData {
                         if !sources.isEmpty { OverviewDeviceLegend() } else {
                             HStack(spacing: 6) {
@@ -80,8 +101,18 @@ struct UsageTrendChart: View {
                         Spacer()
                         Text("USD").foregroundStyle(WorkspaceStyle.subtext)
                     }.font(.caption2).monospacedDigit()
-                    let selected = selectedDate.flatMap { trend.point(containing: $0) }
+                    let selected = inspection.selection.flatMap { trend.point(containing: $0) }
                     plot(trend, sources: sources, selected: selected, presence: presence).frame(height: 210)
+                    if let selected, inspection.pinned == selected.id {
+                        PinnedChartReadout(clear: {
+                            DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                                inspection.clear()
+                            }
+                        }) {
+                            readout(selected, hourly: trend.hourly, sources: sources)
+                        }
+                        .transition(.opacity)
+                    }
                 } else {
                     Text(L("usage.no_hourly")).font(.callout).foregroundStyle(WorkspaceStyle.subtext)
                 }
@@ -93,13 +124,10 @@ struct UsageTrendChart: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 210)
             }
-            if unallocatedTokens > 0 {
-                Text(LF("usage.hourly_unallocated", compactTokens(unallocatedTokens)))
-                    .font(.caption).foregroundStyle(WorkspaceStyle.subtext)
-            }
         }
         .onChange(of: presence, initial: true) { _, next in transition.commit(next) }
-        .onChange(of: filter) { _, _ in selectedDate = nil }
+        .onChange(of: filter) { _, _ in inspection.clear() }
+        .onChange(of: timeZone) { _, _ in inspection.clear() }
     }
 
     private struct DeviceBuckets {
@@ -169,7 +197,7 @@ struct UsageTrendChart: View {
                 if let plot = proxy.plotFrame {
                     let frame = geometry[plot]
                     ZStack(alignment: .topLeading) {
-                        chartMarks(trend, sources: sources, proxy: proxy, size: frame.size, presence: presence)
+                        chartMarks(trend, sources: sources, proxy: proxy, size: frame.size, presence: presence, selectedDate: selected?.id)
                             .frame(width: frame.width, height: frame.height)
                             .offset(x: frame.minX, y: frame.minY)
                             .allowsHitTesting(false)
@@ -184,18 +212,25 @@ struct UsageTrendChart: View {
                         Rectangle().fill(.clear).contentShape(Rectangle())
                             .onContinuousHover { phase in
                                 switch phase {
-                                case .active(let location): select(at: location, frame: frame, proxy: proxy, trend: trend)
-                                case .ended: selectedDate = nil
+                                case .active(let location):
+                                    tooltipPointer.move(to: location)
+                                    let next = bucket(at: location, frame: frame, proxy: proxy, trend: trend)
+                                    if inspection.hovered != next { inspection.hovered = next }
+                                case .ended: inspection.hovered = nil
                                 }
                             }
-                            .onTapGesture { select(at: $0, frame: frame, proxy: proxy, trend: trend) }
-                            .selectedTooltip(avoiding: mark, pointer: tooltipPointer, keyboardAnchor: keyboardSelection ? mark.map { CGPoint(x: $0.midX, y: $0.midY) } : nil) {
+                            .onTapGesture { location in
+                                DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                                    inspection.togglePin(bucket(at: location, frame: frame, proxy: proxy, trend: trend))
+                                }
+                            }
+                            .selectedTooltip(avoiding: inspection.pinned == nil ? mark : nil, pointer: tooltipPointer) {
                                 if let selected {
                                     readout(selected, hourly: trend.hourly, sources: sources)
                                 }
                             }
                         if let selected, let x = proxy.position(forX: selected.center) {
-                            ChartHoverRule(x: frame.minX + x, plot: frame, opacity: 0.5)
+                            ChartHoverRule(x: frame.minX + x, plot: frame, opacity: inspection.pinned == nil ? 0.5 : 0.95)
                         }
                     }
                 }
@@ -204,7 +239,13 @@ struct UsageTrendChart: View {
         .focusable()
         .onKeyPress(.leftArrow) { moveSelection(-1, trend: trend); return .handled }
         .onKeyPress(.rightArrow) { moveSelection(1, trend: trend); return .handled }
-        .onKeyPress(.escape) { selectedDate = nil; return .handled }
+        .onKeyPress(.escape) {
+            guard inspection.selection != nil else { return .ignored }
+            DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                inspection.clear()
+            }
+            return .handled
+        }
         .accessibilityRepresentation {
             VStack {
                 ForEach(trend.points.filter { !$0.isFuture }) { point in
@@ -217,7 +258,8 @@ struct UsageTrendChart: View {
         }
     }
 
-    private func chartMarks(_ trend: UsageTrend, sources: [DeviceBuckets], proxy: ChartProxy, size: CGSize, presence: DashboardPlotPresence) -> some View {
+    private func chartMarks(_ trend: UsageTrend, sources: [DeviceBuckets], proxy: ChartProxy, size: CGSize,
+                            presence: DashboardPlotPresence, selectedDate: Date?) -> some View {
         let baseline = proxy.position(forY: 0.0) ?? size.height
         var series: [[CGPoint]] = []
         var dots: [DashboardChartMarks.Dot] = []
@@ -256,21 +298,18 @@ struct UsageTrendChart: View {
                                    otherDeviceColor: NSColor(WorkspaceStyle.otherDevices(scheme)))
     }
 
-    private func select(at location: CGPoint, frame: CGRect, proxy: ChartProxy, trend: UsageTrend) {
-        tooltipPointer.move(to: location)
-        keyboardSelection = false
-        guard frame.contains(location), let date: Date = proxy.value(atX: location.x - frame.minX) else {
-            selectedDate = nil; return
-        }
-        let bucket = trend.point(containing: date)?.id
-        if selectedDate != bucket { selectedDate = bucket }
+    private func bucket(at location: CGPoint, frame: CGRect, proxy: ChartProxy, trend: UsageTrend) -> Date? {
+        guard frame.contains(location), let date: Date = proxy.value(atX: location.x - frame.minX) else { return nil }
+        return trend.point(containing: date)?.id
     }
+
     private func moveSelection(_ delta: Int, trend: UsageTrend) {
         let points = trend.points.filter { !$0.isFuture }
         guard !points.isEmpty else { return }
-        keyboardSelection = true
-        let current = points.firstIndex { $0.id == selectedDate } ?? (delta > 0 ? -1 : points.count)
-        selectedDate = points[min(max(current + delta, 0), points.count - 1)].id
+        let current = points.firstIndex { $0.id == inspection.selection } ?? (delta > 0 ? -1 : points.count)
+        DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+            inspection.pinned = points[min(max(current + delta, 0), points.count - 1)].id
+        }
     }
     private func hour(_ date: Date) -> String {
         Date.VerbatimFormatStyle(format: "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
@@ -300,6 +339,27 @@ private extension UsageTrend {
         guard low > 0 else { return nil }
         let point = points[low - 1]
         return !point.isFuture && date < point.start.addingTimeInterval(point.duration) ? point : nil
+    }
+}
+
+struct PinnedChartReadout<Content: View>: View {
+    let clear: () -> Void
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Divider()
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "pin.fill").foregroundStyle(WorkspaceStyle.selection).accessibilityHidden(true)
+                content
+                Spacer(minLength: 0)
+                Button(action: clear) {
+                    Image(systemName: "xmark").frame(width: 22, height: 22)
+                }
+                .buttonStyle(WorkspaceHoverStyle())
+                .accessibilityLabel(L("overview.clear_chart_selection"))
+            }.font(.caption)
+        }
     }
 }
 

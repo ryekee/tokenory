@@ -1,5 +1,5 @@
 // [INPUT]: 接收用量存储、更新服务及系统登录项状态。
-// [OUTPUT]: 提供各项设置、费率刷新后的重算预览、采集和备份恢复状态及行内错误。
+// [OUTPUT]: 各项设置、卡片内的重算确认、采集和备份恢复反馈。
 // [POS]: 设置窗口入口；价格目录交给 PriceCatalogView 展示。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -41,6 +41,14 @@ private enum SettingsOperation {
 private struct SettingsOperationStatus {
     enum Phase {
         case pending, succeeded, failed(String)
+
+        var stateKey: Int {
+            switch self {
+            case .pending: 1
+            case .succeeded: 2
+            case .failed: 3
+            }
+        }
     }
 
     let operation: SettingsOperation
@@ -74,6 +82,7 @@ private struct PriceReview {
 struct SettingsView: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var ratesExpanded = true
     @State private var tab: SettingsSection = .general
     @AppStorage("appLanguage") private var language = AppLanguage.system.rawValue
@@ -89,15 +98,17 @@ struct SettingsView: View {
     @State private var selectedClient = "claude"
     @State private var pricingBusy = false
     @State private var priceNotice: String?
+    @State private var priceFailure: (title: String, detail: String)?
     @State private var collectionStatus: SettingsOperationStatus?
     @State private var ledgerStatus: SettingsOperationStatus?
-    @State private var importBusy = false
-    @State private var restoreGeneration = 0
+    @State private var importDraft = ImportDraft()
+    @State private var exportState = SourceExportState()
     @State private var priceReview: PriceReview?
     @State private var pendingRestore: URL?
 
     private var busy: Bool {
-        importBusy || pricingBusy || collectionStatus?.isPending == true || ledgerStatus?.isPending == true
+        importDraft.busy || exportState.inProgress || pricingBusy
+            || collectionStatus?.isPending == true || ledgerStatus?.isPending == true
     }
 
     var body: some View {
@@ -113,21 +124,19 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         ErrorBanner()
+                            .transition(.opacity)
                         switch tab {
                         case .general: generalSettings
                         case .hud: HUDSettingsView()
                         case .prices: priceSettings
                         case .collection: collectionSettings
-                        case .sources: SourcesView()
+                        case .sources: SourcesView(exportState: exportState, exportAllowed: !busy)
                         case .cloud: DeviceSyncSettings()
                         case .data: dataSettings
                         case .about: aboutSettings
                         }
-                        if tab == .prices, let priceNotice {
-                            Label(priceNotice, systemImage: "checkmark.circle")
-                                .font(.callout).foregroundStyle(.secondary)
-                        }
                     }.padding(.horizontal, 24).padding(.bottom, 24)
+                        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: store.error != nil)
                 }
                 .id(tab)
             }
@@ -137,36 +146,19 @@ struct SettingsView: View {
         .frame(width: 880, height: 610).navigationTitle(L("settings.window"))
             .toolbar(removing: .title)
             .disclosureGroupStyle(WorkspaceDisclosureStyle())
-            .onChange(of: tab) { _, _ in priceNotice = nil }
             .onChange(of: appearance) { _, value in value.apply() }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                login.refresh()
+            }
             .onChange(of: interval) { _, _ in clearSavedCollectionStatus() }
             .onChange(of: scanPaths) { _, _ in clearSavedCollectionStatus() }
             .task {
-                await store.loadManagement(); login.refresh()
+                login.refresh()
+                await store.loadManagement()
                 initializeCollectionDraft()
             }
             .task(id: tab) {
                 if tab == .collection && !defaultPathsLoaded { await loadDefaultScanPaths() }
-            }
-            .sheet(isPresented: Binding(get: { priceReview != nil }, set: { if !$0 { priceReview = nil } })) {
-                if let priceReview {
-                    let estimate = priceReview.estimate
-                    VStack(alignment: .leading, spacing: 18) {
-                        Text(L("price.preview")).font(.title2)
-                        if priceReview.usesSavedRates {
-                            Text(L("price.refresh_fallback")).font(.callout).foregroundStyle(.secondary)
-                        }
-                        Text(LF("price.preview_summary", estimate.records, usd(estimate.before), usd(estimate.after))).font(.headline)
-                        Text(LF("price.preview_unpriced", compactTokens(estimate.unpricedTokens)))
-                        HStack {
-                            Button(L("action.cancel")) { self.priceReview = nil }
-                                .settingsActionForeground().keyboardShortcut(.cancelAction)
-                            Spacer()
-                            Button(L("price.apply")) { applyReprice(estimate) }
-                                .buttonStyle(.borderedProminent).disabled(busy)
-                        }
-                    }.padding(24).frame(width: 500)
-                }
             }
             .alert(
                 L("data.restore_confirm_title"),
@@ -215,11 +207,17 @@ struct SettingsView: View {
                     SettingsSwitch(label: L("settings.login"), isOn: Binding(get: { login.enabled }, set: { value in do { try login.setEnabled(value) } catch { store.fail(error) } }))
                 }
                 if login.status == .requiresApproval {
-                    Button(L("settings.open_login")) { SMAppService.openSystemSettingsLoginItems() }
-                        .settingsActionForeground()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    HStack {
+                        Text(login.statusText).font(.callout).foregroundStyle(.secondary)
+                        Spacer()
+                        Button(L("settings.open_login")) { SMAppService.openSystemSettingsLoginItems() }
+                            .settingsActionForeground()
+                    }
+                    .transition(.opacity)
                 }
             }
+            .clipped()
+            .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: login.status == .requiresApproval)
         }
     }
 
@@ -252,62 +250,122 @@ struct SettingsView: View {
                         ))
                     }
                     if updates.automaticallyChecksForUpdates {
-                        Divider()
-                        HStack {
-                            Text(L("update.frequency"))
-                            Spacer()
-                            WorkspaceDropdown(
-                                label: L("update.frequency"),
-                                selection: Binding(get: { updates.checkIntervalHours }, set: { updates.setIntervalHours($0) }),
-                                options: UpdateChecker.intervalHours, width: pickerWidth, title: { L("update.interval_\($0)") }
-                            )
+                        VStack(alignment: .leading, spacing: 14) {
+                            Divider()
+                            HStack {
+                                Text(L("update.frequency"))
+                                Spacer()
+                                WorkspaceDropdown(
+                                    label: L("update.frequency"),
+                                    selection: Binding(get: { updates.checkIntervalHours }, set: { updates.setIntervalHours($0) }),
+                                    options: UpdateChecker.intervalHours, width: pickerWidth, title: { L("update.interval_\($0)") }
+                                )
+                            }
                         }
+                        .transition(.opacity)
                     }
                     if let error = updates.startupError {
                         WorkspaceErrorMessage(title: error) {}
+                            .transition(.opacity)
                     }
                 }
+                .clipped()
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: updates.automaticallyChecksForUpdates)
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: updates.startupError != nil)
             }
         }
     }
     private var priceSettings: some View {
         VStack(alignment: .leading, spacing: 14) {
             WorkspacePanel {
-                HStack(alignment: .top, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L("price.automatic")).font(.headline)
-                        Text(L("price.explanation")).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(L("price.automatic")).font(.headline)
+                            Text(L("price.explanation")).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                                .frame(width: 16, height: 16)
+                                .opacity(pricingBusy && priceReview == nil ? 1 : 0)
+                                .accessibilityHidden(!(pricingBusy && priceReview == nil))
+                            Button(L("price.refresh"), action: refreshPricesAndPreview)
+                                .settingsActionForeground().disabled(busy || priceReview != nil)
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    HStack(spacing: 8) {
-                        if pricingBusy { ProgressView().controlSize(.small) }
-                        Button(L("price.refresh"), action: refreshPricesAndPreview)
-                            .settingsActionForeground().disabled(busy)
+                    if let priceReview {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Divider()
+                            priceReviewContent(priceReview)
+                        }
+                        .transition(.opacity)
                     }
-                    .fixedSize(horizontal: true, vertical: false)
+                    if let priceFailure {
+                        WorkspaceErrorMessage(title: priceFailure.title, detail: priceFailure.detail) {}
+                            .transition(.opacity)
+                    } else if let priceNotice, priceReview == nil {
+                        Label(priceNotice, systemImage: "checkmark.circle")
+                            .font(.callout).foregroundStyle(.secondary)
+                            .transition(.opacity)
+                    }
                 }
+                .clipped()
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: priceReview != nil)
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: priceFailure != nil)
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: priceNotice)
             }
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 16) {
                     DisclosureGroup(L("price.rates"), isExpanded: $ratesExpanded) {
                         PriceCatalogView(providers: store.priceProviders, usedModels: store.usedPriceModels)
                     }
-                    Divider()
-                    DisclosureGroup(LF("price.missing_models", store.prices["missing"].array.count)) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(L("price.missing_reason")).font(.caption).foregroundStyle(.secondary)
-                            ForEach(store.prices["missing"].array, id: \.self) { missing in
-                                HStack {
-                                    BrandLabel(name: missing["model"].string ?? "", kind: .model).lineLimit(1).truncationMode(.middle)
-                                    Spacer()
-                                    Text(compactTokens(missing["tokens"].int ?? 0)).monospacedDigit()
-                                }.font(.callout)
+                    let missingModels = store.prices["missing"].array
+                    if !missingModels.isEmpty {
+                        Divider()
+                        DisclosureGroup(LF("price.missing_models", missingModels.count)) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(L("price.missing_reason")).font(.caption).foregroundStyle(.secondary)
+                                ForEach(missingModels, id: \.self) { missing in
+                                    HStack {
+                                        BrandLabel(name: missing["model"].string ?? "", kind: .model).lineLimit(1).truncationMode(.middle)
+                                        Spacer()
+                                        Text(compactTokens(missing["tokens"].int ?? 0)).monospacedDigit()
+                                    }.font(.callout)
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func priceReviewContent(_ review: PriceReview) -> some View {
+        let estimate = review.estimate
+        return VStack(alignment: .leading, spacing: 9) {
+            Text(L("price.preview")).font(.headline)
+            if review.usesSavedRates {
+                Text(L("price.refresh_fallback")).font(.callout).foregroundStyle(.secondary)
+            }
+            Text(LF("price.preview_summary", estimate.records, usd(estimate.before), usd(estimate.after)))
+            if estimate.unpricedTokens > 0 {
+                Text(LF("price.preview_unpriced", compactTokens(estimate.unpricedTokens)))
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 8) {
+                Spacer()
+                Button(L("action.cancel")) { priceReview = nil }.settingsActionForeground().disabled(pricingBusy)
+                ProgressView().controlSize(.small)
+                    .frame(width: 16, height: 16)
+                    .opacity(pricingBusy ? 1 : 0)
+                    .accessibilityHidden(!pricingBusy)
+                Button(L("price.apply")) { applyReprice(estimate) }
+                    .buttonStyle(.borderedProminent).disabled(busy)
+            }
+        }
+        .font(.callout)
     }
     private var collectionSettings: some View {
         let intervals = [30, 60, 120]
@@ -333,7 +391,7 @@ struct SettingsView: View {
                     Text(L("settings.timezone_note")).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .disabled(collectionStatus?.isPending == true)
+            .disabled(collectionStatus?.isPending == true || !collectionDraftInitialized)
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 12) {
                     let clients = store.clients.filter(\.supportsExtraPaths)
@@ -353,11 +411,15 @@ struct SettingsView: View {
                         Text(L("settings.paths_note")).font(.caption).foregroundStyle(.secondary)
                         if let conflict = duplicateScanPathClient {
                             WorkspaceErrorMessage(title: LF("settings.duplicate_path", clientName(conflict))) {}
+                                .transition(.opacity)
                         }
                     }
-                    .disabled(collectionStatus?.isPending == true)
+                    .disabled(collectionStatus?.isPending == true || !collectionDraftInitialized)
                     collectionSaveControl
                 }
+                .clipped()
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: duplicateScanPathClient != nil)
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: collectionStatus?.phase.stateKey ?? 0)
             }
         }
     }
@@ -366,6 +428,7 @@ struct SettingsView: View {
         Group {
             if case .failed(let detail)? = collectionStatus?.phase {
                 WorkspaceErrorMessage(title: L("settings.save_failed"), detail: detail) { collectionSaveButton }
+                    .transition(.opacity)
             } else {
                 collectionSaveButton.frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -379,26 +442,31 @@ struct SettingsView: View {
                 ForEach(["settings.save", "settings.saving", "settings.saved", "action.retry"], id: \.self) { key in
                     Label(L(key), systemImage: "checkmark").hidden()
                 }
-                if let status = collectionStatus {
-                    switch status.phase {
-                    case .pending:
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.small)
-                            Text(status.message)
+                Group {
+                    if let status = collectionStatus {
+                        switch status.phase {
+                        case .pending:
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text(status.message)
+                            }
+                        case .succeeded:
+                            Label(status.message, systemImage: "checkmark")
+                        case .failed:
+                            Text(L("action.retry"))
                         }
-                    case .succeeded:
-                        Label(status.message, systemImage: "checkmark")
-                    case .failed:
-                        Text(L("action.retry"))
+                    } else {
+                        Text(L("settings.save"))
                     }
-                } else {
-                    Text(L("settings.save"))
                 }
+                .transition(.opacity)
             }
+            .animation(DashboardMotion.animation(DashboardMotion.state, reduceMotion: reduceMotion), value: collectionStatus?.phase.stateKey ?? 0)
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.regular)
-        .disabled(busy || collectionStatus?.isSucceeded == true || store.settings == nil || !defaultPathsLoaded || duplicateScanPathClient != nil)
+        .disabled(busy || collectionStatus?.isSucceeded == true || !hasCollectionEdits
+                  || !defaultPathsLoaded || duplicateScanPathClient != nil)
     }
     private func pathEditor(text: Binding<String>) -> some View {
         let defaults = defaultScanPaths[selectedClient] ?? []
@@ -415,7 +483,7 @@ struct SettingsView: View {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Image(systemName: "lock.fill").font(.system(size: 10)).accessibilityHidden(true)
                                 Text(path).font(.system(size: 12, design: .monospaced))
-                                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled).help(path)
+                                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                             }
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -473,6 +541,18 @@ struct SettingsView: View {
         return URL(fileURLWithPath: expanded).standardizedFileURL.resolvingSymlinksInPath().path
     }
 
+    private func normalizedScanPaths(home: String) -> [String: [String]] {
+        scanPaths.mapValues { text in
+            text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                .map { expandedScanPath($0, home: home) }
+        }.filter { !$0.value.isEmpty }
+    }
+
+    private var hasCollectionEdits: Bool {
+        guard collectionDraftInitialized, let settings = store.settings else { return false }
+        return interval != settings.intervalSeconds || normalizedScanPaths(home: settings.homeDir) != settings.extraScanPaths
+    }
+
     private var duplicateScanPathClient: String? {
         guard let settings = store.settings, defaultPathsLoaded else { return nil }
         for client in scanPaths.keys.sorted() {
@@ -495,9 +575,9 @@ struct SettingsView: View {
     private var dataSettings: some View {
         VStack(alignment: .leading, spacing: 14) {
             WorkspacePanel {
-                ImportView(busy: $importBusy)
-                    .id(restoreGeneration)
-                    .disabled(pricingBusy || collectionStatus?.isPending == true || ledgerStatus?.isPending == true)
+                ImportView(draft: importDraft)
+                    .disabled(exportState.inProgress || pricingBusy
+                              || collectionStatus?.isPending == true || ledgerStatus?.isPending == true)
             }
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 12) {
@@ -516,8 +596,13 @@ struct SettingsView: View {
                         .fixedSize()
                         .disabled(busy)
                     }
-                    if let ledgerStatus { operationFeedback(ledgerStatus) }
+                    if let ledgerStatus {
+                        operationFeedback(ledgerStatus)
+                            .transition(.opacity)
+                    }
                 }
+                .clipped()
+                .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: ledgerStatus?.phase.stateKey ?? 0)
             }
             WorkspacePanel {
                 HStack(spacing: 12) {
@@ -587,9 +672,10 @@ struct SettingsView: View {
     }
 
     private func refreshPricesAndPreview() {
-        guard !busy else { return }
+        guard !busy, priceReview == nil else { return }
         pricingBusy = true
         priceNotice = nil
+        priceFailure = nil
         Task {
             defer { pricingBusy = false }
             do {
@@ -598,8 +684,7 @@ struct SettingsView: View {
                 var refreshError: Error?
                 do {
                     snapshotId = try await store.perform("refreshPrices").decode(RefreshedPrice.self).id
-                    priceNotice = L("price.refreshed")
-                    await store.loadManagement()
+                    await store.loadManagement(notifyOnFailure: false)
                 } catch {
                     guard let savedId = store.prices["current"]["id"].string else { throw error }
                     snapshotId = savedId
@@ -610,36 +695,35 @@ struct SettingsView: View {
                 if estimate.records > 0 {
                     priceReview = PriceReview(estimate: estimate, usesSavedRates: refreshError != nil)
                 } else if let refreshError {
-                    store.fail(refreshError)
+                    priceFailure = (L("price.refresh_failed"), refreshError.localizedDescription)
+                } else {
+                    priceNotice = L("price.refreshed")
                 }
-            } catch { store.fail(error) }
+            } catch { priceFailure = (L("price.refresh_failed"), error.localizedDescription) }
         }
     }
     private func applyReprice(_ p: RepricePreview) {
         guard !busy else { return }
         pricingBusy = true
+        priceFailure = nil
         Task {
             defer { pricingBusy = false }
             do {
                 _ = try await store.perform("repriceApply", payload: .object(["id": .string(p.id)]))
+                await store.refresh()
+                await store.loadManagement(notifyOnFailure: false)
                 priceReview = nil
                 priceNotice = L("price.applied")
-                await store.refresh()
-                await store.loadManagement()
             } catch {
                 priceReview = nil
-                store.fail(error)
+                priceFailure = (L("price.apply_failed"), error.localizedDescription)
             }
         }
     }
     private func saveSettings() {
-        guard var settings = store.settings else { return }
+        guard hasCollectionEdits, var settings = store.settings else { return }
         settings.intervalSeconds = interval
-        let home = settings.homeDir
-        settings.extraScanPaths = scanPaths.mapValues { text in
-            text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-                .map { expandedScanPath($0, home: home) }
-        }.filter { !$0.value.isEmpty }
+        settings.extraScanPaths = normalizedScanPaths(home: settings.homeDir)
         runOperation(.saveCollection) {
             _ = try await store.perform("updateSettings", payload: try .encode(settings))
             await store.loadManagement()
@@ -658,7 +742,8 @@ struct SettingsView: View {
     private func restore(from file: URL) {
         runOperation(.restore) {
             try await store.restore(from: file)
-            restoreGeneration += 1
+            importDraft = ImportDraft()
+            priceReview = nil
         }
     }
 }

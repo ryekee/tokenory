@@ -1,110 +1,170 @@
 // [INPUT]: Selected-range and annual reports for this Mac and participating devices.
-// [OUTPUT]: Rolling totals, independent Codex subagent card, rankings, range charts, and annual activity.
+// [OUTPUT]: Rolling totals, insights, expandable tool rankings, range charts and annual activity.
 // [POS]: Native overview composition; disclosure keeps detailed caveats off the canvas.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 
-private struct CodexSubagentsView: View {
-    let report: CodexSubagentReport
-    let local: CodexSubagentReport?
+private struct SubagentsCardView: View {
+    struct ToolEntry: Identifiable {
+        let id: String
+        let name: String
+        let report: CodexSubagentReport
+        let local: CodexSubagentReport?
+        let remote: [CodexSubagentReport]
+        let toolSummary: UsageSummary?
+    }
+
+    let entries: [ToolEntry]
     let hasRemote: Bool
-    let remote: [CodexSubagentReport]
-    let codexSummary: UsageSummary?
+    let overallSummary: UsageSummary
     @Environment(\.colorScheme) private var colorScheme
     private var metricFont: Font { DisplayNumberFont.font(for: .title3) }
 
+    private var totalStarts: Int64 { entries.reduce(0) { $0 + $1.report.starts } }
+    private var totalTokens: Int64 { entries.reduce(0) { $0 + $1.report.tokens } }
+    private var totalCost: CodexSubagentCost? {
+        var known = 0.0, hasKnown = false
+        var unpriced: Int64 = 0
+        for entry in entries {
+            if let usd = entry.report.cost?.knownEstimatedCostUsd {
+                known += usd
+                hasKnown = true
+            }
+            unpriced += entry.report.cost?.unpricedTokens ?? 0
+        }
+        guard hasKnown || unpriced > 0 else { return nil }
+        return CodexSubagentCost(knownEstimatedCostUsd: hasKnown ? known : nil, unpricedTokens: unpriced)
+    }
+    private var remoteTokens: Double {
+        entries.reduce(0) { sum, entry in sum + entry.remote.reduce(0) { $0 + Double($1.tokens) } }
+    }
+    private var remoteCost: Double {
+        entries.reduce(0) { sum, entry in sum + entry.remote.compactMap { $0.cost?.knownEstimatedCostUsd }.reduce(0, +) }
+    }
     private var tokensShare: Double? {
-        subagentShare(Double(report.tokens), of: codexSummary.map { Double($0.tokens) })
+        subagentShare(Double(totalTokens), of: Double(overallSummary.tokens))
     }
     private var costShare: Double? {
-        subagentShare(report.cost?.knownEstimatedCostUsd, of: codexSummary?.knownEstimatedCostUsd)
+        subagentShare(totalCost?.knownEstimatedCostUsd, of: overallSummary.knownEstimatedCostUsd)
     }
     private var partialCost: Bool {
-        (report.cost?.unpricedTokens ?? 0) > 0 || (codexSummary?.unpricedTokens ?? 0) > 0
+        (totalCost?.unpricedTokens ?? 0) > 0 || overallSummary.unpricedTokens > 0
     }
 
     var body: some View {
         WorkspacePanel {
             VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text(L("subagents.title")).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                HStack(alignment: .center, spacing: 8) {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(WorkspaceStyle.selection)
+                        .frame(width: 22, height: 22)
+                        .background(WorkspaceStyle.selection.opacity(0.11), in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(WorkspaceStyle.selection.opacity(0.32), lineWidth: 1)
+                        )
+                        .accessibilityHidden(true)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(L("subagents.card_title")).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                        Text(LF("subagents.started_value", totalStarts.formatted(.number.locale(Localization.locale))))
+                            .font(.caption)
+                            .foregroundStyle(WorkspaceStyle.subtext)
+                            .monospacedDigit()
+                    }
                     Spacer()
                     if hasRemote { OverviewDeviceLegend() }
                     WorkspaceInfoPopover(title: L("subagents.basis")) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(L("subagents.count_help"))
-                            Text(L("subagents.tokens_help"))
-                            Text(L("subagents.cost_help"))
-                            Text(L("subagents.conversations_help"))
-                        }
-                        .padding(16)
-                        .frame(width: 290, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                        Text(L("subagents.supported_only_help"))
+                            .padding(14)
+                            .frame(width: 260, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 28) {
-                        startedMetric
-                        summaryMetrics
-                    }
-                    VStack(alignment: .leading, spacing: 14) {
-                        startedMetric
-                        summaryMetrics
-                    }
+                HStack(alignment: .top, spacing: 24) {
+                    shareMetric(
+                        title: L("usage.tokens"),
+                        value: totalTokens.formatted(.number.locale(Localization.locale)),
+                        share: tokensShare,
+                        otherShare: subagentShare(remoteTokens, of: Double(overallSummary.tokens)),
+                        partial: false,
+                        color: WorkspaceStyle.localUsage
+                    )
+                    shareMetric(
+                        title: L("cost.estimate"),
+                        value: subagentCostText(totalCost),
+                        share: costShare,
+                        otherShare: subagentShare(remoteCost, of: overallSummary.knownEstimatedCostUsd),
+                        partial: partialCost,
+                        color: WorkspaceStyle.costColor(colorScheme)
+                    )
                 }
-                if let local, !local.conversations.isEmpty {
-                    Divider()
-                    DisclosureGroup(L("subagents.conversations")) {
-                        VStack(spacing: 0) {
-                            ForEach(local.conversations) { conversation in
-                                CodexSubagentConversationView(
-                                    conversation: conversation,
-                                    totalTokens: local.tokens,
-                                    totalCost: local.cost
-                                )
-                            }
-                        }
+                Divider()
+                VStack(spacing: 4) {
+                    ForEach(entries) { entry in
+                        toolSection(entry)
                     }
-                    .disclosureGroupStyle(WorkspaceDisclosureStyle())
                 }
             }
         }
     }
 
-    private var startedMetric: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(L("subagents.started")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
-            Text(report.starts.formatted(.number.locale(Localization.locale)))
-                .font(metricFont)
-            if hasRemote {
-                OverviewShareBar(total: Double(report.starts), amount: Double(report.starts),
-                                 other: remote.reduce(0) { $0 + Double($1.starts) })
-                    .frame(width: 86)
+    @ViewBuilder
+    private func toolSection(_ entry: ToolEntry) -> some View {
+        let conversations = entry.local?.conversations ?? []
+        if !conversations.isEmpty, let local = entry.local {
+            DisclosureGroup {
+                VStack(spacing: 0) {
+                    ForEach(conversations) { conversation in
+                        CodexSubagentConversationView(
+                            conversation: conversation,
+                            totalTokens: local.tokens,
+                            totalCost: local.cost
+                        )
+                    }
+                }
+            } label: {
+                toolRowLabel(entry)
+            }
+            .disclosureGroupStyle(WorkspaceDisclosureStyle())
+        } else {
+            toolRowLabel(entry)
+                .padding(.vertical, 6)
+        }
+    }
+
+    private func toolRowLabel(_ entry: ToolEntry) -> some View {
+        let tokensPct = subagentShare(Double(entry.report.tokens), of: entry.toolSummary.map { Double($0.tokens) })
+        return HStack(alignment: .center, spacing: 10) {
+            BrandIcon(name: entry.id, kind: .tool, size: 16)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(entry.name)
+                    .fontWeight(.medium)
+                    .foregroundStyle(WorkspaceStyle.text)
+                Text(LF("subagents.started_value", entry.report.starts.formatted(.number.locale(Localization.locale))))
+                    .font(.caption)
+                    .foregroundStyle(WorkspaceStyle.subtext)
+                    .monospacedDigit()
+            }
+            Spacer(minLength: 8)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(compactTokens(entry.report.tokens))
+                    .monospacedDigit()
+                    .foregroundStyle(WorkspaceStyle.text)
+                Text(subagentCostText(entry.report.cost))
+                    .monospacedDigit()
+                    .foregroundStyle(WorkspaceStyle.subtext)
+                if let tokensPct {
+                    Text(subagentShareText(tokensPct))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(WorkspaceStyle.subtext)
+                        .frame(minWidth: 38, alignment: .trailing)
+                }
             }
         }
+        .font(.callout)
         .accessibilityElement(children: .combine)
-    }
-
-    private var summaryMetrics: some View {
-        HStack(alignment: .top, spacing: 24) {
-            shareMetric(
-                title: L("usage.tokens"),
-                value: report.tokens.formatted(.number.locale(Localization.locale)),
-                share: tokensShare,
-                otherShare: subagentShare(remote.reduce(0) { $0 + Double($1.tokens) }, of: codexSummary.map { Double($0.tokens) }),
-                partial: false,
-                color: WorkspaceStyle.localUsage
-            )
-            shareMetric(
-                title: L("cost.estimate"),
-                value: subagentCostText(report.cost),
-                share: costShare,
-                otherShare: subagentShare(remote.compactMap { $0.cost?.knownEstimatedCostUsd }.reduce(0, +),
-                                          of: codexSummary?.knownEstimatedCostUsd),
-                partial: partialCost,
-                color: WorkspaceStyle.costColor(colorScheme)
-            )
-        }
     }
 
     private func shareMetric(title: String, value: String, share: Double?, otherShare: Double?, partial: Bool, color: Color) -> some View {
@@ -190,36 +250,42 @@ private struct CodexSubagentConversationView: View {
         (conversation.cost?.unpricedTokens ?? 0) > 0 || (totalCost?.unpricedTokens ?? 0) > 0
     }
 
+    private var mainContextSummary: String? {
+        var parts: [String] = []
+        if let tokens = conversation.mainTokens {
+            parts.append(compactTokens(tokens))
+        }
+        if let turns = conversation.mainTurns {
+            parts.append(LF("subagents.main_turns", turns.formatted(.number.locale(Localization.locale))))
+        }
+        guard !parts.isEmpty else { return nil }
+        return L("subagents.main") + " " + parts.joined(separator: " · ")
+    }
+
     var body: some View {
         DisclosureGroup {
             VStack(alignment: .leading, spacing: 9) {
                 ForEach(conversation.agents) { agent in
                     agentRows(agent)
                 }
-                if conversation.mainTurns != nil || conversation.mainTokens != nil {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(L("subagents.main")).fontWeight(.medium)
-                        if let turns = conversation.mainTurns {
-                            Text(LF("subagents.main_turns", turns.formatted(.number.locale(Localization.locale))))
-                                .foregroundStyle(WorkspaceStyle.subtext)
-                        }
-                        Spacer(minLength: 8)
-                        if let tokens = conversation.mainTokens {
-                            Text(tokens.formatted(.number.locale(Localization.locale)))
-                                .monospacedDigit()
-                        }
-                    }
-                    .font(.caption)
-                }
             }
             .padding(.vertical, 5)
         } label: {
             VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(title).lineLimit(1).truncationMode(.middle)
+                    if let mainContextSummary {
+                        Text(mainContextSummary)
+                            .font(.caption)
+                            .foregroundStyle(WorkspaceStyle.subtext)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                    }
                     Spacer(minLength: 8)
                     Text(LF("subagents.started_value", conversation.starts.formatted(.number.locale(Localization.locale))))
+                        .font(.caption)
                         .foregroundStyle(WorkspaceStyle.subtext)
+                        .monospacedDigit()
                 }
                 HStack(alignment: .top, spacing: 20) {
                     conversationMetric(
@@ -263,7 +329,8 @@ private struct CodexSubagentConversationView: View {
 
     @ViewBuilder
     private func agentRows(_ agent: CodexSubagent) -> some View {
-        let name = agent.name.flatMap { $0.isEmpty ? nil : $0 } ?? LF("subagents.unnamed", String(agent.id.prefix(8)))
+        let cleaned = agent.name?.trimmingCharacters(in: CharacterSet(charactersIn: "\" \t\n"))
+        let name = cleaned.flatMap { $0.isEmpty ? nil : $0 } ?? LF("subagents.unnamed", String(agent.id.prefix(8)))
         if agent.models.isEmpty {
             HStack {
                 Text(name).fontWeight(.medium)
@@ -315,6 +382,37 @@ struct OverviewView: View {
         isActive ? DashboardDateSpan(from: reportFilter.from, to: reportFilter.to) : nil
     }
 
+    private var annualCalendar: UsageActivity? {
+        localOnly ? store.activityCalendar : (store.combinedActivityCalendar ?? store.activityCalendar)
+    }
+
+    private var reportingCalendar: Calendar {
+        var calendar = Localization.reportingCalendar
+        if multiDevice { calendar.timeZone = TimeZone(identifier: DeviceUsageSnapshot.reportingTimezone)! }
+        return calendar
+    }
+
+    private var antigravityToolSummary: UsageSummary? {
+        let matching = overview.clients.filter { $0.key == "antigravity" || $0.key == "antigravity-cli" }.map(\.summary)
+        guard let first = matching.first else { return nil }
+        guard matching.count > 1 else { return first }
+        let tokens = matching.reduce(Int64(0)) { $0 + $1.tokens }
+        let unpriced = matching.reduce(Int64(0)) { $0 + $1.unpricedTokens }
+        let costs = matching.compactMap(\.knownEstimatedCostUsd)
+        let knownCost: Double? = costs.isEmpty ? nil : costs.reduce(0, +)
+        return UsageSummary(
+            tokens: tokens,
+            tokenBreakdown: first.tokenBreakdown,
+            knownEstimatedCostUsd: knownCost,
+            unpricedTokens: unpriced,
+            costStatus: knownCost == nil ? "unknown" : (unpriced > 0 ? "partial" : "complete"),
+            recordCount: matching.reduce(Int64(0)) { $0 + $1.recordCount },
+            activeDays: first.activeDays,
+            partialDays: first.partialDays,
+            requests: nil
+        )
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ScrollViewReader { proxy in
@@ -323,8 +421,11 @@ struct OverviewView: View {
                         Color.clear.frame(height: 0).id("overview-top")
                         LazyVStack(alignment: .leading, spacing: 20) {
                             if previousRange != nil {
-                                Button { restoreRange() } label: { Label(L("overview.back"), systemImage: "arrow.left") }
-                                    .buttonStyle(.plain).foregroundStyle(WorkspaceStyle.selection).font(.caption)
+                                Button { restoreRange() } label: {
+                                    Label(L("overview.back"), systemImage: "arrow.left")
+                                        .padding(.horizontal, 6).padding(.vertical, 3)
+                                }
+                                .buttonStyle(WorkspaceHoverStyle()).foregroundStyle(WorkspaceStyle.selection).font(.caption)
                             }
                             if !localOnly, let notice = store.cloud.compatibilityNotice {
                                 Label(notice, systemImage: "icloud.slash").font(.callout).foregroundStyle(.secondary)
@@ -332,9 +433,11 @@ struct OverviewView: View {
                             WorkspacePanel {
                                 VStack(alignment: .leading, spacing: 20) {
                                     if overview.summary.recordCount > 0 {
-                                        totals
+                                        totals(wide: geometry.size.width >= 660)
+                                    }
+                                    if overview.summary.tokens > 0 {
                                         TokenMixView(tokens: overview.summary.tokenBreakdown, range: range)
-                                        Divider()
+                                            .padding(.bottom, 14)
                                     }
                                     UsageTrendChart(report: overview, localReport: localAtSync,
                                                     remoteReports: remoteReports,
@@ -348,6 +451,8 @@ struct OverviewView: View {
                                     : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
                                 WorkspacePanel {
                                     VStack(alignment: .leading, spacing: 16) {
+                                        Text(L("overview.tools_models")).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                                            .accessibilityAddTraits(.isHeader)
                                         HStack(spacing: 12) {
                                             Picker(L("overview.sort"), selection: $rankingMetric) {
                                                 ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -364,24 +469,52 @@ struct OverviewView: View {
                                         }
                                         Divider()
                                         layout {
-                                            UsageRankingView(groups: overview.clients, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.clients), by: \.key), kind: .tool, metric: rankingMetric, range: range)
-                                            UsageRankingView(groups: overview.models, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.models), by: \.key), kind: .model, metric: rankingMetric, range: range)
+                                            UsageRankingView(groups: overview.clients, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.clients), by: \.key), kind: .tool, metric: rankingMetric, range: range,
+                                                             childModels: overview.clientModels ?? [:], codexSubagents: overview.codexSubagents,
+                                                             antigravitySubagents: overview.antigravitySubagents ?? report.antigravitySubagents)
+                                            UsageRankingView(groups: overview.models, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.models), by: \.key), kind: .model, metric: rankingMetric, range: range,
+                                                             codexSubagents: multiDevice ? store.cloud.matchingSubagentDetails(in: report, for: reportFilter) : report.codexSubagents,
+                                                             antigravitySubagents: overview.antigravitySubagents ?? report.antigravitySubagents)
                                         }
                                     }
                                 }
                             }
-                            if let subagents = overview.codexSubagents, subagents.hasActivity {
-                                CodexSubagentsView(report: subagents,
-                                                  local: multiDevice
-                                                    ? store.cloud.matchingSubagentDetails(in: report, for: reportFilter)
-                                                    : report.codexSubagents,
-                                                  hasRemote: multiDevice,
-                                                  remote: remoteReports.values.compactMap(\.codexSubagents),
-                                                  codexSummary: overview.clients.first { $0.key == "codex" }?.summary)
+                            let subagentEntries: [SubagentsCardView.ToolEntry] = {
+                                var list: [SubagentsCardView.ToolEntry] = []
+                                if let codex = overview.codexSubagents, codex.hasActivity {
+                                    list.append(.init(
+                                        id: "codex",
+                                        name: clientName("codex"),
+                                        report: codex,
+                                        local: multiDevice
+                                            ? store.cloud.matchingSubagentDetails(in: report, for: reportFilter)
+                                            : report.codexSubagents,
+                                        remote: remoteReports.values.compactMap(\.codexSubagents),
+                                        toolSummary: overview.clients.first { $0.key == "codex" }?.summary
+                                    ))
+                                }
+                                if let agy = overview.antigravitySubagents ?? report.antigravitySubagents, agy.hasActivity {
+                                    list.append(.init(
+                                        id: "antigravity",
+                                        name: clientName("antigravity"),
+                                        report: agy,
+                                        local: report.antigravitySubagents,
+                                        remote: [],
+                                        toolSummary: antigravityToolSummary
+                                    ))
+                                }
+                                return list
+                            }()
+                            if !subagentEntries.isEmpty {
+                                SubagentsCardView(
+                                    entries: subagentEntries,
+                                    hasRemote: multiDevice && subagentEntries.contains { !$0.remote.isEmpty },
+                                    overallSummary: overview.summary
+                                )
                             }
-                            if let activity = localOnly ? store.activity : (store.combinedActivity ?? store.activity), !activity.daily.isEmpty,
-                               let calendar = localOnly ? store.activityCalendar : (store.combinedActivityCalendar ?? store.activityCalendar) {
-                                let hasRemote = !localOnly && store.combinedActivity != nil && !store.remoteActivityReports.isEmpty
+                            let activity = localOnly ? store.activity : (store.combinedActivity ?? store.activity)
+                            let hasRemote = !localOnly && store.combinedActivity != nil && !store.remoteActivityReports.isEmpty
+                            if let activity, !activity.daily.isEmpty, let calendar = annualCalendar {
                                 UsageActivityView(report: activity, activity: calendar, showsDeviceBreakdown: hasRemote) { day in
                                     if reportFilter.from == day, reportFilter.to == day, store.filter == reportFilter {
                                         proxy.scrollTo("overview-top", anchor: .top)
@@ -393,6 +526,15 @@ struct OverviewView: View {
                                     var filter = store.filter; filter.from = day; filter.to = day; filter.offset = 0
                                     store.filter = filter
                                 }
+                            }
+                            if overview.summary.tokens > 0 || (annualCalendar?.activeDays ?? 0) > 0 {
+                                OverviewInsightsView(
+                                    insights: OverviewInsights(summary: overview.summary, filter: reportFilter, calendar: reportingCalendar),
+                                    streak: annualCalendar.flatMap { $0.activeDays > 0 ? $0.streak : nil },
+                                    wide: geometry.size.width >= 790
+                                )
+                            }
+                            if let activity, !activity.daily.isEmpty, let calendar = annualCalendar {
                                 UsageHabitsView(report: activity, activity: calendar, horizontal: geometry.size.width >= 760)
                                 UsageHistoryChart(report: activity, localOnly: localOnly || !hasRemote)
                             }
@@ -415,13 +557,17 @@ struct OverviewView: View {
         var filter = store.filter; filter.from = previousRange.1; filter.to = previousRange.2; filter.offset = 0
         store.filter = filter; store.updateDateRange(); self.previousRange = nil
     }
-    private var totals: some View {
+    @ViewBuilder
+    private func totals(wide: Bool) -> some View {
         let fields = totalFields
-        return ViewThatFits(in: .horizontal) {
-            totalsGrid(fields)
-            VStack(alignment: .leading, spacing: 14) {
-                totalsGrid(Array(fields.prefix(2)))
-                totalsGrid(Array(fields.dropFirst(2)))
+        Group {
+            if wide {
+                totalsGrid(fields)
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    totalsGrid(Array(fields.prefix(2)))
+                    totalsGrid(Array(fields.dropFirst(2)))
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -429,6 +575,7 @@ struct OverviewView: View {
 
     private struct TotalField: Identifiable {
         let id: String
+        let titleKey: String
         let value: String
         let amount: Double?
         let local: String?
@@ -439,28 +586,32 @@ struct OverviewView: View {
     private var totalFields: [TotalField] {
         let summary = overview.summary
         var fields = [
-            TotalField(id: "usage.tokens", value: compactTokens(summary.tokens), amount: Double(summary.tokens),
+            TotalField(id: "usage.tokens", titleKey: "usage.tokens", value: compactTokens(summary.tokens), amount: Double(summary.tokens),
                        local: compactTokens(localAtSync.summary.tokens), primary: true),
-            TotalField(id: summary.costStatus == "partial" ? "cost.known" : "cost.estimate",
+            TotalField(id: "cost", titleKey: summary.costStatus == "partial" ? "cost.known" : "cost.estimate",
                        value: usd(summary.knownEstimatedCostUsd), amount: summary.knownEstimatedCostUsd,
                        local: usd(localAtSync.summary.knownEstimatedCostUsd), primary: true, explainsCost: true)
         ]
         if reportFilter.from == nil || reportFilter.from != reportFilter.to {
-            fields.append(TotalField(id: "overview.active_days", value: summary.activeDays.formatted(),
+            fields.append(TotalField(id: "overview.active_days", titleKey: "overview.active_days", value: summary.activeDays.formatted(),
                                      amount: Double(summary.activeDays), local: nil))
         }
         let count = overview.overviewModelCount
-        fields.append(TotalField(id: "overview.models", value: count.formatted(), amount: Double(count),
+        fields.append(TotalField(id: "overview.models", titleKey: "overview.models", value: count.formatted(), amount: Double(count),
                                  local: localAtSync.overviewModelCount.formatted()))
         return fields
     }
 
+    private var reservesLocalRow: Bool { !localOnly && !store.cloud.sources.isEmpty }
+
     private func totalsGrid(_ fields: [TotalField]) -> some View {
-        Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 5) {
+        let fast = overview.summary.fastTokens ?? 0
+        let showsFast = fast > 0
+        return Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 5) {
             GridRow(alignment: .firstTextBaseline) {
                 ForEach(fields) { field in
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text(L(field.id)).font(.subheadline).foregroundStyle(WorkspaceStyle.subtext)
+                        Text(L(field.titleKey)).font(.subheadline).foregroundStyle(WorkspaceStyle.subtext)
                         if field.explainsCost { costInfo }
                     }
                 }
@@ -474,32 +625,37 @@ struct OverviewView: View {
                             OverviewDeviceReadout(rows: totalRows)
                         }
                         .frame(maxWidth: field.primary ? .infinity : nil, alignment: .leading)
-                        .accessibilityLabel(L(field.id) + " " + field.value)
+                        .accessibilityLabel(L(field.titleKey) + " " + field.value)
                 }
             }
-            if multiDevice {
+            if reservesLocalRow {
                 GridRow(alignment: .firstTextBaseline) {
                     ForEach(fields) { field in
                         if let local = field.local {
                             if field.id == "overview.models" {
                                 Text(local).font(.caption).monospacedDigit().foregroundStyle(WorkspaceStyle.subtext)
+                                    .opacity(multiDevice ? 1 : 0)
                                     .cursorTooltip(enabled: multiDevice) { OverviewDeviceReadout(rows: totalRows) }
                                     .accessibilityLabel(LF("cloud.overview.localValue", local))
+                                    .accessibilityHidden(!multiDevice)
                             } else {
-                                totalDetail(icon: "desktopcomputer", label: L("cloud.overview.local"), value: local, showsDevices: true)
+                                totalDetail(icon: "desktopcomputer", label: L("cloud.overview.local"), value: local, showsDevices: multiDevice)
+                                    .opacity(multiDevice ? 1 : 0)
                                     .accessibilityLabel(LF("cloud.overview.localValue", local))
+                                    .accessibilityHidden(!multiDevice)
                             }
                         } else { Color.clear.frame(width: 1, height: 1).accessibilityHidden(true) }
                     }
                 }
             }
-            if fields.contains(where: { $0.id == "usage.tokens" }),
-               let fast = overview.summary.fastTokens, fast > 0 {
+            if fields.contains(where: { $0.id == "usage.tokens" }) {
                 GridRow(alignment: .firstTextBaseline) {
                     totalDetail(icon: "bolt.fill", label: L("fast.title"), value: compactTokens(fast))
-                        .help(L("fast.tokens_help"))
+                        .opacity(showsFast ? 1 : 0)
+                        .allowsHitTesting(showsFast)
                         .accessibilityLabel(LF("fast.value_accessibility", compactTokens(fast)))
                         .accessibilityHint(L("fast.tokens_help"))
+                        .accessibilityHidden(!showsFast)
                     ForEach(fields.dropFirst()) { _ in
                         Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
                     }
@@ -539,6 +695,53 @@ struct OverviewView: View {
 
 }
 
+private struct OverviewInsightsView: View {
+    let insights: OverviewInsights
+    let streak: (current: Int, longest: Int)?
+    let wide: Bool
+
+    var body: some View {
+        let count = [streak != nil, insights.monthlyPace != nil, insights.activeDayTokens != nil, insights.cachedInputShare != nil]
+            .filter { $0 }.count
+        if count > 0 {
+            WorkspacePanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(L("overview.insights")).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                        .accessibilityAddTraits(.isHeader)
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 18, alignment: .leading),
+                                             count: min(wide ? 4 : 2, count)), alignment: .leading, spacing: 16) {
+                        if let streak {
+                            metric("insight.streak", LF("insight.days", streak.current),
+                                   detail: LF("insight.longest", streak.longest))
+                        }
+                        if let pace = insights.monthlyPace, let days = insights.periodDays {
+                            metric("insight.monthly_pace", usd(pace), detail: LF("insight.pace_basis", days))
+                        }
+                        if let average = insights.activeDayTokens {
+                            metric("insight.active_day", compactTokens(average) + " Tokens",
+                                   detail: insights.activeDayCost.map { LF("insight.active_day_cost", usd($0)) })
+                        }
+                        if let share = insights.cachedInputShare {
+                            metric("insight.cached_input", share.formatted(.percent.precision(.fractionLength(0...1)).locale(Localization.locale)),
+                                   detail: insights.costPerMillion.map { LF("insight.cost_per_million", usd($0)) })
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func metric(_ title: String, _ reading: String, detail: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L(title)).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+            Text(reading).font(DisplayNumberFont.font(for: .title3)).foregroundStyle(WorkspaceStyle.text)
+            if let detail { Text(detail).font(.caption2).foregroundStyle(WorkspaceStyle.subtext) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct TokenMixView: View {
     let tokens: TokenBreakdown
     let range: DashboardDateSpan?
@@ -550,17 +753,16 @@ private struct TokenMixView: View {
     }
     var body: some View {
         let total = parts.reduce(Int64(0)) { $0 + $1.1 }
+        let fractions: [Double] = total > 0 ? parts.map { Double($0.1) / Double(total) } : [0, 0, 0, 0, 0]
         VStack(alignment: .leading, spacing: 10) {
-            GeometryReader { geometry in
-                HStack(spacing: 0) {
-                    ForEach(parts.indices, id: \.self) { i in
-                        Rectangle().fill(parts[i].2.opacity(0.8))
-                            .frame(width: total > 0 ? geometry.size.width * Double(parts[i].1) / Double(total) : 0)
-                    }
-                }
-                .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: range)
-                .clipShape(Capsule())
-            }.frame(height: 5).accessibilityHidden(true)
+            TokenMixBar(
+                f0: fractions[0], f1: fractions[1], f2: fractions[2], f3: fractions[3], f4: fractions[4],
+                colors: parts.map { $0.2.opacity(0.8) }
+            )
+            .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: range)
+            .frame(height: 5)
+            .clipShape(Capsule())
+            .accessibilityHidden(true)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 142), alignment: .leading)], alignment: .leading, spacing: 7) {
                 ForEach(parts.indices, id: \.self) { i in
                     HStack(spacing: 5) {
@@ -568,8 +770,43 @@ private struct TokenMixView: View {
                         Text(L(parts[i].0)).foregroundStyle(WorkspaceStyle.subtext)
                         DashboardRollingValue(text: compactTokens(parts[i].1), value: Double(parts[i].1),
                                               range: range, style: .caption2, themed: true)
-                    }.font(.caption2).help(total > 0 ? (Double(parts[i].1) / Double(total)).formatted(.percent.precision(.fractionLength(1))) : "0%")
+                    }.font(.caption2)
                         .accessibilityElement(children: .combine)
+                }
+            }
+        }
+    }
+
+    private struct TokenMixBar: View, Animatable {
+        var f0: Double
+        var f1: Double
+        var f2: Double
+        var f3: Double
+        var f4: Double
+        let colors: [Color]
+
+        nonisolated var animatableData: AnimatablePair<AnimatablePair<Double, Double>, AnimatablePair<AnimatablePair<Double, Double>, Double>> {
+            get { AnimatablePair(AnimatablePair(f0, f1), AnimatablePair(AnimatablePair(f2, f3), f4)) }
+            set {
+                f0 = newValue.first.first
+                f1 = newValue.first.second
+                f2 = newValue.second.first.first
+                f3 = newValue.second.first.second
+                f4 = newValue.second.second
+            }
+        }
+
+        var body: some View {
+            Canvas { context, size in
+                let values = [max(0, f0), max(0, f1), max(0, f2), max(0, f3), max(0, f4)]
+                let sum = values.reduce(0, +)
+                guard sum > 0, size.width > 0, size.height > 0 else { return }
+                var x: CGFloat = 0
+                for (index, value) in values.enumerated() where value > 0 {
+                    let width = size.width * CGFloat(value / sum)
+                    context.fill(Path(CGRect(x: x, y: 0, width: width + 0.5, height: size.height)),
+                                 with: .color(colors[index]))
+                    x += width
                 }
             }
         }
@@ -599,7 +836,12 @@ private struct UsageRankingView: View {
     let kind: BrandKind
     let metric: UsageMetric
     let range: DashboardDateSpan?
+    var childModels: [String: [UsageGroup]] = [:]
+    var codexSubagents: CodexSubagentReport? = nil
+    var antigravitySubagents: CodexSubagentReport? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = false
+    @State private var expandedTools: Set<String> = []
     private var sorted: [UsageGroup] {
         groups.sorted {
             let a = metric.amount(in: $0.summary) ?? -1
@@ -607,23 +849,239 @@ private struct UsageRankingView: View {
             return a == b ? $0.key < $1.key : a > b
         }
     }
+
+    private struct SubagentBadgeSummary {
+        let starts: Int64
+        let tokens: Int64
+        let cost: CodexSubagentCost?
+    }
+
+    private var modelSubagentSummaries: [String: SubagentBadgeSummary] {
+        guard kind == .model else { return [:] }
+        let conversations = [codexSubagents, antigravitySubagents]
+            .compactMap { $0 }
+            .flatMap(\.conversations)
+        guard !conversations.isEmpty else { return [:] }
+        var totals: [String: (starts: Int64, tokens: Int64, cost: Double, hasCost: Bool, unpriced: Int64)] = [:]
+        for conversation in conversations {
+            for agent in conversation.agents {
+                for item in agent.models where item.tokens > 0 || (item.cost?.knownEstimatedCostUsd ?? 0) > 0 {
+                    var entry = totals[item.model] ?? (0, 0, 0, false, 0)
+                    entry.starts += agent.starts
+                    entry.tokens += item.tokens
+                    if let usd = item.cost?.knownEstimatedCostUsd {
+                        entry.cost += usd
+                        entry.hasCost = true
+                    }
+                    entry.unpriced += item.cost?.unpricedTokens ?? 0
+                    totals[item.model] = entry
+                }
+            }
+        }
+        return totals.mapValues { entry in
+            SubagentBadgeSummary(
+                starts: entry.starts,
+                tokens: entry.tokens,
+                cost: entry.hasCost || entry.unpriced > 0
+                    ? CodexSubagentCost(knownEstimatedCostUsd: entry.hasCost ? entry.cost : nil, unpricedTokens: entry.unpriced)
+                    : nil
+            )
+        }
+    }
+
+    private func subagentReport(for group: UsageGroup) -> CodexSubagentReport? {
+        guard kind == .tool else { return nil }
+        switch group.key {
+        case "codex":
+            return codexSubagents?.hasActivity == true ? codexSubagents : nil
+        case "antigravity", "antigravity-cli":
+            return antigravitySubagents?.hasActivity == true ? antigravitySubagents : nil
+        default:
+            return nil
+        }
+    }
+
+    private func subagentTitle(for group: UsageGroup) -> String {
+        if kind == .tool && (group.key == "antigravity" || group.key == "antigravity-cli") {
+            return L("subagents.antigravity_title")
+        }
+        return L("subagents.title")
+    }
+
+    private func subagentSummary(for group: UsageGroup, modelMap: [String: SubagentBadgeSummary]) -> SubagentBadgeSummary? {
+        if let report = subagentReport(for: group) {
+            return SubagentBadgeSummary(starts: report.starts, tokens: report.tokens, cost: report.cost)
+        }
+        if kind == .model, let modelSummary = modelMap[group.key] {
+            return modelSummary
+        }
+        return nil
+    }
+
+    private func subagentShare(_ summary: SubagentBadgeSummary, in group: UsageGroup) -> Double? {
+        switch metric {
+        case .tokens:
+            return subagentShareValue(Double(summary.tokens), of: Double(group.summary.tokens))
+        case .cost:
+            return subagentShareValue(summary.cost?.knownEstimatedCostUsd, of: group.summary.knownEstimatedCostUsd)
+        }
+    }
+
+    private func subagentShareValue(_ amount: Double?, of total: Double?) -> Double? {
+        guard let amount, let total, amount.isFinite, total.isFinite, total > 0 else { return nil }
+        return amount / total
+    }
+
+    private func subagentMetricText(_ subagents: CodexSubagentReport) -> String {
+        switch metric {
+        case .tokens: compactTokens(subagents.tokens)
+        case .cost: subagentCostText(subagents.cost)
+        }
+    }
+
     var body: some View {
         let total = groups.reduce(0.0) { $0 + (metric.amount(in: $1.summary) ?? 0) }
-        VStack(alignment: .leading, spacing: 16) {
-            Text(L(kind == .tool ? "usage.by_tool" : "usage.by_model"))
+        let modelMap = modelSubagentSummaries
+        VStack(alignment: .leading, spacing: kind == .tool ? 6 : 16) {
+            Text(L(kind == .tool ? "field.tool" : "field.model"))
                 .font(.headline).foregroundStyle(WorkspaceStyle.text).frame(height: 24)
             ForEach(expanded ? sorted : Array(sorted.prefix(5))) { group in
-                rankingRow(group, total: total)
+                let models = childModels[group.key] ?? []
+                let subagents = subagentReport(for: group)
+                let badgeSummary = subagentSummary(for: group, modelMap: modelMap)
+                Group {
+                    if !models.isEmpty || subagents != nil {
+                        DisclosureGroup(isExpanded: Binding(
+                            get: { expandedTools.contains(group.key) },
+                            set: { if $0 { expandedTools.insert(group.key) } else { expandedTools.remove(group.key) } }
+                        )) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                if let subagents {
+                                    subagentSummaryRow(subagents, in: group)
+                                    if !models.isEmpty { Divider() }
+                                }
+                                if !models.isEmpty {
+                                    modelRows(models)
+                                }
+                            }
+                            .padding(.leading, 16).padding(.vertical, 8)
+                        } label: {
+                            rankingRow(group, total: total, badgeSummary: badgeSummary)
+                        }
+                        .disclosureGroupStyle(WorkspaceDisclosureStyle())
+                    } else {
+                        rankingRow(group, total: total, badgeSummary: badgeSummary)
+                    }
+                }
+                .transition(.opacity)
             }
             if groups.count > 5 {
-                Button(L(expanded ? "action.show_less" : "action.show_all")) { expanded.toggle() }
-                    .buttonStyle(.plain).font(.caption).foregroundStyle(WorkspaceStyle.selection)
+                Button {
+                    DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                        expanded.toggle()
+                    }
+                } label: {
+                    Text(L(expanded ? "action.show_less" : "action.show_all"))
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                }
+                .buttonStyle(WorkspaceHoverStyle()).font(.caption).foregroundStyle(WorkspaceStyle.selection)
             }
             if groups.isEmpty { Text(L("usage.empty")).foregroundStyle(WorkspaceStyle.subtext).padding(.vertical, 24) }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func rankingRow(_ group: UsageGroup, total: Double) -> some View {
+    private func modelRows(_ models: [UsageGroup]) -> some View {
+        let ranked = models.sorted {
+            let a = metric.amount(in: $0.summary) ?? -1, b = metric.amount(in: $1.summary) ?? -1
+            return a == b ? $0.key < $1.key : a > b
+        }
+        return VStack(alignment: .leading, spacing: 8) {
+            ForEach(ranked) { model in
+                let summary = model.summary
+                let partial = metric == .cost && summary.costStatus == "partial"
+                let text = metric == .tokens ? compactTokens(summary.tokens) : (partial ? "≈ " : "") + usd(metric.amount(in: summary))
+                HStack(spacing: 8) {
+                    BrandIcon(name: model.key, kind: .model, size: 14)
+                    Text(model.key).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 5)
+                    Text(text).monospacedDigit().fixedSize()
+                }
+                .font(.caption)
+                .foregroundStyle(WorkspaceStyle.subtext)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint(partial ? L("cost.known") : "")
+            }
+        }
+    }
+
+    private func subagentBadge(_ subagents: SubagentBadgeSummary, in group: UsageGroup) -> some View {
+        let title = subagentTitle(for: group)
+        let share = subagentShare(subagents, in: group)
+        let partial = metric == .cost && ((subagents.cost?.unpricedTokens ?? 0) > 0 || group.summary.unpricedTokens > 0)
+        let label = share.map { subagentShareText($0, partial: partial) }
+            ?? subagents.starts.formatted(.number.locale(Localization.locale))
+        return HStack(spacing: 3) {
+            Image(systemName: "arrow.triangle.branch").font(.system(size: 9, weight: .semibold))
+            Text(label).monospacedDigit()
+        }
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(WorkspaceStyle.selection)
+        .padding(.horizontal, 6).padding(.vertical, 2)
+        .background(WorkspaceStyle.selection.opacity(0.11), in: Capsule())
+        .fixedSize()
+        .cursorTooltip(enabled: true) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.triangle.branch").foregroundStyle(WorkspaceStyle.selection)
+                    Text(title).fontWeight(.semibold).foregroundStyle(WorkspaceStyle.text)
+                    Spacer(minLength: 10)
+                    Text(LF("subagents.started_value", subagents.starts.formatted(.number.locale(Localization.locale))))
+                        .foregroundStyle(WorkspaceStyle.subtext)
+                }
+                HStack(spacing: 12) {
+                    Text(compactTokens(subagents.tokens) + " Tokens").monospacedDigit().foregroundStyle(WorkspaceStyle.text)
+                    Text(subagentCostText(subagents.cost)).monospacedDigit().foregroundStyle(WorkspaceStyle.subtext)
+                    if let share {
+                        Text(subagentShareText(share, partial: partial)).monospacedDigit().foregroundStyle(WorkspaceStyle.selection)
+                    }
+                }
+            }
+            .font(.caption)
+            .fixedSize()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title + " " + label)
+    }
+
+    private func subagentSummaryRow(_ subagents: CodexSubagentReport, in group: UsageGroup) -> some View {
+        let title = subagentTitle(for: group)
+        let badge = SubagentBadgeSummary(starts: subagents.starts, tokens: subagents.tokens, cost: subagents.cost)
+        let share = subagentShare(badge, in: group)
+        let partial = metric == .cost && ((subagents.cost?.unpricedTokens ?? 0) > 0 || group.summary.unpricedTokens > 0)
+        return HStack(spacing: 8) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(WorkspaceStyle.selection)
+                .frame(width: 14, alignment: .center)
+            Text(title)
+                .foregroundStyle(WorkspaceStyle.text)
+                .fontWeight(.medium)
+            Text(LF("subagents.started_value", subagents.starts.formatted(.number.locale(Localization.locale))))
+                .foregroundStyle(WorkspaceStyle.subtext)
+            Spacer(minLength: 5)
+            Text(subagentMetricText(subagents)).monospacedDigit().fixedSize()
+                .foregroundStyle(WorkspaceStyle.text)
+            if let share {
+                Text(subagentShareText(share, partial: partial))
+                    .monospacedDigit().fixedSize()
+                    .foregroundStyle(WorkspaceStyle.subtext)
+            }
+        }
+        .font(.caption)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func rankingRow(_ group: UsageGroup, total: Double, badgeSummary: SubagentBadgeSummary?) -> some View {
         let summary = group.summary
         let amount = metric.amount(in: summary)
         let share = amount.map { total > 0 ? $0 / total : 0 }
@@ -631,25 +1089,27 @@ private struct UsageRankingView: View {
         let other = remote.reduce(0.0) { $0 + (metric.amount(in: $1.summary) ?? 0) }
         let otherFast = remote.reduce(0.0) { $0 + metric.fastAmount(in: $1.summary) }
         let fastText = metric.fastReadout(in: summary)
-        let costText = L(summary.costStatus == "partial" ? "cost.known" : "cost.estimate") + ": " + usd(summary.knownEstimatedCostUsd)
         return HStack(spacing: 10) {
             BrandIcon(name: group.key, kind: kind, size: 18)
             VStack(spacing: 7) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(kind == .tool ? clientName(group.key) : group.key).lineLimit(1).truncationMode(.middle)
                         .foregroundStyle(WorkspaceStyle.text)
+                    if let badgeSummary {
+                        subagentBadge(badgeSummary, in: group)
+                    }
                     Spacer(minLength: 8)
                     DashboardRollingValue(text: metric == .tokens ? compactTokens(summary.tokens) : usd(amount),
                                           value: amount, range: range, style: .callout, themed: true)
                 }.font(.callout)
                 OverviewShareBar(total: total, amount: amount ?? 0, other: other,
-                                 fast: metric.fastAmount(in: summary), otherFast: otherFast, height: 5, range: range)
+                                 fast: metric.fastAmount(in: summary), otherFast: otherFast, height: 5, range: range,
+                                 formatValue: metric == .tokens ? { compactTokens(Int64($0.rounded())) } : { usd($0) })
             }
             DashboardRollingValue(text: share?.formatted(.percent.precision(.fractionLength(0))) ?? "—",
                                   value: share, range: range, style: .caption2, secondary: true, themed: true)
                 .foregroundStyle(WorkspaceStyle.subtext).frame(width: 35, alignment: .trailing)
         }
-        .help([group.key, costText, fastText].compactMap { $0 }.joined(separator: "\n"))
         .accessibilityElement(children: .combine)
         .accessibilityValue(fastText ?? "")
     }

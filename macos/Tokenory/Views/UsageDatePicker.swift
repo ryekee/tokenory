@@ -1,5 +1,5 @@
 // [INPUT]: 当前用量筛选范围与日历交互。
-// [OUTPUT]: 在工具栏及无记录状态打开共用日期浮层，并支持移动日期范围。
+// [OUTPUT]: 共用日期浮层支持一次点选单日、两次点选范围，并可移动已选日期范围。
 // [POS]: 统计窗口的日期工具栏控件与原生弹窗。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -29,7 +29,7 @@ struct UsageDatePicker: View {
         } label: {
             Label(title, systemImage: "calendar").lineLimit(1)
         }
-        .labelStyle(.titleAndIcon).help(title)
+        .labelStyle(.titleAndIcon)
         .accessibilityLabel(L("field.date")).accessibilityValue(title)
         .popover(item: $presentation, arrowEdge: .bottom) { draft in
             DateRangePopover(
@@ -55,7 +55,6 @@ struct UsageDatePicker: View {
             Label(title, systemImage: icon).labelStyle(.iconOnly)
         }
         .accessibilityLabel(title)
-        .help(title)
         .disabled(store.steppedDateRange(step) == nil)
     }
 }
@@ -66,6 +65,8 @@ private struct DateRangePopover: View {
     let selectPreset: (UsageDateRange) -> Void
     let cancel: () -> Void
     let apply: (Date, Date) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hoveredDay: Date?
 
     private static let presets = UsageDateRange.allCases.filter { $0 != .custom }
     private static let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
@@ -91,14 +92,16 @@ private struct DateRangePopover: View {
                 Divider()
                 VStack(spacing: 8) {
                     HStack {
-                        Button { draft.moveMonth(-1) } label: { Image(systemName: "chevron.left").frame(width: 20, height: 20) }
-                            .help(L("calendar.previous_month")).accessibilityLabel(L("calendar.previous_month"))
+                        Button { draft.moveMonth(-1) } label: { Image(systemName: "chevron.left").frame(width: 24, height: 24).contentShape(Rectangle()) }
+                            .buttonStyle(WorkspaceHoverStyle())
+                            .accessibilityLabel(L("calendar.previous_month"))
                         Spacer()
                         Text(L("range.custom")).font(.headline)
                         Spacer()
-                        Button { draft.moveMonth(1) } label: { Image(systemName: "chevron.right").frame(width: 20, height: 20) }
-                            .help(L("calendar.next_month")).accessibilityLabel(L("calendar.next_month"))
-                    }.buttonStyle(.borderless)
+                        Button { draft.moveMonth(1) } label: { Image(systemName: "chevron.right").frame(width: 24, height: 24).contentShape(Rectangle()) }
+                            .buttonStyle(WorkspaceHoverStyle())
+                            .accessibilityLabel(L("calendar.next_month"))
+                    }
                     HStack(alignment: .top, spacing: 18) {
                         monthGrid(draft.firstMonth, today: today)
                         monthGrid(draft.secondMonth, today: today)
@@ -107,14 +110,13 @@ private struct DateRangePopover: View {
             }.fixedSize(horizontal: false, vertical: true)
             Divider()
             HStack(spacing: 10) {
-                Text(draft.rangeLabel ?? L("calendar.choose_end"))
+                Text(draft.rangeLabel)
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 Button(L("action.cancel"), action: cancel).keyboardShortcut(.cancelAction)
                 Button(L("action.apply")) {
-                    guard let end = draft.end else { return }
-                    apply(draft.start, end)
-                }.buttonStyle(.borderedProminent).disabled(draft.end == nil).keyboardShortcut(.defaultAction)
+                    apply(draft.start, draft.end)
+                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }
         }.padding(18).frame(width: 660)
     }
@@ -141,18 +143,33 @@ private struct DateRangePopover: View {
 
     private func dayButton(_ day: CalendarMonth.Day, today: Date) -> some View {
         let endpoint = day.date == draft.start || day.date == draft.end
-        let included = draft.end.map { day.date >= draft.start && day.date <= $0 } ?? false
+        let included = day.date >= draft.start && day.date <= draft.end
+        let hovered = hoveredDay == day.date
+        let previewIncluded: Bool = {
+            guard draft.isChoosingSecondDay, let hoveredDay else { return false }
+            let low = min(draft.start, hoveredDay), high = max(draft.start, hoveredDay)
+            return day.date >= low && day.date <= high
+        }()
         let isToday = day.date == today
         return Button { draft.selectDay(day.date) } label: {
             Text("\(day.number)").font(.system(size: 12, weight: isToday ? .bold : .regular)).monospacedDigit()
                 .foregroundStyle(endpoint ? WorkspaceStyle.onSelection : Color.primary)
                 .frame(width: 30, height: 30)
-                .background(endpoint ? WorkspaceStyle.selection : .clear, in: RoundedRectangle(cornerRadius: 6))
+                .background(
+                    endpoint ? WorkspaceStyle.selection : (hovered ? Color.primary.opacity(0.08) : .clear),
+                    in: RoundedRectangle(cornerRadius: 6)
+                )
                 .overlay { if isToday && !endpoint { RoundedRectangle(cornerRadius: 6).strokeBorder(WorkspaceStyle.selection, lineWidth: 1) } }
                 .frame(maxWidth: .infinity).contentShape(Rectangle())
-                .background(included ? WorkspaceStyle.selection.opacity(0.12) : .clear)
+                .background(included ? WorkspaceStyle.selection.opacity(0.12) : previewIncluded ? WorkspaceStyle.selection.opacity(0.07) : .clear)
+                .animation(DashboardMotion.animation(DashboardMotion.hover, reduceMotion: reduceMotion), value: hovered)
+                .animation(DashboardMotion.animation(DashboardMotion.hover, reduceMotion: reduceMotion), value: previewIncluded)
         }
         .buttonStyle(.plain)
+        .onHover { active in
+            if active { hoveredDay = day.date }
+            else if hoveredDay == day.date { hoveredDay = nil }
+        }
         .accessibilityLabel(day.label)
         .accessibilityAddTraits(endpoint || included ? [.isSelected] : [])
     }
@@ -160,11 +177,12 @@ private struct DateRangePopover: View {
 
 struct DateRangeDraft: Identifiable {
     let id = UUID()
-    let selectedRange: UsageDateRange
+    private(set) var selectedRange: UsageDateRange
     let calendar: Calendar
     let weekdays: [String]
     private(set) var start: Date
-    private(set) var end: Date?
+    private(set) var end: Date
+    private(set) var isChoosingSecondDay = false
     fileprivate var firstMonth: CalendarMonth
     fileprivate var secondMonth: CalendarMonth
     private let dayFormatter: DateFormatter
@@ -207,7 +225,7 @@ struct DateRangeDraft: Identifiable {
         secondMonth = CalendarMonth(first: next, calendar: calendar, monthFormatter: monthFormatter, dayFormatter: dayFormatter)
     }
 
-    var rangeLabel: String? { end.map { rangeFormatter.string(from: start, to: $0) } }
+    var rangeLabel: String { rangeFormatter.string(from: start, to: end) }
 
     mutating func moveMonth(_ delta: Int) {
         if delta < 0 {
@@ -222,15 +240,15 @@ struct DateRangeDraft: Identifiable {
     }
 
     mutating func selectDay(_ date: Date) {
-        if end != nil {
-            start = date
-            end = nil
-        } else if date < start {
-            end = start
-            start = date
+        selectedRange = .custom
+        if isChoosingSecondDay {
+            end = max(start, date)
+            start = min(start, date)
         } else {
+            start = date
             end = date
         }
+        isChoosingSecondDay.toggle()
     }
 }
 

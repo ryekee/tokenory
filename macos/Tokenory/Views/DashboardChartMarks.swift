@@ -35,11 +35,13 @@ struct DashboardChartMarks: NSViewRepresentable {
 
     final class PlotView: NSView {
         private let barContainer = CALayer()
+        private let exitingBarContainer = CALayer()
         private let lineContainer = CALayer()
         private let line = CAShapeLayer()
         private var barLayers: [CALayer] = []
         private var dotLayers: [CALayer] = []
         private var rendered: DashboardChartMarks?
+        private var renderedMorphPath: CGPath?
         private var revealID = 0
 
         init() {
@@ -49,11 +51,14 @@ struct DashboardChartMarks: NSViewRepresentable {
             layer = root
             wantsLayer = true
             barContainer.masksToBounds = true
+            exitingBarContainer.masksToBounds = true
             root.addSublayer(barContainer)
+            root.addSublayer(exitingBarContainer)
             root.addSublayer(lineContainer)
             line.fillColor = nil
             line.lineWidth = 2
             line.lineJoin = .round
+            line.lineCap = .round
             lineContainer.addSublayer(line)
         }
 
@@ -95,6 +100,7 @@ struct DashboardChartMarks: NSViewRepresentable {
             if previous?.frameSize != marks.frameSize {
                 let frame = CGRect(origin: .zero, size: marks.frameSize)
                 barContainer.frame = frame
+                exitingBarContainer.frame = frame
                 lineContainer.frame = frame
                 line.frame = frame
                 if let mask = lineContainer.mask {
@@ -102,17 +108,38 @@ struct DashboardChartMarks: NSViewRepresentable {
                 }
             }
             updateBars(marks, previous: previous, heightChanged: heightChanged, animate: animate)
+            let previousMorphPath = renderedMorphPath
+            let canMorphLine = animate && !growsOnMount && previousMorphPath != nil
+                && marks.series.count == 1 && marks.series[0].count > 1
+            let nextMorphPath = marks.series.count == 1 && marks.series[0].count > 1
+                ? Self.resampledPath(marks.series[0], plotHeight: marks.frameSize.height)
+                : nil
+
             if previous?.series != marks.series || heightChanged {
-                line.path = Self.linePath(marks.series, plotHeight: marks.frameSize.height)
+                let targetPath = Self.linePath(marks.series, plotHeight: marks.frameSize.height)
+                if canMorphLine, let fromPath = (line.presentation()?.path ?? previousMorphPath), let toMorph = nextMorphPath {
+                    lineContainer.mask = nil
+                    line.removeAnimation(forKey: "range")
+                    line.path = toMorph
+                    let morph = Self.animation("path", from: fromPath, to: toMorph)
+                    morph.duration = DashboardMotion.growDuration
+                    morph.timingFunction = DashboardMotion.rangeTimingFunction
+                    line.add(morph, forKey: "range")
+                } else {
+                    line.removeAnimation(forKey: "range")
+                    line.path = targetPath
+                }
             }
+            renderedMorphPath = nextMorphPath
+
             if previous?.dots != marks.dots || heightChanged {
-                updateDots(marks.dots, plotHeight: marks.frameSize.height)
+                updateDots(marks.dots, plotHeight: marks.frameSize.height, animate: animate)
             }
             updateColors(marks)
 
-            if animate && (line.path?.isEmpty == false || !marks.dots.isEmpty) {
+            if animate && !canMorphLine && (line.path?.isEmpty == false || !marks.dots.isEmpty) {
                 revealLine(in: marks.frameSize)
-            } else if !marks.animateRangeChanges || animate {
+            } else if !marks.animateRangeChanges || (animate && !canMorphLine) {
                 lineContainer.mask = nil
             }
 
@@ -124,7 +151,37 @@ struct DashboardChartMarks: NSViewRepresentable {
             _ marks: DashboardChartMarks, previous: DashboardChartMarks?, heightChanged: Bool, animate: Bool
         ) {
             let count = marks.bars.count
-            while barLayers.count > count { barLayers.removeLast().removeFromSuperlayer() }
+            let timing = DashboardMotion.rangeTimingFunction
+            if barLayers.count > count {
+                let removed = Array(barLayers[count...])
+                barLayers.removeSubrange(count...)
+                for layer in removed {
+                    layer.removeFromSuperlayer()
+                    guard animate else { continue }
+                    let snapshot = CALayer()
+                    snapshot.anchorPoint = .zero
+                    let live = layer.presentation() ?? layer
+                    snapshot.bounds = live.bounds
+                    snapshot.position = live.position
+                    snapshot.cornerRadius = live.cornerRadius
+                    snapshot.backgroundColor = live.backgroundColor
+                    snapshot.opacity = 0
+                    exitingBarContainer.addSublayer(snapshot)
+
+                    let shrink = Self.animation("bounds.size.height", from: live.bounds.height, to: 0)
+                    shrink.duration = DashboardMotion.growDuration * 0.65
+                    shrink.timingFunction = timing
+                    let fade = Self.animation("opacity", from: live.opacity, to: 0)
+                    fade.duration = DashboardMotion.growDuration * 0.65
+                    fade.timingFunction = timing
+                    snapshot.bounds.size.height = 0
+                    CATransaction.begin()
+                    CATransaction.setCompletionBlock { snapshot.removeFromSuperlayer() }
+                    snapshot.add(shrink, forKey: "exit.height")
+                    snapshot.add(fade, forKey: "exit.opacity")
+                    CATransaction.commit()
+                }
+            }
             let previousCount = barLayers.count
             while barLayers.count < count {
                 let bar = CALayer()
@@ -134,7 +191,12 @@ struct DashboardChartMarks: NSViewRepresentable {
             }
             for (index, bar) in marks.bars.enumerated() {
                 let layer = barLayers[index]
-                if !marks.animateRangeChanges { layer.removeAnimation(forKey: "range") }
+                if !marks.animateRangeChanges {
+                    layer.removeAnimation(forKey: "range")
+                    layer.removeAnimation(forKey: "range.position")
+                    layer.removeAnimation(forKey: "range.width")
+                    layer.removeAnimation(forKey: "range.opacity")
+                }
 
                 let isNew = index >= previousCount
                 guard isNew || heightChanged || previous?.bars[index].frame != bar.frame else { continue }
@@ -142,36 +204,80 @@ struct DashboardChartMarks: NSViewRepresentable {
                     x: bar.frame.minX, y: marks.frameSize.height - bar.frame.maxY,
                     width: bar.frame.width, height: bar.frame.height
                 )
-                // The new scale owns x, width, and the baseline as soon as it is
-                // visible. Only height interpolates, so bars never sweep sideways.
-                let previousHeight = isNew ? 0 : (layer.presentation() ?? layer).bounds.height
+                let live = layer.presentation() ?? layer
+                let previousHeight = isNew ? 0 : live.bounds.height
+                let previousWidth = isNew ? target.width : live.bounds.width
+                let previousPosition = isNew ? target.origin : live.position
                 layer.removeAnimation(forKey: "range")
+                layer.removeAnimation(forKey: "range.position")
+                layer.removeAnimation(forKey: "range.width")
+                layer.removeAnimation(forKey: "range.opacity")
                 layer.bounds = CGRect(origin: .zero, size: target.size)
                 layer.position = target.origin
                 layer.cornerRadius = min(2, target.width / 2, target.height / 2)
-                if animate && previousHeight != target.height {
-                    let growth = Self.animation("bounds.size.height", from: previousHeight, to: target.height)
-                    growth.duration = 0.34
-                    growth.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    layer.add(growth, forKey: "range")
+                if animate {
+                    if previousHeight != target.height {
+                        let growth = Self.animation("bounds.size.height", from: previousHeight, to: target.height)
+                        growth.duration = DashboardMotion.growDuration
+                        growth.timingFunction = timing
+                        layer.add(growth, forKey: "range")
+                    }
+                    if !isNew && previousPosition != target.origin {
+                        let move = Self.animation("position", from: previousPosition, to: target.origin)
+                        move.duration = DashboardMotion.growDuration
+                        move.timingFunction = timing
+                        layer.add(move, forKey: "range.position")
+                    }
+                    if !isNew && previousWidth != target.width {
+                        let resize = Self.animation("bounds.size.width", from: previousWidth, to: target.width)
+                        resize.duration = DashboardMotion.growDuration
+                        resize.timingFunction = timing
+                        layer.add(resize, forKey: "range.width")
+                    }
+                    if isNew && previous != nil {
+                        let fade = Self.animation("opacity", from: 0, to: bar.emphasized ? 1 : 0.35)
+                        fade.duration = DashboardMotion.growDuration * 0.7
+                        fade.timingFunction = timing
+                        layer.add(fade, forKey: "range.opacity")
+                    }
                 }
             }
         }
 
-        private func updateDots(_ dots: [Dot], plotHeight: CGFloat) {
+        private func updateDots(_ dots: [Dot], plotHeight: CGFloat, animate: Bool) {
             while dotLayers.count > dots.count { dotLayers.removeLast().removeFromSuperlayer() }
+            let previousCount = dotLayers.count
             while dotLayers.count < dots.count {
                 let dot = CALayer()
                 lineContainer.addSublayer(dot)
                 dotLayers.append(dot)
             }
-            for (dot, layer) in zip(dots, dotLayers) {
+            let timing = DashboardMotion.rangeTimingFunction
+            for (index, (dot, layer)) in zip(dots, dotLayers).enumerated() {
                 let radius = dot.diameter / 2
-                layer.frame = CGRect(
+                let targetFrame = CGRect(
                     x: dot.center.x - radius, y: plotHeight - dot.center.y - radius,
                     width: dot.diameter, height: dot.diameter
                 )
+                let live = layer.presentation() ?? layer
+                let isNew = index >= previousCount
+                layer.removeAnimation(forKey: "range.position")
+                layer.removeAnimation(forKey: "range.opacity")
+                layer.frame = targetFrame
                 layer.cornerRadius = radius
+                if animate {
+                    if !isNew {
+                        let move = Self.animation("position", from: live.position, to: layer.position)
+                        move.duration = DashboardMotion.growDuration
+                        move.timingFunction = timing
+                        layer.add(move, forKey: "range.position")
+                    } else {
+                        let fade = Self.animation("opacity", from: 0, to: 1)
+                        fade.duration = DashboardMotion.growDuration * 0.75
+                        fade.timingFunction = timing
+                        layer.add(fade, forKey: "range.opacity")
+                    }
+                }
             }
         }
 
@@ -212,7 +318,7 @@ struct DashboardChartMarks: NSViewRepresentable {
                 }
             }
             let sweep = Self.animation("transform.scale.x", from: 0, to: 1)
-            sweep.duration = 0.44
+            sweep.duration = DashboardMotion.lineRevealDuration
             sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             mask.add(sweep, forKey: "range")
         }
@@ -222,6 +328,26 @@ struct DashboardChartMarks: NSViewRepresentable {
             animation.fromValue = from
             animation.toValue = to
             return animation
+        }
+
+        private static let morphSamples = 96
+
+        private static func resampledPath(_ segment: [CGPoint], plotHeight: CGFloat) -> CGPath {
+            let points = segment.map { CGPoint(x: $0.x, y: plotHeight - $0.y) }
+            let path = CGMutablePath()
+            guard points.count > 1 else { return path }
+            let lastIndex = points.count - 1
+            for sample in 0...Self.morphSamples {
+                let position = CGFloat(sample) / CGFloat(Self.morphSamples) * CGFloat(lastIndex)
+                let leftIndex = min(lastIndex, Int(floor(position)))
+                let rightIndex = min(lastIndex, leftIndex + 1)
+                let t = position - CGFloat(leftIndex)
+                let blend = t * t * (3 - 2 * t)
+                let a = points[leftIndex], b = points[rightIndex]
+                let point = CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * blend)
+                if sample == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            }
+            return path
         }
 
         private static func linePath(_ series: [[CGPoint]], plotHeight: CGFloat) -> CGPath {

@@ -16,7 +16,6 @@ struct FastModeMark: View {
         .font(.caption.weight(.medium))
         .foregroundStyle(.secondary)
         .fixedSize()
-        .help(helpText)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title ?? L("fast.title"))
         .accessibilityHint(helpText)
@@ -60,11 +59,8 @@ struct MenuBarSummary: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 14) {
                 metric(L("usage.tokens"), compactTokens(summary.tokens))
-                    .help(summary.tokens.formatted(.number.locale(Localization.locale)))
                 metric(L("menubar.cost"), usd(summary.knownEstimatedCostUsd))
-                    .help(L(summary.costStatus == "partial" ? "cost.known" : "cost.estimate"))
                 metric(L("menubar.speed"), (turns?.containsEstimates == true ? "≈ " : "") + TurnFormat.number(turns?.averageSpeed), unit: turns?.averageSpeed == nil ? "" : "tokens/s")
-                    .help(speedError ?? L("turns.average_speed_help"))
             }
             if let partial = summary.partialDays, partial > 0 {
                 Label(LF("usage.partial_days", partial), systemImage: "clock.badge.exclamationmark").font(.caption).foregroundStyle(.secondary)
@@ -233,6 +229,10 @@ struct OverviewShareSegments: Equatable {
 }
 
 struct OverviewShareBar: View {
+    private enum Segment: Int, CaseIterable {
+        case localStandard, localFast, otherStandard, otherFast
+    }
+
     let total: Double
     let amount: Double
     let other: Double
@@ -240,23 +240,187 @@ struct OverviewShareBar: View {
     var otherFast: Double = 0
     var height: CGFloat = 4
     var range: DashboardDateSpan? = nil
+    var formatValue: ((Double) -> String)? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
+    @State private var hovered: Segment?
+    @State private var pointer = TooltipPointer()
+
+    private var segmentValues: [Segment: Double] {
+        let clampedAmount = max(amount, 0)
+        let remote = min(max(other, 0), clampedAmount)
+        let local = clampedAmount - remote
+        let remoteFast = min(max(otherFast, 0), remote)
+        let localFastVal = min(max(fast - otherFast, 0), local)
+        return [
+            .localStandard: max(0, local - localFastVal),
+            .localFast: localFastVal,
+            .otherStandard: max(0, remote - remoteFast),
+            .otherFast: remoteFast
+        ]
+    }
+
+    private func segmentColor(_ segment: Segment) -> Color {
+        switch segment {
+        case .localStandard: WorkspaceStyle.localUsage
+        case .localFast, .otherFast: WorkspaceStyle.fastUsage(scheme)
+        case .otherStandard: WorkspaceStyle.otherDevices(scheme)
+        }
+    }
+
+    private func segmentLabel(_ segment: Segment, hasOther: Bool) -> String {
+        switch segment {
+        case .localStandard: L("cloud.overview.local")
+        case .localFast: hasOther ? L("cloud.overview.local") + " · " + L("fast.title") : L("fast.title")
+        case .otherStandard: L("cloud.overview.others")
+        case .otherFast: L("cloud.overview.others") + " · " + L("fast.title")
+        }
+    }
+
+    private func hitSegment(at x: CGFloat, width: CGFloat, shares: OverviewShareSegments) -> (Segment, CGRect)? {
+        guard width > 0 else { return nil }
+        let ordered: [(Segment, Double)] = [
+            (.localStandard, shares.localStandard),
+            (.localFast, shares.localFast),
+            (.otherStandard, shares.otherStandard),
+            (.otherFast, shares.otherFast)
+        ]
+        var cursor: CGFloat = 0
+        for (segment, fraction) in ordered where fraction > 0 {
+            let segWidth = width * CGFloat(fraction)
+            let end = cursor + segWidth
+            let hitEnd = max(end, cursor + 4)
+            if x >= cursor && x <= hitEnd {
+                return (segment, CGRect(x: cursor, y: 0, width: max(segWidth, 4), height: height))
+            }
+            cursor = end
+        }
+        return nil
+    }
+
+    private func segmentRect(_ segment: Segment, width: CGFloat, shares: OverviewShareSegments) -> CGRect? {
+        let ordered: [(Segment, Double)] = [
+            (.localStandard, shares.localStandard),
+            (.localFast, shares.localFast),
+            (.otherStandard, shares.otherStandard),
+            (.otherFast, shares.otherFast)
+        ]
+        var cursor: CGFloat = 0
+        for (item, fraction) in ordered where fraction > 0 {
+            let segWidth = width * CGFloat(fraction)
+            if item == segment {
+                return CGRect(x: cursor, y: 0, width: max(segWidth, 4), height: height)
+            }
+            cursor += segWidth
+        }
+        return nil
+    }
 
     var body: some View {
         let shares = OverviewShareSegments(total: total, amount: amount, other: other, fast: fast, otherFast: otherFast)
+        let values = segmentValues
+        let hasOther = (values[.otherStandard] ?? 0) + (values[.otherFast] ?? 0) > 0
         GeometryReader { geometry in
             let width = geometry.size.width
             ZStack(alignment: .leading) {
                 Capsule().fill(WorkspaceStyle.localUsage.opacity(0.08))
-                HStack(spacing: 0) {
-                    Rectangle().fill(WorkspaceStyle.localUsage).frame(width: width * shares.localStandard)
-                    Rectangle().fill(WorkspaceStyle.fastUsage(scheme)).frame(width: width * shares.localFast)
-                    Rectangle().fill(WorkspaceStyle.otherDevices(scheme)).frame(width: width * shares.otherStandard)
-                    Rectangle().fill(WorkspaceStyle.fastUsage(scheme)).frame(width: width * shares.otherFast)
-                }.clipShape(Capsule())
-                    .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: shares)
+                ShareBarCanvas(
+                    localStandard: shares.localStandard,
+                    localFast: shares.localFast,
+                    otherStandard: shares.otherStandard,
+                    otherFast: shares.otherFast,
+                    localColor: WorkspaceStyle.localUsage,
+                    otherColor: WorkspaceStyle.otherDevices(scheme),
+                    fastColor: WorkspaceStyle.fastUsage(scheme),
+                    highlightedIndex: hovered?.rawValue
+                )
+                .clipShape(Capsule())
+                .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: range)
+                .animation(DashboardMotion.animation(DashboardMotion.hover, reduceMotion: reduceMotion), value: hovered)
             }
-        }.frame(height: height).accessibilityHidden(true)
+            .overlay {
+                if let formatValue {
+                    let activeRect = hovered.flatMap { segmentRect($0, width: width, shares: shares) }
+                    Color.clear
+                        .frame(height: max(height, 14))
+                        .contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let location):
+                                pointer.move(to: location)
+                                let hit = hitSegment(at: location.x, width: width, shares: shares)?.0
+                                if hovered != hit { hovered = hit }
+                            case .ended:
+                                if hovered != nil { hovered = nil }
+                            }
+                        }
+                        .selectedTooltip(avoiding: activeRect, pointer: pointer) {
+                            if let segment = hovered, let segValue = values[segment], segValue > 0 {
+                                let rowTotal = max(amount, 0)
+                                let pct = rowTotal > 0
+                                    ? (segValue / rowTotal).formatted(.percent.precision(.fractionLength(0...1)).locale(Localization.locale))
+                                    : "0%"
+                                HStack(spacing: 8) {
+                                    Circle().fill(segmentColor(segment)).frame(width: 6, height: 6)
+                                    Text(segmentLabel(segment, hasOther: hasOther))
+                                        .foregroundStyle(WorkspaceStyle.subtext)
+                                    Text(formatValue(segValue))
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(WorkspaceStyle.text)
+                                        .monospacedDigit()
+                                    Text(pct)
+                                        .foregroundStyle(WorkspaceStyle.subtext)
+                                        .monospacedDigit()
+                                }
+                                .font(.caption)
+                                .fixedSize()
+                            }
+                        }
+                }
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
+    }
+
+    private struct ShareBarCanvas: View, Animatable {
+        var localStandard: Double
+        var localFast: Double
+        var otherStandard: Double
+        var otherFast: Double
+        let localColor: Color
+        let otherColor: Color
+        let fastColor: Color
+        let highlightedIndex: Int?
+
+        nonisolated var animatableData: AnimatablePair<AnimatablePair<Double, Double>, AnimatablePair<Double, Double>> {
+            get { AnimatablePair(AnimatablePair(localStandard, localFast), AnimatablePair(otherStandard, otherFast)) }
+            set {
+                localStandard = newValue.first.first
+                localFast = newValue.first.second
+                otherStandard = newValue.second.first
+                otherFast = newValue.second.second
+            }
+        }
+
+        var body: some View {
+            Canvas { context, size in
+                guard size.width > 0, size.height > 0 else { return }
+                let segments: [(Int, Double, Color)] = [
+                    (0, max(0, localStandard), localColor),
+                    (1, max(0, localFast), fastColor),
+                    (2, max(0, otherStandard), otherColor),
+                    (3, max(0, otherFast), fastColor)
+                ]
+                var x: CGFloat = 0
+                for (index, fraction, color) in segments where fraction > 0 {
+                    let width = size.width * CGFloat(fraction)
+                    let dimmed = highlightedIndex != nil && highlightedIndex != index
+                    context.fill(Path(CGRect(x: x, y: 0, width: width, height: size.height)),
+                                 with: .color(dimmed ? color.opacity(0.35) : color))
+                    x += width
+                }
+            }
+        }
     }
 }

@@ -362,4 +362,25 @@ final class PresentationDataTests: XCTestCase {
         XCTAssertEqual(openai.groups.first { $0.entries.count == 2 }?.entries.map(\.model), ["model-a", "model-alias"])
         XCTAssertEqual(providers.first { $0.id == "anthropic" }?.groups.count, 1)
     }
+
+    func testRecordsPageItemsUseStableSemanticIDsAcrossEllipsisChanges() {
+        XCTAssertEqual(
+            RecordsView.PageItem.make(page: 0, pageCount: 10),
+            [.page(0), .page(1), .trailingEllipsis, .page(9)]
+        )
+        XCTAssertEqual(
+            RecordsView.PageItem.make(page: 2, pageCount: 10),
+            [.page(0), .page(1), .page(2), .page(3), .trailingEllipsis, .page(9)]
+        )
+        XCTAssertEqual(
+            RecordsView.PageItem.make(page: 3, pageCount: 10),
+            [.page(0), .leadingEllipsis, .page(2), .page(3), .page(4), .trailingEllipsis, .page(9)]
+        )
+        XCTAssertEqual(
+            RecordsView.PageItem.make(page: 7, pageCount: 10),
+            [.page(0), .leadingEllipsis, .page(6), .page(7), .page(8), .page(9)]
+        )
+        XCTAssertNil(DashboardMotion.animation(DashboardMotion.tab, reduceMotion: true))
+        XCTAssertNotNil(DashboardMotion.animation(DashboardMotion.tab, reduceMotion: false))
+    }
 }

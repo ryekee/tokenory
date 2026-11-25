@@ -65,82 +65,70 @@ struct PriceCatalogView: View {
             LazyVStack(alignment: .leading, spacing: 4) {
                 if filtered.isEmpty { Text(L("filter.no_models")).foregroundStyle(.secondary).padding(.vertical, 16) }
                 ForEach(filtered) { provider in
-                    VStack(alignment: .leading, spacing: 10) {
-                        let hasSchedule = provider.groups.contains { $0.entries[0].schedule == "deepseek-cn-2026-v1" }
-                        Button {
-                            if !expandedProviders.contains(provider.id) {
-                                expandedProviders.insert(provider.id)
-                            } else {
-                                expandedProviders.remove(provider.id)
+                    let hasSchedule = provider.groups.contains { $0.entries[0].schedule == "deepseek-cn-2026-v1" }
+                    DisclosureGroup(isExpanded: Binding(
+                        get: { expandedProviders.contains(provider.id) },
+                        set: { if $0 { expandedProviders.insert(provider.id) } else { expandedProviders.remove(provider.id) } }
+                    )) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            if ProviderBrand.all[provider.id]?.subscription == true {
+                                Text(L("price.subscription_rates")).font(.caption).foregroundStyle(.secondary)
                             }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: !expandedProviders.contains(provider.id) ? "chevron.right" : "chevron.down")
-                                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary).frame(width: 12)
-                                BrandLabel(name: provider.id, kind: .provider, title: provider.title, size: 18).font(.headline)
-                                Spacer(minLength: 0)
-                            }.frame(minHeight: 32).contentShape(Rectangle())
-                        }
-                        .buttonStyle(WorkspaceHoverStyle())
-                        .accessibilityLabel(provider.title)
-                        .accessibilityValue(L(!expandedProviders.contains(provider.id) ? "state.collapsed" : "state.expanded"))
-                        .accessibilityIdentifier("price-provider-" + provider.id)
-                        if expandedProviders.contains(provider.id) {
-                            VStack(alignment: .leading, spacing: 10) {
-                                if ProviderBrand.all[provider.id]?.subscription == true {
-                                    Text(L("price.subscription_rates")).font(.caption).foregroundStyle(.secondary)
-                                }
-                                Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 0) {
-                                    GridRow {
-                                        Text(L("field.model")).frame(maxWidth: .infinity, alignment: .leading)
-                                        if hasSchedule { Text(L("price.period")) }
-                                        Text(L("token.input")).frame(width: 72, alignment: .trailing)
-                                        Text(L("token.cache_read")).frame(width: 72, alignment: .trailing)
-                                        Text(L("token.output")).frame(width: 72, alignment: .trailing)
-                                    }.font(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
-                                    Divider().gridCellUnsizedAxes(.horizontal)
-                                    ForEach(provider.groups) { group in
-                                        GridRow(alignment: .top) {
-                                            VStack(alignment: .leading, spacing: 6) {
-                                                ForEach(group.entries, id: \.model) { entry in
-                                                    BrandLabel(name: entry.model, kind: .model, title: modelTitle(entry)).textSelection(.enabled)
-                                                        .fixedSize(horizontal: false, vertical: true)
-                                                }
-                                            }.frame(maxWidth: .infinity, alignment: .leading)
-                                            if hasSchedule {
-                                                VStack(alignment: .leading, spacing: 6) {
-                                                    if group.entries[0].schedule == "deepseek-cn-2026-v1" {
-                                                        Text(L("price.peak"))
-                                                        Text(L("price.off_peak"))
-                                                    } else { Text("—") }
-                                                }.foregroundStyle(.secondary)
+                            Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 0) {
+                                GridRow {
+                                    Text(L("field.model")).frame(maxWidth: .infinity, alignment: .leading)
+                                    if hasSchedule { Text(L("price.period")) }
+                                    Text(L("token.input")).frame(width: 72, alignment: .trailing)
+                                    Text(L("token.cache_read")).frame(width: 72, alignment: .trailing)
+                                    Text(L("token.output")).frame(width: 72, alignment: .trailing)
+                                }.font(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
+                                Divider().gridCellUnsizedAxes(.horizontal)
+                                ForEach(provider.groups) { group in
+                                    GridRow(alignment: .top) {
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            ForEach(group.entries, id: \.model) { entry in
+                                                BrandLabel(name: entry.model, kind: .model, title: modelTitle(entry)).textSelection(.enabled)
+                                                    .fixedSize(horizontal: false, vertical: true)
                                             }
-                                            rate(group, "input_cost_per_token")
-                                            rate(group, "cache_read_input_token_cost")
-                                            rate(group, "output_cost_per_token")
-                                        }.font(.callout).padding(.vertical, 12)
-                                        Divider().gridCellUnsizedAxes(.horizontal)
-                                    }
-                                }
-                                .accessibilityRepresentation {
-                                    VStack {
-                                        ForEach(provider.groups) { group in
-                                            VStack {
-                                                Text(group.entries.map { modelTitle($0) }.joined(separator: ", "))
-                                                Text("\(L("token.input")): \(accessibleRate(group, "input_cost_per_token"))")
-                                                Text("\(L("token.cache_read")): \(accessibleRate(group, "cache_read_input_token_cost"))")
-                                                Text("\(L("token.output")): \(accessibleRate(group, "output_cost_per_token"))")
-                                            }.accessibilityElement(children: .combine)
+                                        }.frame(maxWidth: .infinity, alignment: .leading)
+                                        if hasSchedule {
+                                            VStack(alignment: .leading, spacing: 6) {
+                                                if group.entries[0].schedule == "deepseek-cn-2026-v1" {
+                                                    Text(L("price.peak"))
+                                                    Text(L("price.off_peak"))
+                                                } else { Text("—") }
+                                            }.foregroundStyle(.secondary)
                                         }
-                                    }.accessibilityElement(children: .contain).accessibilityLabel(provider.title)
+                                        rate(group, "input_cost_per_token")
+                                        rate(group, "cache_read_input_token_cost")
+                                        rate(group, "output_cost_per_token")
+                                    }.font(.callout).padding(.vertical, 12)
+                                    Divider().gridCellUnsizedAxes(.horizontal)
                                 }
-                                if provider.id == "deepseek" && hasSchedule {
-                                    Text(L("price.deepseek_schedule")).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                                    Link(L("price.official_page"), destination: URL(string: "https://api-docs.deepseek.com/quick_start/pricing/")!).font(.caption)
-                                }
-                            }.padding(.leading, 20)
+                            }
+                            .accessibilityRepresentation {
+                                VStack {
+                                    ForEach(provider.groups) { group in
+                                        VStack {
+                                            Text(group.entries.map { modelTitle($0) }.joined(separator: ", "))
+                                            Text("\(L("token.input")): \(accessibleRate(group, "input_cost_per_token"))")
+                                            Text("\(L("token.cache_read")): \(accessibleRate(group, "cache_read_input_token_cost"))")
+                                            Text("\(L("token.output")): \(accessibleRate(group, "output_cost_per_token"))")
+                                        }.accessibilityElement(children: .combine)
+                                    }
+                                }.accessibilityElement(children: .contain).accessibilityLabel(provider.title)
+                            }
+                            if provider.id == "deepseek" && hasSchedule {
+                                Text(L("price.deepseek_schedule")).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                                Link(L("price.official_page"), destination: URL(string: "https://api-docs.deepseek.com/quick_start/pricing/")!).font(.caption)
+                            }
                         }
+                    } label: {
+                        BrandLabel(name: provider.id, kind: .provider, title: provider.title, size: 18).font(.headline)
+                            .accessibilityLabel(provider.title)
                     }
+                    .disclosureGroupStyle(WorkspaceDisclosureStyle())
+                    .accessibilityIdentifier("price-provider-" + provider.id)
                 }
             }
         }
@@ -184,7 +172,6 @@ struct PriceCatalogView: View {
                                     Text(option.provider).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                 }
                             }
-                            .help("\(option.provider) · \(option.title)")
                         }
                         if options.isEmpty {
                             Text(L("filter.no_models")).font(.caption).foregroundStyle(.secondary).padding(16)

@@ -19,6 +19,7 @@ struct DashboardView: View {
     @State private var section: DashboardSection = .overview
     @AppStorage("overviewLocalOnly") private var overviewLocalOnly = false
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedRecordID: UsageDetail.ID?
     @State private var datePickerDraft: DateRangeDraft?
     @State private var visited: Set<DashboardSection> = [.overview]
@@ -32,6 +33,8 @@ struct DashboardView: View {
     private var reportIsPending: Bool {
         dashboardSelection != nil && store.reportLoadError == nil && (!hasVisibleReport || store.loading)
     }
+    private var showsScanProgress: Bool { store.scanInProgress || showsReportProgress }
+
     private var showsReportProgress: Bool {
         dashboardSelection != nil && progress?.firstLoad == false && store.reportLoadError == nil
     }
@@ -45,6 +48,7 @@ struct DashboardView: View {
                 .safeAreaInset(edge: .bottom) {
                     HStack(spacing: 7) {
                         Circle().fill(store.connected ? Color.green : Color.orange).frame(width: 5, height: 5)
+                            .animation(DashboardMotion.animation(DashboardMotion.state, reduceMotion: reduceMotion), value: store.connected)
                         Text(store.statusText).font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
@@ -56,13 +60,14 @@ struct DashboardView: View {
                         }
                         .buttonStyle(WorkspaceHoverStyle())
                         .accessibilityLabel(L("settings.title"))
-                        .help(L("settings.title"))
                     }.padding(16)
                 }
         } detail: {
             VStack(spacing: 0) {
-                if store.error != nil, dashboardSelection == nil || store.connected || store.reportLoadError == nil {
+                let showsErrorBanner = store.error != nil && (dashboardSelection == nil || store.connected || store.reportLoadError == nil)
+                if showsErrorBanner {
                     ErrorBanner().padding(.horizontal, 22).padding(.top, 12)
+                        .transition(.opacity)
                 }
                 ZStack {
                     // Keep the overview mounted so navigation reuses chart layouts and scroll state.
@@ -103,7 +108,10 @@ struct DashboardView: View {
                         .accessibilityHidden(section != .details)
                     }
                 }
-            }.background(WorkspaceStyle.canvas(scheme)).navigationTitle(section.title)
+            }
+            .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion),
+                       value: store.error != nil && (dashboardSelection == nil || store.connected || store.reportLoadError == nil))
+            .background(WorkspaceStyle.canvas(scheme)).navigationTitle(section.title)
                 .toolbar {
                     ToolbarItemGroup {
                         if section == .overview && (overviewLocalOnly || !store.cloud.sources.isEmpty) {
@@ -117,13 +125,13 @@ struct DashboardView: View {
                                 Text(L("action.scan"))
                             } icon: {
                                 Image(systemName: "arrow.clockwise")
-                                    .opacity(showsReportProgress ? 0 : 1)
+                                    .opacity(showsScanProgress ? 0 : 1)
                                     .overlay {
-                                        if showsReportProgress { ProgressView().controlSize(.small).accessibilityHidden(true) }
+                                        if showsScanProgress { ProgressView().controlSize(.small).accessibilityHidden(true) }
                                     }
                             }
                         }
-                        .accessibilityValue(showsReportProgress ? L("usage.loading_stats") : "")
+                        .accessibilityValue(store.scanInProgress ? L("status.scanning") : (showsReportProgress ? L("usage.loading_stats") : ""))
                         .disabled(store.scanInProgress || !store.connected)
                         if !store.connected && store.errorAction != .reconnect && (dashboardSelection == nil || store.reportLoadError == nil) {
                             Button(L("action.reconnect")) { store.start() }
@@ -171,16 +179,31 @@ struct DashboardView: View {
                     isActive: section == .details,
                     selectedID: selected?.id,
                     compactColumns: wide && selected != nil,
-                    openDetail: { selectedRecordID = $0.id },
+                    openDetail: { detail in
+                        let next = wide && selectedRecordID == detail.id ? nil : detail.id
+                        if wide {
+                            DashboardMotion.withAnimation(DashboardMotion.panel, reduceMotion: reduceMotion) {
+                                selectedRecordID = next
+                            }
+                        } else {
+                            selectedRecordID = next
+                        }
+                    },
                     openDatePicker: openDatePicker
                 )
                 if wide, let selected {
-                    RecordDetailContent(detail: selected, closeInspector: { selectedRecordID = nil })
+                    RecordDetailContent(detail: selected, closeInspector: {
+                        DashboardMotion.withAnimation(DashboardMotion.panel, reduceMotion: reduceMotion) {
+                            selectedRecordID = nil
+                        }
+                    })
                         .frame(width: min(352, geometry.size.width - 632))
                         .frame(maxHeight: .infinity, alignment: .top)
                         .background(WorkspaceStyle.surface(scheme), in: RoundedRectangle(cornerRadius: WorkspaceStyle.panelRadius))
+                        .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
                 }
             }
+            .clipped()
             .sheet(item: Binding(get: { wide ? nil : selected }, set: { if $0 == nil && !wide { selectedRecordID = nil } })) { detail in
                 RecordDetailSheet(detail: detail)
             }
@@ -192,43 +215,64 @@ struct DashboardView: View {
         datePickerDraft = DateRangeDraft(filter: store.filter, selectedRange: store.dateRange)
     }
 
+    private enum ReportPhase: Equatable {
+        case loading, content, error, empty
+    }
+
+    private func reportPhase(allowConversationReport: Bool) -> ReportPhase {
+        if progress?.firstLoad == true, store.reportLoadError == nil { return .loading }
+        if store.report != nil, allowConversationReport || store.reportFilter?.conversation == nil { return .content }
+        if store.reportLoadError != nil { return .error }
+        return .empty
+    }
+
     @ViewBuilder
     private func usageReport<Content: View>(
         allowConversationReport: Bool = true,
         @ViewBuilder content: (UsageReport) -> Content
     ) -> some View {
-        if progress?.firstLoad == true, store.reportLoadError == nil {
-            if allowConversationReport {
-                ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity)
+        let phase = reportPhase(allowConversationReport: allowConversationReport)
+        VStack(spacing: 0) {
+            if progress?.firstLoad == true, store.reportLoadError == nil {
+                if allowConversationReport {
+                    ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .transition(.opacity)
+                } else {
+                    OverviewLoadingPlaceholder()
+                        .transition(.opacity)
+                }
+            } else if let report = store.report, allowConversationReport || store.reportFilter?.conversation == nil {
+                if let error = store.reportLoadError {
+                    let note = store.reportFilter.map { filter in
+                        let range = filter.from.flatMap { from in filter.to.map { Localization.dateRange(from, $0) } }
+                        return LF("usage.previous_report", range ?? L("range.all"))
+                    }
+                    WorkspacePanel(surface: WorkspaceStyle.warningSurface) {
+                        WorkspaceErrorMessage(title: L("usage.report_failed"), note: note, detail: error) {
+                            reportRetryButton
+                        }
+                    }
+                    .padding(.horizontal, 22).padding(.bottom, 12)
+                    .transition(.opacity)
+                }
+                content(report)
+                    .transition(.opacity)
+            } else if let error = store.reportLoadError {
+                ScrollView {
+                    WorkspacePanel(surface: WorkspaceStyle.warningSurface) {
+                        WorkspaceErrorMessage(title: L("usage.report_failed"), detail: error) {
+                            reportRetryButton
+                        }
+                    }
+                    .padding(.horizontal, 22).padding(.bottom, 22)
+                }
+                .transition(.opacity)
             } else {
-                OverviewLoadingPlaceholder()
+                Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        } else if let report = store.report, allowConversationReport || store.reportFilter?.conversation == nil {
-            if let error = store.reportLoadError {
-                let note = store.reportFilter.map { filter in
-                    let range = filter.from.flatMap { from in filter.to.map { Localization.dateRange(from, $0) } }
-                    return LF("usage.previous_report", range ?? L("range.all"))
-                }
-                WorkspacePanel(surface: WorkspaceStyle.warningSurface) {
-                    WorkspaceErrorMessage(title: L("usage.report_failed"), note: note, detail: error) {
-                        reportRetryButton
-                    }
-                }
-                .padding(.horizontal, 22).padding(.bottom, 12)
-            }
-            content(report)
-        } else if let error = store.reportLoadError {
-            ScrollView {
-                WorkspacePanel(surface: WorkspaceStyle.warningSurface) {
-                    WorkspaceErrorMessage(title: L("usage.report_failed"), detail: error) {
-                        reportRetryButton
-                    }
-                }
-                .padding(.horizontal, 22).padding(.bottom, 22)
-            }
-        } else {
-            Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .animation(DashboardMotion.animation(DashboardMotion.load, reduceMotion: reduceMotion), value: phase)
+        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: store.reportLoadError != nil)
     }
 
     private var reportRetryButton: some View {
@@ -295,7 +339,7 @@ private struct RecordDetailContent: View {
             HStack(alignment: .top) {
                 BrandLabel(name: detail.model, kind: .model, size: 22)
                     .font(.title2).lineLimit(1).truncationMode(.middle)
-                    .help(detail.model).textSelection(.enabled)
+                    .textSelection(.enabled)
                 if let mode = detail.inferenceSpeed, mode.isFast {
                     FastModeMark(title: L("fast.title"), helpText: mode.fastHelp)
                         .padding(.top, 4)
@@ -308,7 +352,6 @@ private struct RecordDetailContent: View {
                     .buttonStyle(WorkspaceHoverStyle())
                     .keyboardShortcut(.cancelAction)
                     .accessibilityLabel(L("record.close_details"))
-                    .help(L("record.close_details"))
                 }
             }
             ScrollView {
