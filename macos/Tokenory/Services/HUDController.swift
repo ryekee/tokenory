@@ -25,6 +25,7 @@ final class HUDController {
     private let store: UsageStore
     private let idleTimeout: Duration
     private let openStatistics: (() -> Void)?
+    private let reduceMotion: () -> Bool
     private var visibility = Visibility.disabled
     private var autoHideWasEnabled = false
     private var lastActivity: Activity?
@@ -34,12 +35,17 @@ final class HUDController {
     private var screenTask: Task<Void, Never>?
     private var activeScreenFrame: CGRect?
     private var screenObserver: NSObjectProtocol?
+    private var animator: HUDAnimator?
+    private var fadeGeneration = 0
+    private var isHiding = false
 
     init(preferences: HUDPreferences = .shared, store: UsageStore = .shared,
-         idleTimeout: Duration = .seconds(30), openStatistics: (() -> Void)? = nil) {
+         idleTimeout: Duration = .seconds(30), openStatistics: (() -> Void)? = nil,
+         reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }) {
         self.preferences = preferences; self.store = store
         self.idleTimeout = idleTimeout
         self.openStatistics = openStatistics
+        self.reduceMotion = reduceMotion
     }
 
     static let fontRegistered: Bool = {
@@ -111,7 +117,7 @@ final class HUDController {
         visibilityTask = nil
         visibility = next
         if next == .visible {
-            if panel?.isVisible != true { show() }
+            if panel?.isVisible != true || isHiding { show() }
         } else {
             hide()
         }
@@ -155,16 +161,36 @@ final class HUDController {
             self.panel = panel
         }
         guard let panel else { return }
+        fadeGeneration += 1
+        let wasHidden = !panel.isVisible
+        isHiding = false
         if panel.contentView == nil {
+            let animator = HUDAnimator()
+            self.animator = animator
             panel.contentView = NSHostingView(rootView: MechanicalHUDView(canPlaySound: { [weak panel] in
                 panel?.isOnActiveSpace == true
             }, dismiss: { [weak self] in
                 self?.dismissFromHUD()
-            }, openStatistics: openStatistics)
+            }, openStatistics: openStatistics, animator: animator)
                 .environment(store).environment(preferences).focusEffectDisabled())
         }
         placeOnScreen()
-        panel.orderFrontRegardless()
+        if reduceMotion() {
+            panel.alphaValue = 1
+            panel.orderFrontRegardless()
+        } else {
+            if wasHidden {
+                panel.alphaValue = 0
+                panel.orderFrontRegardless()
+            } else {
+                panel.orderFrontRegardless()
+            }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = DashboardMotion.hudShowDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().alphaValue = 1
+            }
+        }
         screenTask?.cancel()
         screenTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -176,10 +202,40 @@ final class HUDController {
 
     private func hide() {
         screenTask?.cancel(); screenTask = nil
-        panel?.orderOut(nil)
-        // Release the SwiftUI task as well as hiding the window; no hidden rolling or sound.
-        panel?.contentView = nil
+        // Immediately stop rolling animation and sound when hiding begins.
+        animator?.settle()
         HUDSound.shared.stop()
+        fadeGeneration += 1
+        let generation = fadeGeneration
+        guard let panel else {
+            animator = nil
+            isHiding = false
+            return
+        }
+        if reduceMotion() || !panel.isVisible {
+            finishHide(panel)
+            return
+        }
+        isHiding = true
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = DashboardMotion.hudHideDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 0
+        } completionHandler: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.fadeGeneration == generation, let panel = self.panel else { return }
+                self.finishHide(panel)
+            }
+        }
+    }
+
+    private func finishHide(_ panel: NSPanel) {
+        isHiding = false
+        panel.orderOut(nil)
+        panel.alphaValue = 1
+        // Release the SwiftUI task as well as hiding the window; no hidden rolling or sound.
+        panel.contentView = nil
+        animator = nil
     }
 
     func stop() {

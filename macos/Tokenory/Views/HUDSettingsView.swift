@@ -1,5 +1,5 @@
 // [INPUT]: Shared, persisted HUD preferences and local audio service.
-// [OUTPUT]: Visibility, idle-hide switch, triple-click action, position and stepped audio controls with live preview and inline errors.
+// [OUTPUT]: Visibility, idle-hide switch, triple-click action, placement and audio controls that reveal volume when sound is on.
 // [POS]: Settings section and its sound controls.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -35,16 +35,12 @@ struct HUDSettingsView: View {
                                 GridRow {
                                     ForEach(0..<3) { column in
                                         let placement = HUDPlacement.allCases[row * 3 + column]
-                                        Button { preferences.placement = placement } label: {
-                                            Text(placement.label).frame(width: 82, height: 28)
-                                                .background(preferences.placement == placement ? WorkspaceStyle.selection.opacity(0.25) : Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-                                                .overlay {
-                                                    RoundedRectangle(cornerRadius: 6)
-                                                        .strokeBorder(preferences.placement == placement ? WorkspaceStyle.selection : .clear, lineWidth: 1.5)
-                                                }
+                                        HUDPlacementButton(
+                                            label: placement.label,
+                                            selected: preferences.placement == placement
+                                        ) {
+                                            preferences.placement = placement
                                         }
-                                        .buttonStyle(.plain)
-                                        .accessibilityAddTraits(preferences.placement == placement ? .isSelected : [])
                                     }
                                 }
                             }
@@ -57,36 +53,100 @@ struct HUDSettingsView: View {
     }
 }
 
+private struct HUDPlacementButton: View {
+    let label: String
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label).frame(width: 82, height: 28)
+        }
+        .buttonStyle(HUDPlacementButtonStyle(selected: selected))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+private struct HUDPlacementButtonStyle: ButtonStyle {
+    let selected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        StyledButton(configuration: configuration, selected: selected)
+    }
+
+    private struct StyledButton: View {
+        let configuration: Configuration
+        let selected: Bool
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @State private var hovered = false
+
+        private var fill: Color {
+            if selected {
+                return WorkspaceStyle.selection.opacity(configuration.isPressed ? 0.32 : hovered ? 0.28 : 0.25)
+            }
+            return Color.primary.opacity(configuration.isPressed ? 0.14 : hovered ? 0.10 : 0.06)
+        }
+
+        var body: some View {
+            configuration.label
+                .background(fill, in: RoundedRectangle(cornerRadius: 6))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(selected ? WorkspaceStyle.selection : .clear, lineWidth: 1.5)
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .animation(DashboardMotion.animation(DashboardMotion.state, reduceMotion: reduceMotion), value: selected)
+                .animation(DashboardMotion.animation(DashboardMotion.hover, reduceMotion: reduceMotion), value: hovered)
+                .animation(DashboardMotion.animation(DashboardMotion.press, reduceMotion: reduceMotion), value: configuration.isPressed)
+                .onHover { hovered = $0 }
+        }
+    }
+}
+
 struct HUDAudioControls: View {
     @Environment(HUDPreferences.self) private var preferences
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sound = HUDSound.shared
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text(L("hud.sound")); Spacer()
                 SettingsSwitch(label: L("hud.sound"), isOn: Binding(get: { preferences.soundEnabled }, set: { enabled in
-                    preferences.soundEnabled = enabled
+                    DashboardMotion.withAnimation(DashboardMotion.panel, reduceMotion: reduceMotion) {
+                        preferences.soundEnabled = enabled
+                    }
                     sound.preview(preferences: preferences)
                 }))
             }
-            HStack {
-                Text(L("hud.volume"))
-                Spacer(minLength: 12)
-                HStack(spacing: 8) {
-                    Image(systemName: "speaker.fill").foregroundStyle(.secondary).accessibilityHidden(true)
-                    Slider(value: Binding(get: { preferences.volume }, set: { volume in
-                        guard volume != preferences.volume else { return }
-                        preferences.volume = volume
-                        sound.preview(preferences: preferences)
-                    }), in: 0...1, step: 0.05) { Text(L("hud.volume")) }
-                        .labelsHidden()
-                    Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary).accessibilityHidden(true)
-                    Text(preferences.volume.formatted(.percent.precision(.fractionLength(0))))
-                        .monospacedDigit().foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
+            if preferences.soundEnabled {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text(L("hud.volume"))
+                        Spacer(minLength: 12)
+                        HStack(spacing: 8) {
+                            Image(systemName: "speaker.fill").foregroundStyle(.secondary).accessibilityHidden(true)
+                            Slider(value: Binding(get: { preferences.volume }, set: { volume in
+                                guard volume != preferences.volume else { return }
+                                preferences.volume = volume
+                                sound.preview(preferences: preferences)
+                            }), in: 0...1, step: 0.05) { Text(L("hud.volume")) }
+                                .labelsHidden()
+                            Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary).accessibilityHidden(true)
+                            Text(preferences.volume.formatted(.percent.precision(.fractionLength(0))))
+                                .monospacedDigit().foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
+                        }
+                        .frame(maxWidth: 300)
+                    }
+                    if let error = sound.error {
+                        WorkspaceErrorMessage(title: error) {}
+                            .transition(.opacity)
+                    }
                 }
-                .frame(maxWidth: 300)
+                .transition(.opacity)
             }
-            if let error = sound.error { WorkspaceErrorMessage(title: error) {} }
         }
+        .clipped()
+        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: preferences.soundEnabled)
+        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: sound.error != nil)
     }
 }

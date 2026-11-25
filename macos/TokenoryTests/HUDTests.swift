@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import Tokenory
 
@@ -270,7 +271,7 @@ final class HUDTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: name) }
         let preferences = HUDPreferences(defaults: defaults)
         preferences.enabled = true
-        let controller = HUDController(preferences: preferences, store: UsageStore())
+        let controller = HUDController(preferences: preferences, store: UsageStore(), reduceMotion: { true })
         controller.start()
         defer { controller.stop() }
         let content = try XCTUnwrap(controller.panel?.contentView)
@@ -313,7 +314,7 @@ final class HUDTests: XCTestCase {
         }
         store.today = report(100, cost: 1)
         preferences.enabled = true
-        let controller = HUDController(preferences: preferences, store: store, idleTimeout: .milliseconds(200))
+        let controller = HUDController(preferences: preferences, store: store, idleTimeout: .milliseconds(200), reduceMotion: { true })
         controller.start()
         defer { controller.stop() }
         XCTAssertEqual(controller.panel?.isVisible, true)
@@ -361,7 +362,7 @@ final class HUDTests: XCTestCase {
         let preferences = HUDPreferences(defaults: defaults)
         preferences.enabled = true
         var openedStatistics = 0
-        let controller = HUDController(preferences: preferences, store: UsageStore(), openStatistics: { openedStatistics += 1 })
+        let controller = HUDController(preferences: preferences, store: UsageStore(), openStatistics: { openedStatistics += 1 }, reduceMotion: { true })
         controller.start()
         defer { controller.stop() }
         let panel = try XCTUnwrap(controller.panel)
@@ -395,6 +396,68 @@ final class HUDTests: XCTestCase {
         XCTAssertEqual(openedStatistics, 2)
         XCTAssertFalse(preferences.enabled)
         XCTAssertFalse(panel.isVisible)
+    }
+
+    func testHUDFadeOutIsInterruptibleByReshowAndCompletesWhenNotInterrupted() async throws {
+        let name = "Tokenory-HUD-fade-\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = HUDPreferences(defaults: defaults)
+        preferences.enabled = true
+        let controller = HUDController(preferences: preferences, store: UsageStore(), reduceMotion: { false })
+        controller.start()
+        defer { controller.stop() }
+        let panel = try XCTUnwrap(controller.panel)
+        XCTAssertTrue(panel.isVisible)
+
+        // Start fading out, then immediately re-enable before the 140ms fade completes.
+        preferences.enabled = false
+        try await Task.sleep(for: .milliseconds(40))
+        preferences.enabled = true
+        try await Task.sleep(for: .milliseconds(220))
+        XCTAssertTrue(panel.isVisible, "Stale fade-out completion must not orderOut a re-shown HUD")
+        XCTAssertNotNil(panel.contentView)
+
+        // Let a full fade-out complete without interruption.
+        preferences.enabled = false
+        try await Task.sleep(for: .milliseconds(260))
+        XCTAssertFalse(panel.isVisible)
+        XCTAssertNil(panel.contentView)
+    }
+
+    func testHostedHUDRollsAcrossFramesInsteadOfSnappingOnFirstTick() async throws {
+        let name = "Tokenory-HUD-roll-\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = HUDPreferences(defaults: defaults)
+        let store = UsageStore()
+        func report(_ tokens: Int64) -> UsageReport {
+            let summary = UsageSummary(tokens: tokens, tokenBreakdown: TokenBreakdown(input: tokens, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0),
+                                       knownEstimatedCostUsd: 1, unpricedTokens: 0, costStatus: "complete",
+                                       recordCount: 1, activeDays: 1, partialDays: nil, requests: 1)
+            return UsageReport(revision: 0, summary: summary, daily: [], clients: [], providers: [], models: [], details: [], hourly: nil)
+        }
+        store.today = report(100)
+        let animator = HUDAnimator()
+        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: MechanicalHUDView.windowSize),
+                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.contentView = NSHostingView(rootView: MechanicalHUDView(
+            canPlaySound: { false }, dismiss: {}, animator: animator
+        ).environment(store).environment(preferences))
+        panel.orderFrontRegardless()
+        defer { panel.orderOut(nil); panel.contentView = nil }
+
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(animator.reading?.value, 100)
+        XCTAssertFalse(animator.isRolling)
+        let beforePositions = animator.positions
+
+        store.today = report(250)
+        try await Task.sleep(for: .milliseconds(160))
+        XCTAssertEqual(animator.reading?.value, 250)
+        XCTAssertTrue(animator.isRolling, "HUD should still be rolling smoothly instead of snapping on the first tick")
+        XCTAssertNotEqual(animator.positions, beforePositions, "HUD drums should visibly advance across frames")
+        XCTAssertNotEqual(animator.positions.map { Int($0) % 10 }, [0, 0, 0, 2, 5, 0])
     }
 
 }
