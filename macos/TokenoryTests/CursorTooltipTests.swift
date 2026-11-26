@@ -5,6 +5,36 @@ import XCTest
 
 @MainActor
 final class CursorTooltipTests: XCTestCase {
+    func testHoverFocusIsImmediateAndOnlyTheReadoutWaits() async throws {
+        let hover = HoverDwell<Int>(delay: .milliseconds(40))
+        hover.update(1)
+        XCTAssertEqual(hover.target, 1)
+        XCTAssertNil(hover.readoutTarget)
+        hover.update(2)
+        XCTAssertEqual(hover.target, 2)
+        XCTAssertNil(hover.readoutTarget)
+
+        // Repeated pointer samples for the same target must let the timer finish.
+        let deadline = ContinuousClock.now + .seconds(1)
+        while hover.readoutTarget == nil, ContinuousClock.now < deadline {
+            hover.update(2)
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(hover.readoutTarget, 2)
+
+        hover.update(3)
+        XCTAssertEqual(hover.target, 3)
+        XCTAssertNil(hover.readoutTarget)
+        hover.update(nil)
+        XCTAssertNil(hover.target)
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertNil(hover.readoutTarget)
+    }
+
+    func testCalendarWaitsLongerThanOtherReadouts() {
+        XCTAssertGreaterThan(HoverDwell<Int>.calendarDelay, HoverDwell<Int>.standardDelay)
+    }
+
     func testFollowsPointerAndFlipsBesideTheSelectedMark() {
         let size = CGSize(width: 213, height: 84)
         let window = CGRect(x: 0, y: 0, width: 660, height: 440)

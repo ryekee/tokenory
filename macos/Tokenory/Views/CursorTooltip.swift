@@ -1,7 +1,8 @@
 // [INPUT]: A hovered SwiftUI value or selected chart bucket, and its compact readout.
-// [OUTPUT]: A mouse-transparent readout in the overview's own foreground layer.
+// [OUTPUT]: Immediate hover targets and delayed mouse-transparent readouts in the dashboard foreground.
 // [POS]: Dashboard tooltips share one placement rule across scroll views and charts.
 import AppKit
+import Observation
 import SwiftUI
 
 extension View {
@@ -74,16 +75,47 @@ final class TooltipPointer {
     fileprivate weak var anchor: TooltipAnchorView?
     fileprivate(set) var location: CGPoint?
 
-    func move(to point: CGPoint) {
+    func move(to point: CGPoint, reposition: Bool = true) {
         location = point
-        anchor?.position()
+        if reposition { anchor?.position() }
+    }
+}
+
+/// The target drives immediate focus. The readout waits for the pointer to settle on that target.
+@MainActor @Observable
+final class HoverDwell<Target: Equatable & Sendable> {
+    static var standardDelay: Duration { .milliseconds(150) }
+    static var calendarDelay: Duration { .milliseconds(240) }
+
+    private(set) var target: Target?
+    private(set) var readoutTarget: Target?
+    private let delay: Duration
+    @ObservationIgnored private var pending: Task<Void, Never>?
+
+    init(delay: Duration = HoverDwell.standardDelay) { self.delay = delay }
+
+    func update(_ next: Target?) {
+        guard target != next else { return }
+        pending?.cancel()
+        pending = nil
+        if readoutTarget != nil { readoutTarget = nil }
+        target = next
+        guard let next else { return }
+
+        let deadline = ContinuousClock.now + delay
+        pending = Task { [weak self] in
+            do { try await Task.sleep(until: deadline) } catch { return }
+            guard !Task.isCancelled, let self else { return }
+            readoutTarget = next
+            pending = nil
+        }
     }
 }
 
 private struct ValueTooltip<Readout: View>: ViewModifier {
     let enabled: Bool
     let readout: Readout
-    @State private var hovered = false
+    @State private var hover = HoverDwell<Bool>()
     @State private var pointer = TooltipPointer()
 
     func body(content: Content) -> some View {
@@ -91,12 +123,14 @@ private struct ValueTooltip<Readout: View>: ViewModifier {
             switch phase {
             case .active(let point):
                 pointer.move(to: point)
-                if !hovered { hovered = true }
-            case .ended: hovered = false
+                hover.update(enabled ? true : nil)
+            case .ended: hover.update(nil)
             }
         }
+            .onChange(of: enabled) { _, _ in hover.update(nil) }
+            .onDisappear { hover.update(nil) }
             .background {
-                if enabled && hovered {
+                if enabled && hover.readoutTarget != nil {
                     CursorTooltipAnchor(mark: nil, pointer: pointer, keyboardAnchor: nil, readout: readout)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)

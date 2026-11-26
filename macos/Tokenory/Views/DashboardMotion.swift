@@ -29,6 +29,7 @@ enum DashboardMotion {
     static let pagination = Animation.easeOut(duration: paginationDuration)
     static let panel = Animation.easeOut(duration: panelDuration)
     static let hover = Animation.easeOut(duration: hoverDuration)
+    static let calendarCell = Animation.spring(response: 0.36, dampingFraction: 0.82)
     static let press = Animation.easeOut(duration: pressDuration)
     static let state = Animation.easeOut(duration: stateDuration)
     static let load = Animation.easeOut(duration: loadDuration)

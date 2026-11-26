@@ -1,5 +1,5 @@
 // [INPUT]: Lazy multi-agent turn report, shared date range and local client/model selection.
-// [OUTPUT]: Turn analytics with six-row pages, search-preserving chart selection, available metrics and retryable errors.
+// [OUTPUT]: Turn analytics with search-preserving chart selection, delayed agent labels and retryable errors.
 // [POS]: Native speed analysis. The chart and list share turn selection across filters and pages.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -110,7 +110,8 @@ struct TurnsView: View {
 
 private struct AgentCoveragePopover: View {
     let capabilities: [TurnCapability]
-    @State private var hovered: (client: String, pointer: CGPoint, icon: CGRect)?
+    @State private var hover = HoverDwell<String>()
+    @State private var sample: (client: String, pointer: CGPoint, icon: CGRect)?
     @State private var measuredSizes: [String: CGSize] = [:]
 
     private func tooltipSize(for client: String) -> CGSize {
@@ -131,7 +132,7 @@ private struct AgentCoveragePopover: View {
         .coordinateSpace(name: "agentCoverage")
         .overlay(alignment: .topLeading) {
             GeometryReader { geometry in
-                if let hovered {
+                if let hovered = sample, hovered.client == hover.readoutTarget {
                     let size = tooltipSize(for: hovered.client)
                     let above = min(hovered.pointer.y - 10, hovered.icon.minY - 4) - size.height
                     let below = max(hovered.pointer.y + 12, hovered.icon.maxY + 4)
@@ -149,6 +150,7 @@ private struct AgentCoveragePopover: View {
                 }
             }.allowsHitTesting(false)
         }
+        .onDisappear { hover.update(nil) }
     }
 
     private func capabilityGroup(_ group: [TurnCapability], supported: Bool) -> some View {
@@ -165,9 +167,13 @@ private struct AgentCoveragePopover: View {
                                 switch phase {
                                 case .active(let location):
                                     let frame = icon.frame(in: .named("agentCoverage"))
-                                    hovered = (capability.client, CGPoint(x: frame.minX + location.x, y: frame.minY + location.y), frame)
+                                    sample = (capability.client, CGPoint(x: frame.minX + location.x, y: frame.minY + location.y), frame)
+                                    hover.update(capability.client)
                                 case .ended:
-                                    if hovered?.client == capability.client { hovered = nil }
+                                    if sample?.client == capability.client {
+                                        sample = nil
+                                        hover.update(nil)
+                                    }
                                 }
                             }
                     }

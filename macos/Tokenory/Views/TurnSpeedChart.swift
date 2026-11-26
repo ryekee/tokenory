@@ -1,14 +1,14 @@
 // From Uiverse.io by NK2552003 - https://uiverse.io/NK2552003/silly-moth-73
 // MIT License, Copyright (c) NK2552003 (Nitish)
 // [INPUT]: Committed range, calendar-based turn distributions, and selected turn identity.
-// [OUTPUT]: Reversible time-bucket selection and shared timestamped chart readouts.
+// [OUTPUT]: Immediate chart emphasis, delayed pointer readouts, instant keyboard readouts and reversible time-bucket selection.
 // [POS]: Keeps pointer state local and uses the reporting calendar's time axis.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
 import Charts
 
 struct TurnSpeedChart: View {
-    private enum Target: Equatable {
+    private enum Target: Equatable, Sendable {
         case bucket(start: Date, center: Date)
         case turn(AgentTurn)
 
@@ -33,13 +33,15 @@ struct TurnSpeedChart: View {
     let hasChartSelection: Bool
     let onSelect: (AgentTurn, Date?) -> Void
     let onClearSelection: () -> Void
-    @State private var hovered: Target?
+    @State private var hover = HoverDwell<Target>()
     @State private var tooltipPointer = TooltipPointer()
-    @State private var keyboardPreview = false
+    @State private var keyboardTarget: Target?
     @State private var previousPresence: DashboardPlotPresence?
     @State private var reveal = 1.0
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var preview: Target? { keyboardTarget ?? hover.target }
 
     var body: some View {
         let presence = DashboardPlotPresence(range: range, hasData: data.speedTimeline?.buckets.isEmpty == false)
@@ -58,7 +60,7 @@ struct TurnSpeedChart: View {
             let shouldReveal = animateRangeChanges && !reduceMotion && next.hasData
                 && previousPresence.map { $0.range != next.range } == true
             previousPresence = next
-            hovered = nil
+            clearPreview()
             guard shouldReveal else { reveal = 1; return }
             if reveal >= 1 { reveal = 0 }
             withAnimation(DashboardMotion.grow) { reveal = 1 }
@@ -66,7 +68,8 @@ struct TurnSpeedChart: View {
         .onChange(of: reduceMotion) { _, enabled in
             if enabled { reveal = 1 }
         }
-        .onChange(of: data.points) { _, _ in hovered = nil }
+        .onChange(of: data.points) { _, _ in clearPreview() }
+        .onDisappear { clearPreview() }
     }
 
     private func plot(_ timeline: TurnSpeedTimeline, domain: ClosedRange<Date>) -> some View {
@@ -117,11 +120,12 @@ struct TurnSpeedChart: View {
         .focusable()
         .onKeyPress(.leftArrow) { move(-1); return .handled }
         .onKeyPress(.rightArrow) { move(1); return .handled }
-        .onKeyPress(.return) { if let hovered { select(hovered) }; return .handled }
-        .onKeyPress(.space) { if let hovered { select(hovered) }; return .handled }
+        .onKeyPress(.return) { if let preview { select(preview) }; return .handled }
+        .onKeyPress(.space) { if let preview { select(preview) }; return .handled }
         .onKeyPress(.escape) {
-            guard hovered != nil || hasChartSelection else { return .ignored }
-            hovered = nil
+            let hadSelection = preview != nil || hasChartSelection
+            clearPreview()
+            guard hadSelection else { return .ignored }
             if hasChartSelection { onClearSelection() }
             return .handled
         }
@@ -142,7 +146,8 @@ struct TurnSpeedChart: View {
         GeometryReader { geometry in
             if let plot = proxy.plotFrame {
                 let frame = geometry[plot]
-                let mark = hovered.flatMap { tooltipMark($0, frame: frame, proxy: proxy, timeline: timeline) }
+                let readoutTarget = keyboardTarget ?? hover.readoutTarget
+                let mark = readoutTarget.flatMap { tooltipMark($0, frame: frame, proxy: proxy, timeline: timeline) }
                 ZStack(alignment: .topLeading) {
                     Canvas { context, _ in draw(context, proxy: proxy, timeline: timeline) }
                         .frame(width: frame.width, height: frame.height)
@@ -153,28 +158,31 @@ struct TurnSpeedChart: View {
                     Rectangle().fill(.clear).contentShape(Rectangle())
                         .onContinuousHover { phase in
                             switch phase {
-                            case .active(let location): preview(at: location, frame: frame, proxy: proxy, timeline: timeline)
-                            case .ended: hovered = nil
+                            case .active(let location):
+                                keyboardTarget = nil
+                                hover.update(target(at: location, frame: frame, proxy: proxy, timeline: timeline))
+                                tooltipPointer.move(to: location, reposition: hover.readoutTarget != nil)
+                            case .ended: hover.update(nil)
                             }
                         }
                         .onTapGesture { location in
-                            preview(at: location, frame: frame, proxy: proxy, timeline: timeline)
-                            if let hovered { select(hovered) }
+                            keyboardTarget = nil
+                            if let target = target(at: location, frame: frame, proxy: proxy, timeline: timeline) {
+                                select(target)
+                            }
                         }
                         .selectedTooltip(avoiding: mark, pointer: tooltipPointer,
-                                         keyboardAnchor: keyboardPreview ? mark.map { CGPoint(x: $0.midX, y: $0.midY) } : nil) {
-                            if let hovered { readout(hovered).frame(width: 188, alignment: .leading) }
+                                         keyboardAnchor: keyboardTarget != nil ? mark.map { CGPoint(x: $0.midX, y: $0.midY) } : nil) {
+                            if let readoutTarget { readout(readoutTarget).frame(width: 188, alignment: .leading) }
                         }
                 }
             }
         }
     }
 
-    private func preview(at location: CGPoint, frame: CGRect, proxy: ChartProxy, timeline: TurnSpeedTimeline) {
-        tooltipPointer.move(to: location)
-        keyboardPreview = false
-        let next = target(at: location, frame: frame, proxy: proxy, timeline: timeline)
-        if next != hovered { hovered = next }
+    private func clearPreview() {
+        keyboardTarget = nil
+        hover.update(nil)
     }
 
     private func tooltipMark(_ target: Target, frame: CGRect, proxy: ChartProxy, timeline: TurnSpeedTimeline) -> CGRect? {
@@ -192,7 +200,7 @@ struct TurnSpeedChart: View {
         let accent = WorkspaceStyle.localUsage
         let surface = WorkspaceStyle.surface(scheme)
         let highlightedBucket: Date?
-        if case .bucket(let start, _) = hovered { highlightedBucket = start } else { highlightedBucket = selectedBucketStart }
+        if case .bucket(let start, _) = preview { highlightedBucket = start } else { highlightedBucket = selectedBucketStart }
         func line(_ x1: CGFloat, _ y1: CGFloat, _ x2: CGFloat, _ y2: CGFloat, color: Color, width: CGFloat) {
             var path = Path()
             path.move(to: CGPoint(x: x1, y: y1))
@@ -225,7 +233,7 @@ struct TurnSpeedChart: View {
             for turn in bucket.visiblePoints { dot(turn, radius: 2.5, hollow: bucket.distribution != nil) }
         }
         if let selected { dot(selected, radius: 5, hollow: true); dot(selected, radius: 2, hollow: false) }
-        if case .turn(let turn) = hovered, turn.id != selected?.id {
+        if case .turn(let turn) = preview, turn.id != selected?.id {
             dot(turn, radius: 5, hollow: true)
             dot(turn, radius: 2, hollow: false)
         }
@@ -264,9 +272,9 @@ struct TurnSpeedChart: View {
     private func move(_ delta: Int) {
         let targets = targets
         guard !targets.isEmpty else { return }
-        keyboardPreview = true
-        let index = hovered.flatMap { targets.firstIndex(of: $0) } ?? (delta > 0 ? -1 : targets.count)
-        hovered = targets[min(max(index + delta, 0), targets.count - 1)]
+        let index = preview.flatMap { targets.firstIndex(of: $0) } ?? (delta > 0 ? -1 : targets.count)
+        hover.update(nil)
+        keyboardTarget = targets[min(max(index + delta, 0), targets.count - 1)]
     }
 
     private func isSelected(_ target: Target) -> Bool {

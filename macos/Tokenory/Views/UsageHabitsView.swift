@@ -1,5 +1,5 @@
 // [INPUT]: Annual effective-ledger days and timestamp-qualified hour totals.
-// [OUTPUT]: Coding patterns with weekday share, biggest day and hour distribution.
+// [OUTPUT]: Coding patterns with weekday share, biggest day and hour distribution with delayed readouts.
 // [POS]: Independent overview panel; daily-only imports remain unallocated by hour.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -69,9 +69,11 @@ private struct HabitsDistribution: View {
     let values: [Int64]
     let labels: [String]
     let fullLabels: [String]
-    @State private var selected: Int?
+    @State private var hover = HoverDwell<Int>()
     @State private var tooltipPointer = TooltipPointer()
     @Environment(\.colorScheme) private var scheme
+
+    private var selected: Int? { hover.target }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
@@ -95,7 +97,8 @@ private struct HabitsDistribution: View {
                 GeometryReader { geometry in
                     if let plot = proxy.plotFrame {
                         let frame = geometry[plot]
-                        let mark = selected.flatMap { index -> CGRect? in
+                        let readoutTarget = hover.readoutTarget
+                        let mark = readoutTarget.flatMap { index -> CGRect? in
                             guard let center = proxy.position(forX: Double(index)) else { return nil }
                             let bar = frame.width / CGFloat(values.count) * 0.72
                             return CGRect(x: frame.minX + center - bar / 2, y: frame.minY, width: bar, height: frame.height)
@@ -104,16 +107,17 @@ private struct HabitsDistribution: View {
                             .onContinuousHover { phase in
                                 switch phase {
                                 case .active(let location):
-                                    tooltipPointer.move(to: location)
                                     if frame.contains(location), let x: Double = proxy.value(atX: location.x - frame.minX) {
                                         let index = Int(x.rounded())
-                                        selected = values.indices.contains(index) ? index : nil
-                                    } else { selected = nil }
-                                case .ended: selected = nil
+                                        hover.update(values.indices.contains(index) ? index : nil)
+                                    } else { hover.update(nil) }
+                                    tooltipPointer.move(to: location, reposition: hover.readoutTarget != nil)
+                                case .ended: hover.update(nil)
                                 }
                             }
+                            .onDisappear { hover.update(nil) }
                             .selectedTooltip(avoiding: mark, pointer: tooltipPointer) {
-                                if let selected {
+                                if let selected = readoutTarget {
                                     VStack(alignment: .leading, spacing: 5) {
                                         Text(fullLabels[selected]).fontWeight(.medium)
                                         HStack(spacing: 8) {

@@ -1,5 +1,5 @@
 // [INPUT]: Daily aggregates with gaps, free and unknown costs.
-// [OUTPUT]: Regression coverage for annual calendar, model history and rounded axis ticks.
+// [OUTPUT]: Regression coverage for calendar layout and hover geometry, model history and rounded axis ticks.
 // [POS]: Pure native presentation tests.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import XCTest
@@ -59,6 +59,63 @@ final class UsageActivityTests: XCTestCase {
         XCTAssertEqual(activity.peak?.key, "2026-11-03")
         XCTAssertEqual(activity.topWeekday, 1)
     }
+
+    func testCalendarFitsEveryWeekAndEdgeSelectionAtNarrowAndWideWidths() {
+        for width: CGFloat in [540, 896, 1320] {
+            let layout = ActivityCalendarLayout(width: width, weeks: 54)
+            XCTAssertEqual(layout.plot.width + 26, width, accuracy: 0.0001)
+            for position in [0, 6, 53 * 7, 54 * 7 - 1] {
+                let cell = layout.cellFrame(at: position)
+                let selected = layout.insets(at: position, selected: position).frame(in: cell)
+                XCTAssertEqual(selected.width / cell.width, 1.8, accuracy: 0.0001)
+                XCTAssertEqual(selected.height / cell.height, 1.8, accuracy: 0.0001)
+                XCTAssertGreaterThanOrEqual(selected.minX, layout.plot.minX - 0.0001)
+                XCTAssertLessThanOrEqual(selected.maxX, layout.plot.maxX + 0.0001)
+                XCTAssertGreaterThanOrEqual(selected.minY, layout.plot.minY - 0.0001)
+                XCTAssertLessThanOrEqual(selected.maxY, layout.plot.maxY + 0.0001)
+                XCTAssertEqual(layout.position(at: CGPoint(x: cell.midX, y: cell.midY)), position)
+                XCTAssertNil(layout.position(at: CGPoint(x: cell.midX, y: cell.maxY + 1)))
+            }
+        }
+    }
+
+    func testHoveredCalendarDayCompressesOnlyItsEightNeighborsWithoutOverlap() {
+        let layout = ActivityCalendarLayout(width: 896, weeks: 53)
+        let selected = 24 * 7 + 3
+        let expanded = layout.insets(at: selected, selected: selected).frame(in: layout.cellFrame(at: selected))
+        for column in -1...1 {
+            for row in -1...1 where column != 0 || row != 0 {
+                let position = selected + column * 7 + row
+                let cell = layout.cellFrame(at: position)
+                let compressed = layout.insets(at: position, selected: selected).frame(in: cell)
+                XCTAssertEqual(compressed.width / cell.width, column == 0 ? 1 : 0.6, accuracy: 0.0001)
+                XCTAssertEqual(compressed.height / cell.height, row == 0 ? 1 : 0.6, accuracy: 0.0001)
+                XCTAssertFalse(expanded.intersects(compressed))
+                if column < 0 { XCTAssertEqual(compressed.minX, cell.minX, accuracy: 0.0001) }
+                if column > 0 { XCTAssertEqual(compressed.maxX, cell.maxX, accuracy: 0.0001) }
+                if row < 0 { XCTAssertEqual(compressed.minY, cell.minY, accuracy: 0.0001) }
+                if row > 0 { XCTAssertEqual(compressed.maxY, cell.maxY, accuracy: 0.0001) }
+            }
+        }
+        XCTAssertEqual(layout.insets(at: selected + 14, selected: selected), .zero)
+        XCTAssertEqual(layout.insets(at: selected, selected: nil), .zero)
+        // Sunday followed by Monday is a different column and the opposite edge.
+        XCTAssertEqual(layout.insets(at: 7, selected: 6), .zero)
+    }
+
+    func testPointerCanFollowExpandedDayAndLeaveItWithoutJumpingToAGap() {
+        let layout = ActivityCalendarLayout(width: 896, weeks: 53)
+        let day = 24 * 7 + 3
+        let cell = layout.cellFrame(at: day)
+        let focus = layout.focusFrame(at: day)
+        let expandedEdge = CGPoint(x: focus.maxX - 0.1, y: cell.midY)
+        XCTAssertFalse(cell.contains(expandedEdge))
+        XCTAssertEqual(layout.position(at: expandedEdge, retaining: day), day)
+        XCTAssertNil(layout.position(at: CGPoint(x: focus.maxX + 0.1, y: cell.midY), retaining: day))
+        let next = layout.cellFrame(at: day + 7)
+        XCTAssertEqual(layout.position(at: CGPoint(x: next.midX, y: next.midY), retaining: day), day + 7)
+        XCTAssertNil(layout.position(at: CGPoint(x: layout.plot.maxX + 1, y: cell.midY), retaining: day))
+    }
     func testActivityStreakAndAverageUseOnlyDaysWithTokens() {
         let activity = UsageActivity(report: report)
         XCTAssertEqual(activity.streak.current, 0)
@@ -89,16 +146,19 @@ final class UsageActivityTests: XCTestCase {
         XCTAssertNil(singleDay.monthlyPace)
     }
 
-    func testChartPinSurvivesHoverAndTogglesOffOnTheSameMark() {
+    @MainActor
+    func testChartPinsImmediatelyWhileHoverIsPendingAndTogglesOffOnTheSameMark() {
         var inspection = ChartInspection<Int>()
-        inspection.hovered = 2
+        inspection.hover.update(2)
         XCTAssertEqual(inspection.selection, 2)
+        XCTAssertNil(inspection.hover.readoutTarget)
         inspection.togglePin(2)
-        inspection.hovered = 3
+        inspection.hover.update(3)
         XCTAssertEqual(inspection.selection, 2)
         inspection.togglePin(2)
         XCTAssertNil(inspection.selection)
-        inspection.togglePin(3)
+        inspection.pin(3)
+        XCTAssertEqual(inspection.selection, 3)
         inspection.clear()
         XCTAssertNil(inspection.selection)
     }

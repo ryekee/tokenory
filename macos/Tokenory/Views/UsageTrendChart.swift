@@ -1,25 +1,27 @@
 // [INPUT]: Local and combined daily/hourly reports and device-specific bucket indexes.
-// [OUTPUT]: Dual-axis trend in the local or device snapshot time zone, with a shared hover readout.
+// [OUTPUT]: Dual-axis trend in the reporting time zone, with immediate hover emphasis, delayed readouts and instant pinning.
 // [POS]: Upper overview chart; preserves unknown prices and unallocated hours.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
 import SwiftUI
 import Charts
 
-struct ChartInspection<Mark: Equatable> {
-    var hovered: Mark?
-    var pinned: Mark?
-    var selection: Mark? { pinned ?? hovered }
+@MainActor
+struct ChartInspection<Mark: Equatable & Sendable> {
+    let hover = HoverDwell<Mark>()
+    private(set) var pinned: Mark?
+    var selection: Mark? { pinned ?? hover.target }
 
     mutating func togglePin(_ mark: Mark?) {
-        pinned = pinned == mark ? nil : mark
-        hovered = nil
+        pin(pinned == mark ? nil : mark)
     }
 
-    mutating func clear() {
-        hovered = nil
-        pinned = nil
+    mutating func pin(_ mark: Mark?) {
+        hover.update(nil)
+        pinned = mark
     }
+
+    mutating func clear() { pin(nil) }
 }
 
 struct UsageTrendChart: View {
@@ -208,18 +210,19 @@ struct UsageTrendChart: View {
                             .onContinuousHover { phase in
                                 switch phase {
                                 case .active(let location):
-                                    tooltipPointer.move(to: location)
                                     let next = bucket(at: location, frame: frame, proxy: proxy, trend: trend)
-                                    if inspection.hovered != next { inspection.hovered = next }
-                                case .ended: inspection.hovered = nil
+                                    inspection.hover.update(inspection.pinned == nil ? next : nil)
+                                    tooltipPointer.move(to: location, reposition: inspection.hover.readoutTarget != nil)
+                                case .ended: inspection.hover.update(nil)
                                 }
                             }
+                            .onDisappear { inspection.hover.update(nil) }
                             .onTapGesture { location in
                                 DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
                                     inspection.togglePin(bucket(at: location, frame: frame, proxy: proxy, trend: trend))
                                 }
                             }
-                            .selectedTooltip(avoiding: inspection.pinned == nil ? mark : nil, pointer: tooltipPointer) {
+                            .selectedTooltip(avoiding: inspection.hover.readoutTarget != nil ? mark : nil, pointer: tooltipPointer) {
                                 if let selected {
                                     readout(selected, hourly: trend.hourly, sources: sources)
                                 }
@@ -235,7 +238,10 @@ struct UsageTrendChart: View {
         .onKeyPress(.leftArrow) { moveSelection(-1, trend: trend); return .handled }
         .onKeyPress(.rightArrow) { moveSelection(1, trend: trend); return .handled }
         .onKeyPress(.escape) {
-            guard inspection.selection != nil else { return .ignored }
+            guard inspection.selection != nil else {
+                inspection.hover.update(nil)
+                return .ignored
+            }
             DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
                 inspection.clear()
             }
@@ -303,7 +309,7 @@ struct UsageTrendChart: View {
         guard !points.isEmpty else { return }
         let current = points.firstIndex { $0.id == inspection.selection } ?? (delta > 0 ? -1 : points.count)
         DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
-            inspection.pinned = points[min(max(current + delta, 0), points.count - 1)].id
+            inspection.pin(points[min(max(current + delta, 0), points.count - 1)].id)
         }
     }
     private func hour(_ date: Date) -> String {
