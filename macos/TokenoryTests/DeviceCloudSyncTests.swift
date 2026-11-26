@@ -77,7 +77,7 @@ final class DeviceCloudSyncTests: XCTestCase {
         func replace(with value: DeviceUsageSnapshot) { snapshot = value }
         func gateNextRead() { holdRead = true }
         func isReading() -> Bool { blockedRead != nil }
-        func resumeRead() { blockedRead?.resume(); blockedRead = nil }
+        func resumeRead() { holdRead = false; blockedRead?.resume(); blockedRead = nil }
         func read() async -> DeviceUsageSnapshot {
             if holdRead {
                 holdRead = false
@@ -87,12 +87,13 @@ final class DeviceCloudSyncTests: XCTestCase {
         }
     }
 
-    private func snapshot(tokens: Int64) -> DeviceUsageSnapshot {
+    private func snapshot(tokens: Int64, antigravitySubagent: Bool = false) -> DeviceUsageSnapshot {
         let summary = UsageSummary(tokens: tokens, tokenBreakdown: .init(input: tokens, output: 0, cacheRead: 0,
                                    cacheWrite: 0, reasoning: 0), knownEstimatedCostUsd: nil, unpricedTokens: tokens,
                                    costStatus: "unknown", recordCount: 1, activeDays: 1, partialDays: 0, requests: 1)
-        let bucket = DeviceUsageSnapshot.Bucket(date: "2026-11-23", hour: 9, client: "codex", provider: "test",
-                                                model: "test", source: "local", isSubagent: false, summary: summary)
+        let bucket = DeviceUsageSnapshot.Bucket(date: "2026-11-23", hour: 9, client: antigravitySubagent ? "antigravity" : "codex",
+                                                provider: "test", model: "test", source: "local", isSubagent: false, summary: summary,
+                                                isAntigravitySubagent: antigravitySubagent ? true : nil)
         return DeviceUsageSnapshot(schemaVersion: 1, revision: tokens, timezone: "Asia/Shanghai",
                                    buckets: [bucket], subagentStarts: [])
     }
@@ -449,14 +450,78 @@ final class DeviceCloudSyncTests: XCTestCase {
         }
 
         let current = try report(1)
-        let shared = \UsageReport.sharedAntigravitySubagents
-        XCTAssertEqual(store.matchingSubagentDetails(in: current, for: filter)?.starts, 1)
+        XCTAssertEqual(store.matchingLocalReport(current, for: filter)?.codexSubagents?.starts, 1)
         XCTAssertEqual(current.antigravitySubagents?.conversations.first?.id, "local-day")
-        XCTAssertEqual(store.matchingSubagentDetails(in: current, for: filter, field: shared)?.conversations.first?.id, "shared-day")
-        XCTAssertNil(try store.matchingSubagentDetails(in: report(3), for: filter))
-        XCTAssertNil(try store.matchingSubagentDetails(in: report(3), for: filter, field: shared))
-        XCTAssertNil(store.matchingSubagentDetails(in: current, for: .init(), field: shared))
-        XCTAssertNil(try store.matchingSubagentDetails(in: report(1, includesSharedCalendar: false), for: filter, field: shared))
+        XCTAssertEqual(store.matchingLocalReport(current, for: filter)?.sharedAntigravitySubagents?.conversations.first?.id, "shared-day")
+        XCTAssertNil(try store.matchingLocalReport(report(3), for: filter))
+        XCTAssertNil(store.matchingLocalReport(current, for: .init()))
+        XCTAssertNil(try store.matchingLocalReport(report(1, includesSharedCalendar: false), for: filter)?.sharedAntigravitySubagents)
+    }
+
+    func testLocalSubagentDetailsStayAlignedAcrossBothRefreshOrders() async throws {
+        let transport = FakeDeviceCloud(), (local, peer) = devices(transport)
+        try await local.enable()
+        try await peer.enable()
+        try await peer.publish(JSONEncoder().encode(snapshot(tokens: 40)), revision: 40)
+        let ledger = LocalLedger(snapshot(tokens: 100, antigravitySubagent: true))
+        let cloud = DeviceSyncStore(service: local) { await ledger.read() }
+        cloud.refresh()
+        try await waitForStore { !cloud.busy && cloud.hasLocalSnapshot }
+
+        let data = FileManager.default.temporaryDirectory.appending(path: "Tokenory-subagents-\(UUID())")
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        let helper = data.appending(path: "worker.py")
+        try #"""
+        #!/usr/bin/python3
+        import json, pathlib, sys
+        for line in sys.stdin:
+            request = json.loads(line)
+            revision = int(pathlib.Path(__file__).with_name('revision').read_text())
+            if request['operation'] == 'overview':
+                summary = dict(tokens=revision, tokenBreakdown=dict(input=revision, output=0, cacheRead=0, cacheWrite=0, reasoning=0),
+                               unpricedTokens=revision, costStatus='unknown', recordCount=1, activeDays=1)
+                conversations = [dict(id='local-shared', starts=1, tokens=revision, agents=[])]
+                report = dict(revision=revision, summary=summary, daily=[], clients=[], providers=[], models=[], details=[],
+                              sharedAntigravitySubagents=dict(starts=1, tokens=revision, conversations=conversations))
+            else:
+                payload = request['payload']
+                report = dict(revision=revision, daily=[], modelDays=[], **{'from':payload['from'], 'to':payload['to']})
+            print(json.dumps(dict(version=1, id=request['id'], result=report)), flush=True)
+        """#.write(to: helper, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+        func setWorkerRevision(_ revision: Int64) throws {
+            try String(revision).write(to: data.appending(path: "revision"), atomically: true, encoding: .utf8)
+        }
+        try setWorkerRevision(100)
+        let engine = EngineClient(helper: helper, directory: data)
+        addTeardownBlock {
+            await ledger.resumeRead()
+            await engine.stop()
+            try FileManager.default.removeItem(at: data)
+        }
+        try await engine.start()
+        let store = UsageStore(engine: engine, directory: data, cloud: cloud)
+        store.connected = true
+        let filter = UsageFilter(from: "2026-11-23", to: "2026-11-23")
+        store.filter = filter
+        await store.refreshSelection(filter)
+        XCTAssertEqual(cloud.matchingLocalReport(store.report, for: filter)?.sharedAntigravitySubagents?.tokens, 100)
+
+        await ledger.gateNextRead()
+        await ledger.replace(with: snapshot(tokens: 110, antigravitySubagent: true))
+        try setWorkerRevision(110)
+        await store.refreshSelection(filter, forceReport: true)
+        XCTAssertEqual(store.report?.revision, 110)
+        XCTAssertEqual(cloud.matchingLocalReport(store.report, for: filter)?.sharedAntigravitySubagents?.tokens, 100)
+        XCTAssertTrue(cloud.busy)
+        await ledger.resumeRead()
+        try await waitForStore { !cloud.busy && cloud.matchingLocalReport(store.report, for: filter)?.revision == 110 }
+
+        try setWorkerRevision(120)
+        await ledger.replace(with: snapshot(tokens: 120, antigravitySubagent: true))
+        cloud.refresh(localChanged: true)
+        try await waitForStore { cloud.matchingLocalReport(store.report, for: filter)?.revision == 120 }
+        XCTAssertEqual(cloud.matchingLocalReport(store.report, for: filter)?.sharedAntigravitySubagents?.tokens, 120)
     }
 
     func testFailedManagementDoesNotConsumeThePendingLocalRefresh() async throws {

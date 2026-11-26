@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 按系统日期刷新本机统计，区分设备汇总预览和完整报告，在手动扫描完成或失败后更新反馈。
+// [OUTPUT]: 刷新本机统计并与设备快照校准，区分设备汇总预览和完整报告，反馈扫描结果。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -68,6 +68,11 @@ final class UsageStore {
     @ObservationIgnored private var reportCache: [UsageFilter: UsageReport] = [:]
     @ObservationIgnored private var reportCacheRevision: Int64?
     @ObservationIgnored private var prefetchTask: Task<Void, Never>?
+    @ObservationIgnored private var requestedProjectionCatchUp: ProjectionCatchUp?
+    private struct ProjectionCatchUp: Equatable {
+        let filter: UsageFilter
+        let revision: Int64
+    }
     private struct HistorySelection: Hashable {
         let revision: Int64
         let localOnly: Bool
@@ -138,6 +143,7 @@ final class UsageStore {
         dataDirectory = directory
         self.engine = engine ?? EngineClient(helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/tokenory"), directory: directory)
         self.cloud = cloud ?? DeviceSyncStore(engine: self.engine, usesDefaultLedger: directory.standardizedFileURL.path == primaryLedger.standardizedFileURL.path)
+        self.cloud.localProjectionChanged = { [weak self] in self?.alignReportWithLocalProjection() }
         updateDateRange()
     }
     static func day(_ date: Date) -> String { Localization.dayKey(date) }
@@ -363,7 +369,11 @@ final class UsageStore {
         requestedReportFilter = selection
         reportFailure = nil
         defer {
-            if generation == reportGeneration { requestedReportFilter = nil; loading = false }
+            if generation == reportGeneration {
+                requestedReportFilter = nil
+                loading = false
+                alignReportWithLocalProjection()
+            }
         }
         let isCurrent = { self.reportGeneration == generation && self.reportSelection == selection }
         let year = Self.reportingYear(ending: now)
@@ -406,9 +416,33 @@ final class UsageStore {
         }
     }
     private func publishReport(_ selected: UsageReport, for selection: UsageFilter, provisional: Bool = false) {
+        if let report, reportFilter == selection, !reportIsProvisional {
+            cloud.retainMatchingLocalReport(report, for: selection)
+        }
         report = selected
         reportFilter = selection
         reportIsProvisional = provisional
+        if !provisional { cloud.retainMatchingLocalReport(selected, for: selection) }
+    }
+    private func alignReportWithLocalProjection() {
+        guard connected, !recordsAreActive, requestedReportFilter == nil,
+              let report, !reportIsProvisional, let filter = reportFilter, filter == reportSelection,
+              let revision = cloud.localRevision(for: filter), report.revision != revision else { return }
+        if report.revision > revision {
+            cloud.catchUpLocalSnapshot(to: report.revision)
+            return
+        }
+        let local = cloud.local(for: filter)
+        guard local?.codexSubagents?.hasActivity == true || local?.antigravitySubagents?.hasActivity == true else { return }
+        let catchUp = ProjectionCatchUp(filter: filter, revision: revision)
+        Task { [weak self] in
+            guard let self, self.requestedProjectionCatchUp != catchUp, self.requestedReportFilter == nil,
+                  !self.recordsAreActive, self.reportSelection == filter, self.reportFilter == filter,
+                  self.cloud.localRevision(for: filter) == revision,
+                  let currentReport = self.report, currentReport.revision < revision else { return }
+            self.requestedProjectionCatchUp = catchUp
+            await self.refreshReport(filter, now: Date(), force: true)
+        }
     }
     private static func reportingYear(ending now: Date) -> (from: String, to: String) {
         let calendar = Localization.reportingCalendar
@@ -500,6 +534,7 @@ final class UsageStore {
         prefetchTask = nil
         reportCache.removeAll(keepingCapacity: true)
         reportCacheRevision = nil
+        requestedProjectionCatchUp = nil
         historyCache.removeAll(keepingCapacity: true)
         connected = false
         loading = false

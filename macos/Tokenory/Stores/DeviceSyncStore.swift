@@ -1,5 +1,5 @@
 // [INPUT]: A local worker, the signed private CloudKit store and the selected reporting period.
-// [OUTPUT]: Sync controls, device sources and selected reports with matching local details, reusable annual activity and snapshot invalidation on restore.
+// [OUTPUT]: Sync controls, device sources, and selected reports with retained revision-matched local details.
 // [POS]: Keeps remote summaries outside the local ledger, HUD, records and speed queries.
 import CloudKit
 import Foundation
@@ -57,6 +57,8 @@ final class DeviceSyncStore {
     @ObservationIgnored private var snapshots: [String: DeviceUsageSnapshot] = [:]
     @ObservationIgnored private var remoteDates: [String: Date] = [:]
     @ObservationIgnored private var localDirty = true
+    @ObservationIgnored private var requiredLocalRevision: Int64?
+    @ObservationIgnored private var retainedLocalReport: (filter: UsageFilter, report: UsageReport)?
     @ObservationIgnored private var uploadPending = false
     @ObservationIgnored private var selection = UsageFilter()
     @ObservationIgnored private var year: (String, String)?
@@ -66,6 +68,7 @@ final class DeviceSyncStore {
     @ObservationIgnored private var timer: Task<Void, Never>?
     @ObservationIgnored private var accountObserver: Task<Void, Never>?
     @ObservationIgnored private var pending = false
+    @ObservationIgnored var localProjectionChanged: (() -> Void)?
 
     var localName: String { service.deviceName }
     var hasLocalSnapshot: Bool { snapshots[service.deviceID] != nil }
@@ -78,10 +81,19 @@ final class DeviceSyncStore {
     func overview(for filter: UsageFilter?) -> UsageReport? { projection?.filter == filter ? projection?.overview : nil }
     func remote(for filter: UsageFilter?) -> [String: UsageReport] { projection?.filter == filter ? projection?.remote ?? [:] : [:] }
     func local(for filter: UsageFilter?) -> UsageReport? { projection?.filter == filter ? projection?.local : nil }
-    func matchingSubagentDetails(in report: UsageReport, for filter: UsageFilter,
-                                 field: KeyPath<UsageReport, CodexSubagentReport?> = \.codexSubagents) -> CodexSubagentReport? {
-        guard let projection, projection.filter == filter, projection.localRevision == report.revision else { return nil }
-        return report[keyPath: field]
+    func localRevision(for filter: UsageFilter) -> Int64? {
+        projection?.filter == filter ? projection?.localRevision : nil
+    }
+    func retainMatchingLocalReport(_ report: UsageReport, for filter: UsageFilter) {
+        guard localRevision(for: filter) == report.revision else { return }
+        retainedLocalReport = (filter, report)
+    }
+    func matchingLocalReport(_ report: UsageReport?, for filter: UsageFilter) -> UsageReport? {
+        guard let revision = localRevision(for: filter) else { return nil }
+        if let report, report.revision == revision { return report }
+        guard let retainedLocalReport, retainedLocalReport.filter == filter,
+              retainedLocalReport.report.revision == revision else { return nil }
+        return retainedLocalReport.report
     }
     var localCalendar: UsageActivity? { projection?.annual.localCalendar }
     var activity: ActivityReport? { projection?.annual.activity }
@@ -179,8 +191,12 @@ final class DeviceSyncStore {
             selection = filter
             year = (from, to)
             if !reusable, next != nil || projection != nil { annualVersion += 1 }
+            if old?.filter != filter { retainedLocalReport = nil }
             projection = next
             commit()
+            if old?.filter != next?.filter || old?.localRevision != next?.localRevision {
+                localProjectionChanged?()
+            }
             return
         }
     }
@@ -202,10 +218,19 @@ final class DeviceSyncStore {
 
     func markDirty() { localDirty = true }
 
+    func catchUpLocalSnapshot(to revision: Int64) {
+        guard let local = snapshots[service.deviceID], local.revision < revision,
+              requiredLocalRevision.map({ $0 < revision }) ?? true else { return }
+        requiredLocalRevision = revision
+        refresh()
+    }
+
     func invalidateLocalSnapshot() {
         generation += 1
         snapshots.removeValue(forKey: service.deviceID)
         localDirty = true
+        requiredLocalRevision = nil
+        retainedLocalReport = nil
         uploadPending = false
         snapshotVersion += 1
         annualVersion += 1
@@ -289,7 +314,9 @@ final class DeviceSyncStore {
 
     private func refreshLocal(ticket: Int) async throws {
         let id = service.deviceID
-        let needsLocal = localDirty || snapshots[id] == nil
+        let currentRevision = snapshots[id]?.revision
+        let needsLocal = localDirty || currentRevision == nil ||
+            requiredLocalRevision.map { $0 > (currentRevision ?? .min) } == true
         let publication = enabled && (needsLocal || uploadPending) ? try await service.beginPublication() : nil
         guard ticket == generation else { return }
         if needsLocal {
@@ -382,6 +409,8 @@ final class DeviceSyncStore {
         sources = []
         incompatibleDevices = false
         uploadPending = false
+        requiredLocalRevision = nil
+        retainedLocalReport = nil
         snapshotVersion += 1
         annualVersion += 1
         projection = nil
