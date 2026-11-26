@@ -1,5 +1,5 @@
 // [INPUT]: Annual effective-ledger days and timestamp-qualified hour totals.
-// [OUTPUT]: Titled coding patterns card with weekday share, biggest day and hour distribution.
+// [OUTPUT]: Coding patterns with weekday and hour charts, immediate bar highlights and delayed readouts.
 // [POS]: Independent overview panel; daily-only imports remain unallocated by hour.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -64,24 +64,36 @@ struct UsageHabitsView: View {
     }
 }
 
-private struct HabitsDistribution: View {
+struct HabitsDistribution: View {
     let title: String
     let values: [Int64]
     let labels: [String]
     let fullLabels: [String]
-    @State private var hover = HoverDwell<Int>()
+    @State private var hover: HoverDwell<Int>
     @State private var tooltipPointer = TooltipPointer()
-    @Environment(\.colorScheme) private var scheme
 
-    private var selected: Int? { hover.target }
+    init(title: String, values: [Int64], labels: [String], fullLabels: [String], hover: HoverDwell<Int> = .init()) {
+        self.title = title
+        self.values = values
+        self.labels = labels
+        self.fullLabels = fullLabels
+        _hover = State(initialValue: hover)
+    }
+
     var body: some View {
+        // Read the immediate target in SwiftUI's view body, before Charts evaluates its marks.
+        let selected = hover.target
+        let peak = values.max() ?? 0
+        let inactiveOpacity = selected == nil ? 1.0 : 0.6
+        let highlight = WorkspaceStyle.localUsage.mix(with: .white, by: 0.22)
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
             Chart(values.indices, id: \.self) { index in
+                let opacity = values[index] == peak ? 1.0 : 0.35
                 RectangleMark(xStart: .value("Period", Double(index) - 0.36),
                               xEnd: .value("Period", Double(index) + 0.36),
                               yStart: .value("Tokens", 0), yEnd: .value("Tokens", values[index]))
-                    .foregroundStyle(WorkspaceStyle.localUsage.opacity(selected == index || values[index] == values.max() ? 1 : 0.35))
+                    .foregroundStyle(selected == index ? highlight : WorkspaceStyle.localUsage.opacity(opacity * inactiveOpacity))
                     .cornerRadius(2)
                     .accessibilityLabel(fullLabels[index])
                     .accessibilityValue(values[index].formatted(.number.locale(Localization.locale)) + " tokens")
@@ -126,7 +138,7 @@ private struct HabitsDistribution: View {
                                             Text(values[selected].formatted(.number.locale(Localization.locale))).monospacedDigit()
                                         }
                                     }.font(.caption).lineLimit(1).frame(width: max(87,
-                                        CursorTooltipLayout.textWidth((values.max() ?? 0).formatted(.number.locale(Localization.locale))) + 51))
+                                        CursorTooltipLayout.textWidth(peak.formatted(.number.locale(Localization.locale))) + 51))
                                 }
                             }
                     }

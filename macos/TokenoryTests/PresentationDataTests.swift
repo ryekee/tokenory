@@ -136,6 +136,48 @@ final class PresentationDataTests: XCTestCase {
         }
     }
 
+    @MainActor func testUsageHabitsHighlightsEvenThePeakBeforeShowingTheReadout() async throws {
+        let hover = HoverDwell<Int>(delay: .seconds(30))
+        defer { hover.update(nil) }
+        let view = HabitsDistribution(title: "Period", values: [70, 100], labels: ["A", "B"],
+                                      fullLabels: ["A", "B"], hover: hover)
+            .frame(width: 160, height: 110)
+            .background(WorkspaceStyle.surface(.dark))
+            .environment(\.colorScheme, .dark)
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 160, height: 110),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.contentViewController = NSHostingController(rootView: view)
+        window.setContentSize(NSSize(width: 160, height: 110))
+        window.orderBack(nil)
+        let content = try XCTUnwrap(window.contentView)
+
+        func marks() throws -> (first: NSColor, peak: NSColor) {
+            content.layoutSubtreeIfNeeded()
+            content.displayIfNeeded()
+            let bitmap = try XCTUnwrap(content.bitmapImageRepForCachingDisplay(in: content.bounds))
+            content.cacheDisplay(in: content.bounds, to: bitmap)
+            func sample(_ x: Int) throws -> NSColor {
+                try XCTUnwrap(bitmap.colorAt(x: x, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.sRGB))
+            }
+            return (try sample(bitmap.pixelsWide / 4), try sample(3 * bitmap.pixelsWide / 4))
+        }
+
+        let rest = try marks()
+        XCTAssertGreaterThan(rest.peak.blueComponent, rest.first.blueComponent + 0.1)
+        hover.update(1)
+        var emphasized = try marks()
+        for _ in 0..<20 where emphasized.peak.redComponent < rest.peak.redComponent + 0.08 {
+            try await Task.sleep(for: .milliseconds(20))
+            emphasized = try marks()
+        }
+        XCTAssertNil(hover.readoutTarget)
+        XCTAssertGreaterThan(emphasized.peak.redComponent, rest.peak.redComponent + 0.08)
+        XCTAssertLessThan(emphasized.first.blueComponent, rest.first.blueComponent - 0.04)
+    }
+
     @MainActor func testRankingBarPaintsBothFastPortionsAtFullHeight() throws {
         let bar = OverviewShareBar(total: 200, amount: 120, other: 50, fast: 30, otherFast: 20, height: 5)
             .frame(width: 200).environment(\.colorScheme, .light)

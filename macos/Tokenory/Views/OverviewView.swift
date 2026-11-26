@@ -10,6 +10,7 @@ private struct SubagentsCardView: View {
         let name: String
         let report: CodexSubagentReport
         let local: CodexSubagentReport?
+        let awaitingLocalDetails: Bool
         let remote: [CodexSubagentReport]
         let toolTokens: Int64
     }
@@ -18,6 +19,7 @@ private struct SubagentsCardView: View {
     let hasRemote: Bool
     let overallSummary: UsageSummary
     @Environment(\.colorScheme) private var colorScheme
+    @State private var expandedTools: Set<String> = []
     private var metricFont: Font { DisplayNumberFont.font(for: .title3) }
 
     private var totalStarts: Int64 { entries.reduce(0) { $0 + $1.report.starts } }
@@ -101,20 +103,28 @@ private struct SubagentsCardView: View {
 
     @ViewBuilder
     private func toolSection(_ entry: ToolEntry) -> some View {
-        let conversations = entry.local?.conversations ?? []
-        if !conversations.isEmpty, let local = entry.local {
-            DisclosureGroup {
-                VStack(spacing: 0) {
-                    ForEach(conversations) { conversation in
-                        CodexSubagentConversationView(
-                            conversation: conversation,
-                            totalTokens: local.tokens,
-                            totalCost: local.cost
-                        )
+        if entry.local?.conversations.isEmpty == false || entry.awaitingLocalDetails {
+            DisclosureGroup(isExpanded: Binding(
+                get: { expandedTools.contains(entry.id) },
+                set: { if $0 { expandedTools.insert(entry.id) } else { expandedTools.remove(entry.id) } }
+            )) {
+                if let local = entry.local {
+                    VStack(spacing: 0) {
+                        ForEach(local.conversations) { conversation in
+                            CodexSubagentConversationView(
+                                conversation: conversation,
+                                totalTokens: local.tokens,
+                                totalCost: local.cost
+                            )
+                        }
                     }
+                } else {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel(L("usage.loading_stats"))
                 }
             } label: {
-                toolRowLabel(entry)
+                toolRowLabel(entry, expanded: expandedTools.contains(entry.id))
             }
             .disclosureGroupStyle(WorkspaceDisclosureStyle())
         } else {
@@ -124,7 +134,7 @@ private struct SubagentsCardView: View {
         }
     }
 
-    private func toolRowLabel(_ entry: ToolEntry) -> some View {
+    private func toolRowLabel(_ entry: ToolEntry, expanded: Bool? = nil) -> some View {
         let tokensPct = subagentShare(Double(entry.report.tokens), of: Double(entry.toolTokens))
         let costText: String = {
             if entry.report.tokens == 0 && (entry.report.cost?.unpricedTokens ?? 0) == 0 {
@@ -160,6 +170,15 @@ private struct SubagentsCardView: View {
                     .foregroundStyle(WorkspaceStyle.subtext)
                     .frame(minWidth: 44, alignment: .trailing)
             }
+            Group {
+                if let expanded {
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(WorkspaceStyle.subtext)
+                }
+            }
+            .frame(width: 10)
+            .accessibilityHidden(true)
         }
         .font(.callout)
         .accessibilityElement(children: .combine)
@@ -399,16 +418,9 @@ struct OverviewView: View {
             .reduce(0) { $0 + $1.summary.tokens }
     }
 
-    private var localCodexSubagentDetails: CodexSubagentReport? {
-        if multiDevice { return store.cloud.matchingSubagentDetails(in: report, for: reportFilter) }
-        return report.codexSubagents
-    }
-
-    private var localAntigravitySubagentDetails: CodexSubagentReport? {
-        if multiDevice {
-            return store.cloud.matchingSubagentDetails(in: report, for: reportFilter, field: \.sharedAntigravitySubagents)
-        }
-        return report.antigravitySubagents
+    private var localSubagentReport: UsageReport? {
+        if multiDevice { return store.cloud.matchingLocalReport(store.reportIsProvisional ? nil : report, for: reportFilter) }
+        return report
     }
 
     var body: some View {
@@ -439,6 +451,9 @@ struct OverviewView: View {
                                                     filter: reportFilter, animateRangeChanges: isActive, openDatePicker: openDatePicker)
                                 }
                             }
+                            let localSubagents = localSubagentReport
+                            let localAntigravitySubagents = multiDevice ? localSubagents?.sharedAntigravitySubagents : localSubagents?.antigravitySubagents
+                            let awaitingLocalSubagents = multiDevice && localSubagents == nil
                             let layout = geometry.size.width >= 720
                                 ? AnyLayout(HStackLayout(alignment: .top, spacing: 18))
                                 : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
@@ -464,8 +479,8 @@ struct OverviewView: View {
                                         UsageRankingView(groups: overview.clients, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.clients), by: \.key), kind: .tool, metric: rankingMetric, range: range,
                                                          childModels: overview.clientModels ?? [:], toolReport: overview)
                                         UsageRankingView(groups: overview.models, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.models), by: \.key), kind: .model, metric: rankingMetric, range: range,
-                                                         codexSubagents: localCodexSubagentDetails,
-                                                         antigravitySubagents: localAntigravitySubagentDetails)
+                                                         codexSubagents: localSubagents?.codexSubagents,
+                                                         antigravitySubagents: localAntigravitySubagents)
                                     }
                                 }
                             }
@@ -476,7 +491,8 @@ struct OverviewView: View {
                                         id: "codex",
                                         name: clientName("codex"),
                                         report: codex,
-                                        local: localCodexSubagentDetails,
+                                        local: localSubagents?.codexSubagents,
+                                        awaitingLocalDetails: awaitingLocalSubagents && localAtSync.codexSubagents?.hasActivity == true,
                                         remote: remoteReports.values.compactMap(\.codexSubagents),
                                         toolTokens: overview.clients.first { $0.key == "codex" }?.summary.tokens ?? 0
                                     ))
@@ -486,7 +502,8 @@ struct OverviewView: View {
                                         id: "antigravity",
                                         name: clientName("antigravity"),
                                         report: agy,
-                                        local: localAntigravitySubagentDetails,
+                                        local: localAntigravitySubagents,
+                                        awaitingLocalDetails: awaitingLocalSubagents && localAtSync.antigravitySubagents?.hasActivity == true,
                                         remote: remoteReports.values.compactMap(\.antigravitySubagents),
                                         toolTokens: antigravityToolTokens
                                     ))
