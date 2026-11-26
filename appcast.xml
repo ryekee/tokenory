@@ -3,34 +3,20 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.2.5</title>
-            <pubDate>Thu, 26 Nov 2026 18:47:27 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.5</link>
-            <sparkle:version>23</sparkle:version>
-            <sparkle:shortVersionString>0.2.5</sparkle:shortVersionString>
+            <title>0.2.6</title>
+            <pubDate>Thu, 26 Nov 2026 19:07:01 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.6</link>
+            <sparkle:version>24</sparkle:version>
+            <sparkle:shortVersionString>0.2.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.5/Tokenory-0.2.5-macOS-arm64.zip" length="21574905" type="application/octet-stream" sparkle:edSignature="0KIuuBwkzsavPGfLL+lOVxcqPDnSye39PzAWpMh28q7InDVJtEGSJYIOAeYDTii103mdvoo9BTjhbf5Yvp8lAQ==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.6/Tokenory-0.2.6-macOS-arm64.zip" length="21574048" type="application/octet-stream" sparkle:edSignature="ZPYY+SFDhOtMbuVkUvCmO97Mp+nh/P78u/eN1N1gIbVXKeyqcJcWySMSAZucm1HfDfg+Qzgec+0/emCzRss0Bw==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- Support free dragging of the Mechanical HUD across displays with magnetic four-edge snapping and distance-scaled spring bounce.
-- Add a Follow pointer toggle in HUD Settings so you can keep the HUD pinned to a specific display.
-- Detect real Dock width and auto-hidden Dock / menu bar states so bottom corners sit flush at the screen edge when clear and glide smoothly out of the way when overlapping.
-- Add fast, interruptible edge retract and pop-out animations shared by display switching, idle auto-hide, and HUD toggle, with full Reduce Motion support.
-
-## Fixes
-
-- Remove excessive aspect-ratio side margins on HUD corners so the panel sits neatly against screen edges.
+- Expand the Model history chart to full card width with dynamic 2–3 interval round ticks and bold translucent labels above each gridline (omitting the zero label).
 </description><description xml:lang="zh-Hans" sparkle:format="markdown">## 新功能
 
-- 桌面机械 HUD 支持跨屏自由拖拽，松手后自动磁性吸附到最近屏幕边缘，并带有随距离增强的微弹手感。
-- HUD 设置新增「跟随光标」开关，关闭后可将 HUD 固定在指定屏幕上。
-- 智能感知 Dock 实际宽度及 Dock / 菜单栏自动隐藏状态：底角未被 Dock 遮挡时直接贴底，重叠或 Dock / 菜单栏滑出时平滑上浮/下移避让。
-- 跨屏切换、闲置自动隐藏与显隐开关统一采用干脆可打断的边缘收进与微弹弹出动效，并完整适配系统「减少动态效果」。
-
-## 修复
-
-- 取消四角按屏幕宽高比放大的横向留白，HUD 贴边更紧凑利落。
+- 优化「模型历史」图表布局：移除右侧独立轴栏让图表左右撑满卡片，动态选择 2–3 段整数/半数刻度，并将加粗半透明刻度移至各刻度线上方（隐藏 0 刻度）。
 </description></item>
     </channel>
 </rss>
