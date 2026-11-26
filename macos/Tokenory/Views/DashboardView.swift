@@ -33,7 +33,7 @@ struct DashboardView: View {
     private var reportIsPending: Bool {
         dashboardSelection != nil && store.reportLoadError == nil && (!hasVisibleReport || store.loading)
     }
-    private var showsScanProgress: Bool { store.scanInProgress || showsReportProgress }
+    private var showsScanProgress: Bool { store.scanRequested || showsReportProgress }
 
     private var showsReportProgress: Bool {
         dashboardSelection != nil && progress?.firstLoad == false && store.reportLoadError == nil

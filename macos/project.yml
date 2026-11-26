@@ -83,7 +83,7 @@ targets:
         script: |
           set -eu
           PROFILE=debug
-          if [ "$CONFIGURATION" = Release ]; then PROFILE=release; fi
+          if [ "$CONFIGURATION" = Release ] || [ "$CONFIGURATION" = CloudDebug ]; then PROFILE=release; fi
           mkdir -p "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
           cp "$SRCROOT/../cli/target/$PROFILE/tokenory" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/tokenory"
           /usr/bin/codesign --force --sign - "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/tokenory"
