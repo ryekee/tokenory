@@ -145,30 +145,35 @@ final class UsageActivityTests: XCTestCase {
     func testHistoryAxisKeepsRoundTicksUntilThePeakCrossesTheBand() {
         let chinese = Locale(identifier: "zh-Hans")
         let axis = HistoryAxisScale(paddedMaximum: 229_600_000, metric: .tokens, locale: chinese)
-        XCTAssertEqual(axis.maximum, 250_000_000)
-        XCTAssertEqual(axis.labels, ["2.5亿", "2亿", "1.5亿", "1亿", "0.5亿", "0"])
-        XCTAssertEqual(HistoryAxisScale(paddedMaximum: 250_000_000, metric: .tokens, locale: chinese).labels, axis.labels)
+        XCTAssertLessThanOrEqual(axis.labels.count, HistoryAxisScale.maxLabels)
+        XCTAssertEqual(axis.maximum, 300_000_000)
+        XCTAssertEqual(axis.labels, ["3亿", "2亿", "1亿", "0"])
+        XCTAssertEqual(HistoryAxisScale(paddedMaximum: 300_000_000, metric: .tokens, locale: chinese).labels, axis.labels)
 
-        let next = HistoryAxisScale(paddedMaximum: 250_000_001, metric: .tokens, locale: chinese)
-        XCTAssertEqual(next.maximum, 500_000_000)
-        XCTAssertEqual(next.labels, ["5亿", "4亿", "3亿", "2亿", "1亿", "0"])
+        let tightTwo = HistoryAxisScale(paddedMaximum: 175_000_000, metric: .tokens, locale: chinese)
+        XCTAssertEqual(tightTwo.maximum, 200_000_000)
+        XCTAssertEqual(tightTwo.labels, ["2亿", "1亿", "0"])
+
+        let halves = HistoryAxisScale(paddedMaximum: 140_000_000, metric: .tokens, locale: chinese)
+        XCTAssertEqual(halves.maximum, 150_000_000)
+        XCTAssertEqual(halves.labels, ["1.5亿", "1亿", "0.5亿", "0"])
 
         let english = HistoryAxisScale(paddedMaximum: 229_600_000, metric: .tokens, locale: Locale(identifier: "en"))
-        XCTAssertEqual(english.labels, ["250M", "200M", "150M", "100M", "50M", "0"])
+        XCTAssertEqual(english.labels, ["300M", "200M", "100M", "0"])
     }
 
     func testHistoryAxisUsesReadableUnitsForSmallAndLargeValues() {
         let english = Locale(identifier: "en")
         let empty = HistoryAxisScale(paddedMaximum: 0, metric: .tokens, locale: english)
-        XCTAssertEqual(empty.labels, ["5", "4", "3", "2", "1", "0"])
+        XCTAssertEqual(empty.labels, ["3", "2", "1", "0"])
 
         let cost = HistoryAxisScale(paddedMaximum: 2.31, metric: .cost, locale: english)
-        XCTAssertEqual(cost.labels, ["$2.5", "$2", "$1.5", "$1", "$0.5", "$0"])
+        XCTAssertEqual(cost.labels, ["$3", "$2", "$1", "$0"])
         let small = HistoryAxisScale(paddedMaximum: 0.09, metric: .cost, locale: english)
         XCTAssertEqual(small.maximum, 0.1, accuracy: 1e-12)
-        XCTAssertEqual(small.labels, ["10¢", "8¢", "6¢", "4¢", "2¢", "0¢"])
+        XCTAssertEqual(small.labels, ["10¢", "5¢", "0¢"])
 
         let large = HistoryAxisScale(paddedMaximum: 1_090_000, metric: .cost, locale: english)
-        XCTAssertEqual(large.labels, ["$1,250K", "$1,000K", "$750K", "$500K", "$250K", "$0"])
+        XCTAssertEqual(large.labels, ["$1.5M", "$1M", "$0.5M", "$0"])
     }
 }
