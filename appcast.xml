@@ -3,20 +3,38 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.2.6</title>
-            <pubDate>Thu, 26 Nov 2026 19:07:01 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.6</link>
-            <sparkle:version>24</sparkle:version>
-            <sparkle:shortVersionString>0.2.6</sparkle:shortVersionString>
+            <title>0.2.7</title>
+            <pubDate>Fri, 27 Nov 2026 01:05:34 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.7</link>
+            <sparkle:version>31</sparkle:version>
+            <sparkle:shortVersionString>0.2.7</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.6/Tokenory-0.2.6-macOS-arm64.zip" length="21574048" type="application/octet-stream" sparkle:edSignature="ZPYY+SFDhOtMbuVkUvCmO97Mp+nh/P78u/eN1N1gIbVXKeyqcJcWySMSAZucm1HfDfg+Qzgec+0/emCzRss0Bw==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.7/Tokenory-0.2.7-macOS-arm64.zip" length="21646406" type="application/octet-stream" sparkle:edSignature="3Ludnbv4UkgSiBQJ34SFdWHbYqw/34B3MIImTYoech1jOeT+P0ruJ6SHJXTikVhb/pMGq0ZFA54NkTW3oyLfAg==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- Expand the Model history chart to full card width with dynamic 2–3 interval round ticks and bold translucent labels above each gridline (omitting the zero label).
+- Overview card titles use matching symbols so you can find tools, insights, and charts at a glance.
+- The activity calendar fits the window and expands the hovered date, while chart highlights respond immediately and floating details wait for the pointer to settle.
+- The subagent card includes Antigravity usage from synced Macs, and the tool ranking shows separate figures for Antigravity App and CLI.
+
+## Fixes
+
+- Overview, Records, and Speed reload their data after you restore a backup.
+- Records and This Mac only offer Retry when the full local report fails to load.
+- The refresh button keeps showing progress while a manual scan waits for an incremental scan to finish.
+- Turning off Follow pointer keeps the HUD on the display where it is currently visible.
 </description><description xml:lang="zh-Hans" sparkle:format="markdown">## 新功能
 
-- 优化「模型历史」图表布局：移除右侧独立轴栏让图表左右撑满卡片，动态选择 2–3 段整数/半数刻度，并将加粗半透明刻度移至各刻度线上方（隐藏 0 刻度）。
+- 总览卡片统一使用标题图标，一眼就能找到工具排行、洞察和图表。
+- 活动日历随窗口宽度调整，鼠标移到日期上会立即放大当前格，各图表的读数浮层在鼠标停留片刻后出现。
+- 子代理卡片汇总已同步 Mac 的 Antigravity 用量，工具排行分别显示 Antigravity App 和 CLI 的子代理数据。
+
+## 修复
+
+- 恢复备份后，总览、明细和速度页会重新载入数据。
+- 完整本机报告加载失败时，明细页和「只看本机」会提供重试。
+- 手动扫描等待本次增量采集完成时，刷新按钮会持续显示进度。
+- 关闭「跟随光标」时，HUD 会固定在当前所在的显示器。
 </description></item>
     </channel>
 </rss>
