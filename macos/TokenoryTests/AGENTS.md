@@ -18,7 +18,7 @@ UsageStore 的统计回归覆盖首次请求失败、筛选失败保留旧报告
 
 TurnAnalyticsTests.swift: 验证速度加权、按项目、会话标题及回合 ID 搜索、估算标记、可选 Fast 证据、协议校验、小时／日／周分组、周边界、四分位、离群点与箱体对齐及稀疏点的实际时间。
 
-CursorTooltipTests.swift: 校验读数位置、翻侧避让和固定尺寸。在带工具栏的原生分栏窗口采样浮层实际像素，核验可见性与鼠标穿透。
+CursorTooltipTests.swift: 校验悬停目标即时更新、浮层延时和取消，以及读数位置、翻侧避让与固定尺寸。在带工具栏的原生分栏窗口采样浮层像素，核验可见性与鼠标穿透。
 
 SourcesPresentationTests.swift: 检查本机按工具归组后能保留多来源覆盖、空采集和部分错误。
 

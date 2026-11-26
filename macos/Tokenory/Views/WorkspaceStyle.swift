@@ -1,5 +1,5 @@
 // [INPUT]: The macOS appearance and the data role of each mark.
-// [OUTPUT]: Tokyo Neon and Tokyo Neon Light colors, warning foreground and surface, dropdown colors and shared layout metrics.
+// [OUTPUT]: Tokyo Neon and Tokyo Neon Light colors, warning and dropdown colors, chart highlights and layout metrics.
 // [POS]: Shared colors and panel surfaces for the statistics workspace.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -37,6 +37,7 @@ enum WorkspaceStyle {
     static let darkDropdownLabel = Color(.sRGB, red: 197 / 255, green: 195 / 255, blue: 202 / 255)
     static let darkDropdownUnderlay = Color.white.opacity(0.12)
     static let selection = Color("AccentColor")
+    static let chartHighlight = Color.white.opacity(0.18)
     static let onSelection = Color(WorkspaceTone(light: 0xFFFFFF, dark: 0x20182C))
     static let localUsage = Color(WorkspaceTone(light: 0x008CE0, dark: 0x00B0FF))
     static let outputTokens = Color(mint)

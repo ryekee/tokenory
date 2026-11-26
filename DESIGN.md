@@ -89,7 +89,7 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 ## Annual calendar
 
 - Use the fixed upstream YlGnBu light and dark ramps; do not offer a palette control. The calendar is Monday-first and uses the archived day keys. The local date range follows the Mac’s time zone.
-- Hover immediately shows the date and data in the shared chart readout style, with the same smooth response as other charts. Click a day to show its summary inside the calendar card. Click again to close it. The explicit day overview action sets the main date range and offers a return to the previous range.
+- Fit all calendar weeks to the window width. Hovering over a day immediately starts the iOS spring to brighten and expand that day and compress the facing edges of its eight immediate neighbors. Show the floating readout after 240 ms on the same day. Neighboring cells keep their original brightness. Moving away restores the grid. Click a calendar day to toggle its inline summary. The explicit day overview action sets the main date range and offers a return to the previous range. Model history brightens the active date and quiets the surrounding marks. A pinned date keeps that emphasis until it is unpinned.
 - The calendar and stacked model chart cover the last 12 months, independently of the upper date range. Global dimensions still apply; the history tool picker further narrows its own chart. Device snapshots use Beijing reporting dates for timestamped events. Day-level imports retain their source dates.
 
 ## Coding patterns
@@ -118,7 +118,8 @@ For future components, reuse `WorkspacePanel` for a complete data or settings gr
 - Keep the current content visible until the new date-range report arrives. Drive rolling readouts from one count with carry and borrow. For large changes, briefly fade to the final portion of the same count, then roll to the result. For unit changes, fade between the two formatted values. Move plot marks independently of axis layout. Bars start at zero after an empty range, and lines draw left to right. Empty results mount only the empty state. Respect Reduce Motion and reuse annual data across range changes.
 - If a report request fails, offer Retry for the current selection. Keep any previous results visible and identify their date range. A first-load failure replaces the loading indicator.
 - An empty Speed report shows one state with a date or filter action. In Overview, hide empty totals and rankings and show one state for the selected dates. Show the annual panels when their scope has records. Use inline text for a missing hourly breakdown or an empty management section.
-- Cache annual presentation data per refresh. When hovering over a day in the activity calendar, inset its fill by 2 pt and draw a 1 pt outline with the current selection color. Keep the hit area at the original size. Isolate hover updates to the highlighted cell and readout. Lazy-load overview sections and reuse cached history on navigation.
+- Cache annual presentation data per refresh. Retain hover inside the expanded day and keep row and column origins fixed. Update the calendar's day marks and readout without rebuilding the report. Lazy-load overview sections and reuse cached history on navigation.
+- Chart highlights follow the pointer immediately. Show floating metric and chart readouts and agent hover labels after 150 ms on one target. Dismiss the floating readout when the pointer leaves the target. Pointer movement within that target keeps the original timer. Click and keyboard selection respond immediately.
 - Keep Records mounted after its first visit. Settings → Sources uses the settings scroll view and reloads independently when opened. Scans refresh cached source data.
 
 ## Review checklist

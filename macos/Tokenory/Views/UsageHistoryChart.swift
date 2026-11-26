@@ -1,5 +1,5 @@
 // [INPUT]: Real daily client/model aggregates for the annual range.
-// [OUTPUT]: Stacked model history, round axis ticks, raw totals and daily/moving-average inspection.
+// [OUTPUT]: Raw and averaged model history with immediate date emphasis, delayed readouts and instant pinning.
 // [POS]: Annual overview chart; known costs remain visible when another model has unpriced usage.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -224,25 +224,33 @@ private struct HistoryPlot: View {
                     if let last = data.days.last { Text(Localization.day(last.key)) }
                 }.font(.caption2).foregroundStyle(WorkspaceStyle.subtext).frame(width: width).offset(y: plotBottom + 10)
                 let index = selectedIndex
-                let mark = index.map { CGRect(x: data.position(of: $0, width: width), y: topInset, width: 1, height: chartHeight) }
-                if let mark {
-                    ChartHoverRule(x: mark.minX, plot: CGRect(x: 0, y: topInset, width: width, height: chartHeight), opacity: inspection.pinned == nil ? 0.7 : 0.95)
+                let plot = CGRect(x: 0, y: topInset, width: width, height: chartHeight)
+                let center = index.map { data.position(of: $0, width: width) }
+                let focus = center.map { x in
+                    let span = max(8, width / CGFloat(max(1, data.days.count - 1)))
+                    return CGRect(x: x - span / 2, y: plot.minY, width: span, height: plot.height).intersection(plot)
+                }
+                if let focus, let center {
+                    ChartFocusShade(plot: plot, focus: focus)
+                    ChartHoverRule(x: center, plot: plot, opacity: inspection.pinned == nil ? 0.7 : 0.95)
                 }
                 Rectangle().fill(.clear).contentShape(Rectangle()).frame(width: width, height: plotBottom)
                     .onContinuousHover { phase in
                         switch phase {
                         case .active(let point):
-                            tooltipPointer.move(to: point)
                             let next = dayKey(at: point, width: width)
-                            if inspection.hovered != next { inspection.hovered = next }
-                        case .ended: inspection.hovered = nil
+                            inspection.hover.update(inspection.pinned == nil ? next : nil)
+                            tooltipPointer.move(to: point, reposition: inspection.hover.readoutTarget != nil)
+                        case .ended: inspection.hover.update(nil)
                         }
-                    }.onTapGesture { point in
+                    }
+                    .onDisappear { inspection.hover.update(nil) }
+                    .onTapGesture { point in
                         DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
                             inspection.togglePin(dayKey(at: point, width: width))
                         }
                     }
-                    .selectedTooltip(avoiding: inspection.pinned == nil ? mark : nil, pointer: tooltipPointer) {
+                    .selectedTooltip(avoiding: inspection.hover.readoutTarget != nil ? focus : nil, pointer: tooltipPointer) {
                         if let index { readout(index) }
                     }
             }
@@ -250,7 +258,10 @@ private struct HistoryPlot: View {
             .onKeyPress(.leftArrow) { move(-1); return .handled }
             .onKeyPress(.rightArrow) { move(1); return .handled }
             .onKeyPress(.escape) {
-                guard inspection.selection != nil else { return .ignored }
+                guard inspection.selection != nil else {
+                    inspection.hover.update(nil)
+                    return .ignored
+                }
                 DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
                     inspection.clear()
                 }
@@ -283,7 +294,7 @@ private struct HistoryPlot: View {
         guard !data.days.isEmpty else { return }
         let index = min(max(0, (selectedIndex ?? (delta > 0 ? -1 : data.days.count)) + delta), data.days.count - 1)
         DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
-            inspection.pinned = data.days[index].key
+            inspection.pin(data.days[index].key)
         }
     }
     private func readout(_ index: Int) -> some View {

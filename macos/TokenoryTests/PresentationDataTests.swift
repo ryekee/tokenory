@@ -101,6 +101,41 @@ final class PresentationDataTests: XCTestCase {
         }
     }
 
+    @MainActor func testModelHistoryFocusBrightensTheDateAndQuietsOtherMarksInBothAppearances() throws {
+        let mark = Color(red: 0.20, green: 0.60, blue: 0.70)
+        let plot = CGRect(x: 0, y: 10, width: 120, height: 20)
+        let focus = CGRect(x: 40, y: 10, width: 40, height: 20)
+
+        func bitmap(in scheme: ColorScheme, showsFocus: Bool) throws -> NSBitmapImageRep {
+            let view = Rectangle().fill(mark)
+                .overlay {
+                    if showsFocus { ChartFocusShade(plot: plot, focus: focus) }
+                }
+                .frame(width: 120, height: 40)
+                .environment(\.colorScheme, scheme)
+            return NSBitmapImageRep(cgImage: try XCTUnwrap(ImageRenderer(content: view).cgImage))
+        }
+
+        func color(_ bitmap: NSBitmapImageRep, _ x: Int, _ y: Int) throws -> NSColor {
+            try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+        }
+
+        func distance(_ a: NSColor, _ b: NSColor) -> CGFloat {
+            abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent) + abs(a.blueComponent - b.blueComponent)
+        }
+
+        for scheme: ColorScheme in [.light, .dark] {
+            let normal = try bitmap(in: scheme, showsFocus: false)
+            let history = try bitmap(in: scheme, showsFocus: true)
+            let surface = try XCTUnwrap(NSColor(WorkspaceStyle.surface(scheme)).usingColorSpace(.sRGB))
+            let rest = try color(normal, 60, 20)
+            XCTAssertGreaterThan(try color(history, 60, 20).redComponent, rest.redComponent + 0.05)
+            XCTAssertLessThan(distance(try color(history, 20, 20), surface), distance(rest, surface) * 0.75)
+            XCTAssertLessThan(distance(try color(history, 100, 20), surface), distance(rest, surface) * 0.75)
+            XCTAssertLessThan(distance(try color(history, 20, 5), rest), 0.02)
+        }
+    }
+
     @MainActor func testRankingBarPaintsBothFastPortionsAtFullHeight() throws {
         let bar = OverviewShareBar(total: 200, amount: 120, other: 50, fast: 30, otherFast: 20, height: 5)
             .frame(width: 200).environment(\.colorScheme, .light)

@@ -1,10 +1,27 @@
 // [INPUT]: Plot-local device segments, cost curve, dots and committed date range.
-// [OUTPUT]: Core Animation marks with bounded bar growth and a horizontal line reveal.
+// [OUTPUT]: Animated trend marks and the model history focus overlay.
 // [POS]: AppKit drawing surface under the dashboard chart's hover controls.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
 import QuartzCore
 import SwiftUI
+
+struct ChartFocusShade: View {
+    let plot: CGRect
+    let focus: CGRect
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Canvas { context, _ in
+            var shade = Path(plot)
+            shade.addRect(focus)
+            context.fill(shade, with: .color(WorkspaceStyle.surface(scheme).opacity(0.52)), style: FillStyle(eoFill: true))
+            context.fill(Path(focus), with: .color(WorkspaceStyle.chartHighlight))
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
 
 struct DashboardChartMarks: NSViewRepresentable {
     struct Bar {

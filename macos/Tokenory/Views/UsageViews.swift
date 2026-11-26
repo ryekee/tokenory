@@ -1,5 +1,5 @@
 // [INPUT]: Typed usage summaries and today-only turn statistics.
-// [OUTPUT]: Locale-aware formats and compact units, device legend and focus-aware toolbar switch, source and Fast shares, a three-column menu summary and dismissible warning panel.
+// [OUTPUT]: Locale-aware usage formats, device controls, source and Fast shares with delayed readouts, menu summary and warning panel.
 // [POS]: Shared native usage presentation; speed does not depend on dashboard filters.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -229,7 +229,7 @@ struct OverviewShareSegments: Equatable {
 }
 
 struct OverviewShareBar: View {
-    private enum Segment: Int, CaseIterable {
+    private enum Segment: Int, CaseIterable, Sendable {
         case localStandard, localFast, otherStandard, otherFast
     }
 
@@ -243,7 +243,8 @@ struct OverviewShareBar: View {
     var formatValue: ((Double) -> String)? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
-    @State private var hovered: Segment?
+    @State private var hover = HoverDwell<Segment>()
+    private var hovered: Segment? { hover.target }
     @State private var pointer = TooltipPointer()
 
     private var segmentValues: [Segment: Double] {
@@ -340,22 +341,23 @@ struct OverviewShareBar: View {
             }
             .overlay {
                 if let formatValue {
-                    let activeRect = hovered.flatMap { segmentRect($0, width: width, shares: shares) }
+                    let readoutTarget = hover.readoutTarget
+                    let activeRect = readoutTarget.flatMap { segmentRect($0, width: width, shares: shares) }
                     Color.clear
                         .frame(height: max(height, 14))
                         .contentShape(Rectangle())
                         .onContinuousHover { phase in
                             switch phase {
                             case .active(let location):
-                                pointer.move(to: location)
                                 let hit = hitSegment(at: location.x, width: width, shares: shares)?.0
-                                if hovered != hit { hovered = hit }
-                            case .ended:
-                                if hovered != nil { hovered = nil }
+                                hover.update(hit)
+                                pointer.move(to: location, reposition: hover.readoutTarget != nil)
+                            case .ended: hover.update(nil)
                             }
                         }
+                        .onDisappear { hover.update(nil) }
                         .selectedTooltip(avoiding: activeRect, pointer: pointer) {
-                            if let segment = hovered, let segValue = values[segment], segValue > 0 {
+                            if let segment = readoutTarget, let segValue = values[segment], segValue > 0 {
                                 let rowTotal = max(amount, 0)
                                 let pct = rowTotal > 0
                                     ? (segValue / rowTotal).formatted(.percent.precision(.fractionLength(0...1)).locale(Localization.locale))
