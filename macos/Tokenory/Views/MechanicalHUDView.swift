@@ -10,6 +10,9 @@ struct MechanicalHUDView: View {
     let canPlaySound: () -> Bool
     let dismiss: () -> Void
     var openStatistics: (() -> Void)? = nil
+    var onDragChanged: (() -> Void)? = nil
+    var onDragEnded: (() -> Void)? = nil
+    var onHoverChanged: ((Bool) -> Void)? = nil
     @Environment(UsageStore.self) private var store
     @Environment(HUDPreferences.self) private var preferences
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -19,10 +22,15 @@ struct MechanicalHUDView: View {
     @State private var pendingDashboardOpen: Task<Void, Never>?
 
     init(canPlaySound: @escaping () -> Bool, dismiss: @escaping () -> Void,
-         openStatistics: (() -> Void)? = nil, animator: HUDAnimator? = nil) {
+         openStatistics: (() -> Void)? = nil, animator: HUDAnimator? = nil,
+         onDragChanged: (() -> Void)? = nil, onDragEnded: (() -> Void)? = nil,
+         onHoverChanged: ((Bool) -> Void)? = nil) {
         self.canPlaySound = canPlaySound
         self.dismiss = dismiss
         self.openStatistics = openStatistics
+        self.onDragChanged = onDragChanged
+        self.onDragEnded = onDragEnded
+        self.onHoverChanged = onHoverChanged
         _animator = State(initialValue: animator ?? HUDAnimator())
     }
 
@@ -91,6 +99,8 @@ struct MechanicalHUDView: View {
         .padding(10)
         .scaleEffect(0.5)
         .frame(width: Self.windowSize.width, height: Self.windowSize.height)
+        .simultaneousGesture(dragGesture)
+        .onHover { onHoverChanged?($0) }
         .environment(\.locale, Locale(identifier: language == AppLanguage.system.rawValue ? Localization.identifier : language))
         .onChange(of: reading, initial: true) { _, next in animator.receive(next, animated: !reduceMotion) }
         .onChange(of: reduceMotion) { _, enabled in if enabled { animator.settle(); HUDSound.shared.stop() } }
@@ -107,6 +117,17 @@ struct MechanicalHUDView: View {
     private func revealDashboard() {
         if let openStatistics { openStatistics() }
         else { openDashboard(using: openWindow) }
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 5)
+            .onChanged { _ in
+                pendingDashboardOpen?.cancel()
+                onDragChanged?()
+            }
+            .onEnded { _ in
+                onDragEnded?()
+            }
     }
 
     private var clickGesture: some Gesture {

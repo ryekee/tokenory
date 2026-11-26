@@ -19,6 +19,10 @@ struct HUDSettingsView: View {
                         SettingsSwitch(label: L("hud.auto_hide"), isOn: $preferences.autoHideWhenIdle)
                     }
                     HStack {
+                        Text(L("hud.follow_pointer")); Spacer()
+                        SettingsSwitch(label: L("hud.follow_pointer"), isOn: $preferences.followPointer)
+                    }
+                    HStack {
                         Text(L("hud.dismiss.title")); Spacer()
                         WorkspaceDropdown(
                             label: L("hud.dismiss.title"), selection: $preferences.dismissal,
@@ -37,7 +41,7 @@ struct HUDSettingsView: View {
                                         let placement = HUDPlacement.allCases[row * 3 + column]
                                         HUDPlacementButton(
                                             label: placement.label,
-                                            selected: preferences.placement == placement
+                                            selected: preferences.matchedPlacement == placement
                                         ) {
                                             preferences.placement = placement
                                         }

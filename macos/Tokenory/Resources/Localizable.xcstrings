@@ -6226,6 +6226,23 @@
         }
       }
     },
+    "hud.follow_pointer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow pointer"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跟随光标"
+          }
+        }
+      }
+    },
     "hud.dismiss.ignore": {
       "extractionState": "manual",
       "localizations": {
