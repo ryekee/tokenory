@@ -129,12 +129,20 @@ private struct SubagentsCardView: View {
             .disclosureGroupStyle(WorkspaceDisclosureStyle())
         } else {
             toolRowLabel(entry)
-                .padding(.vertical, 6)
+                .padding(.vertical, 12)
+                .frame(minHeight: 36)
         }
     }
 
     private func toolRowLabel(_ entry: ToolEntry) -> some View {
         let tokensPct = subagentShare(Double(entry.report.tokens), of: entry.toolSummary.map { Double($0.tokens) })
+        let costText: String = {
+            if entry.report.tokens == 0 && (entry.report.cost?.unpricedTokens ?? 0) == 0 {
+                return usd(0)
+            }
+            return subagentCostText(entry.report.cost)
+        }()
+        let pctText = tokensPct.map { subagentShareText($0) } ?? "0%"
         return HStack(alignment: .center, spacing: 10) {
             BrandIcon(name: entry.id, kind: .tool, size: 16)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -147,20 +155,20 @@ private struct SubagentsCardView: View {
                     .monospacedDigit()
             }
             Spacer(minLength: 8)
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(compactTokens(entry.report.tokens))
                     .monospacedDigit()
                     .foregroundStyle(WorkspaceStyle.text)
-                Text(subagentCostText(entry.report.cost))
+                    .frame(minWidth: 74, alignment: .trailing)
+                Text(costText)
                     .monospacedDigit()
                     .foregroundStyle(WorkspaceStyle.subtext)
-                if let tokensPct {
-                    Text(subagentShareText(tokensPct))
-                        .font(.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(WorkspaceStyle.subtext)
-                        .frame(minWidth: 38, alignment: .trailing)
-                }
+                    .frame(minWidth: 64, alignment: .trailing)
+                Text(pctText)
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(WorkspaceStyle.subtext)
+                    .frame(minWidth: 44, alignment: .trailing)
             }
         }
         .font(.callout)
@@ -288,17 +296,20 @@ private struct CodexSubagentConversationView: View {
                         .monospacedDigit()
                 }
                 HStack(alignment: .top, spacing: 20) {
+                    let convCostText = (conversation.tokens == 0 && (conversation.cost?.unpricedTokens ?? 0) == 0)
+                        ? usd(0)
+                        : subagentCostText(conversation.cost)
                     conversationMetric(
                         title: L("usage.tokens"),
                         value: conversation.tokens.formatted(.number.locale(Localization.locale)),
-                        share: tokensShare,
+                        share: tokensShare ?? 0,
                         partial: false,
                         color: WorkspaceStyle.localUsage
                     )
                     conversationMetric(
                         title: L("cost.estimate"),
-                        value: subagentCostText(conversation.cost),
-                        share: costShare,
+                        value: convCostText,
+                        share: costShare ?? (conversation.tokens == 0 && (conversation.cost?.unpricedTokens ?? 0) == 0 ? 0 : nil),
                         partial: partialCost,
                         color: WorkspaceStyle.costColor(colorScheme)
                     )
@@ -332,20 +343,21 @@ private struct CodexSubagentConversationView: View {
         let cleaned = agent.name?.trimmingCharacters(in: CharacterSet(charactersIn: "\" \t\n"))
         let name = cleaned.flatMap { $0.isEmpty ? nil : $0 } ?? LF("subagents.unnamed", String(agent.id.prefix(8)))
         if agent.models.isEmpty {
-            HStack {
-                Text(name).fontWeight(.medium)
-                Spacer()
-                Text("—").foregroundStyle(WorkspaceStyle.subtext)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(name).fontWeight(.medium).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 8)
+                Text("0").monospacedDigit().fixedSize()
+                Text(usd(0)).monospacedDigit().foregroundStyle(WorkspaceStyle.subtext).fixedSize()
             }
             .font(.caption)
         } else {
             ForEach(agent.models) { model in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(name).fontWeight(.medium)
+                    Text(name).fontWeight(.medium).lineLimit(1).truncationMode(.tail)
                     Text(model.model).foregroundStyle(WorkspaceStyle.subtext).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 8)
-                    Text(model.tokens.formatted(.number.locale(Localization.locale))).monospacedDigit()
-                    Text(subagentCostText(model.cost)).monospacedDigit().foregroundStyle(WorkspaceStyle.subtext)
+                    Text(model.tokens.formatted(.number.locale(Localization.locale))).monospacedDigit().fixedSize()
+                    Text(subagentCostText(model.cost)).monospacedDigit().foregroundStyle(WorkspaceStyle.subtext).fixedSize()
                 }
                 .font(.caption)
             }
@@ -432,50 +444,44 @@ struct OverviewView: View {
                             }
                             WorkspacePanel {
                                 VStack(alignment: .leading, spacing: 20) {
-                                    if overview.summary.recordCount > 0 {
-                                        totals(wide: geometry.size.width >= 660)
-                                    }
-                                    if overview.summary.tokens > 0 {
-                                        TokenMixView(tokens: overview.summary.tokenBreakdown, range: range)
-                                            .padding(.bottom, 14)
-                                    }
+                                    totals(wide: geometry.size.width >= 660)
+                                    TokenMixView(tokens: overview.summary.tokenBreakdown, range: range)
+                                        .padding(.bottom, 14)
                                     UsageTrendChart(report: overview, localReport: localAtSync,
                                                     remoteReports: remoteReports,
                                                     localName: store.localDeviceName, deviceName: store.deviceName,
                                                     filter: reportFilter, animateRangeChanges: isActive, openDatePicker: openDatePicker)
                                 }
                             }
-                            if overview.summary.recordCount > 0 {
-                                let layout = geometry.size.width >= 720
-                                    ? AnyLayout(HStackLayout(alignment: .top, spacing: 18))
-                                    : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
-                                WorkspacePanel {
-                                    VStack(alignment: .leading, spacing: 16) {
-                                        Text(L("overview.tools_models")).font(.headline).foregroundStyle(WorkspaceStyle.text)
-                                            .accessibilityAddTraits(.isHeader)
-                                        HStack(spacing: 12) {
-                                            Picker(L("overview.sort"), selection: $rankingMetric) {
-                                                ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
-                                            }.labelsHidden().pickerStyle(.segmented).tint(WorkspaceStyle.selection).fixedSize()
-                                            Spacer()
-                                            if multiDevice { OverviewDeviceLegend() }
-                                            if rankingMetric.fastAmount(in: overview.summary) > 0 {
-                                                HStack(spacing: 5) {
-                                                    Capsule().fill(WorkspaceStyle.fastUsage(colorScheme)).frame(width: 10, height: 3)
-                                                        .accessibilityHidden(true)
-                                                    Text(L("fast.title")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
-                                                }
+                            let layout = geometry.size.width >= 720
+                                ? AnyLayout(HStackLayout(alignment: .top, spacing: 18))
+                                : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
+                            WorkspacePanel {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    Text(L("overview.tools_models")).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                                        .accessibilityAddTraits(.isHeader)
+                                    HStack(spacing: 12) {
+                                        Picker(L("overview.sort"), selection: $rankingMetric) {
+                                            ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
+                                        }.labelsHidden().pickerStyle(.segmented).tint(WorkspaceStyle.selection).fixedSize()
+                                        Spacer()
+                                        if multiDevice { OverviewDeviceLegend() }
+                                        if rankingMetric.fastAmount(in: overview.summary) > 0 {
+                                            HStack(spacing: 5) {
+                                                Capsule().fill(WorkspaceStyle.fastUsage(colorScheme)).frame(width: 10, height: 3)
+                                                    .accessibilityHidden(true)
+                                                Text(L("fast.title")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                                             }
                                         }
-                                        Divider()
-                                        layout {
-                                            UsageRankingView(groups: overview.clients, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.clients), by: \.key), kind: .tool, metric: rankingMetric, range: range,
-                                                             childModels: overview.clientModels ?? [:], codexSubagents: overview.codexSubagents,
-                                                             antigravitySubagents: overview.antigravitySubagents ?? report.antigravitySubagents)
-                                            UsageRankingView(groups: overview.models, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.models), by: \.key), kind: .model, metric: rankingMetric, range: range,
-                                                             codexSubagents: multiDevice ? store.cloud.matchingSubagentDetails(in: report, for: reportFilter) : report.codexSubagents,
-                                                             antigravitySubagents: overview.antigravitySubagents ?? report.antigravitySubagents)
-                                        }
+                                    }
+                                    Divider()
+                                    layout {
+                                        UsageRankingView(groups: overview.clients, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.clients), by: \.key), kind: .tool, metric: rankingMetric, range: range,
+                                                         childModels: overview.clientModels ?? [:], codexSubagents: overview.codexSubagents,
+                                                         antigravitySubagents: overview.antigravitySubagents ?? report.antigravitySubagents)
+                                        UsageRankingView(groups: overview.models, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.models), by: \.key), kind: .model, metric: rankingMetric, range: range,
+                                                         codexSubagents: multiDevice ? store.cloud.matchingSubagentDetails(in: report, for: reportFilter) : report.codexSubagents,
+                                                         antigravitySubagents: overview.antigravitySubagents ?? report.antigravitySubagents)
                                     }
                                 }
                             }
@@ -755,11 +761,14 @@ private struct TokenMixView: View {
         let total = parts.reduce(Int64(0)) { $0 + $1.1 }
         let fractions: [Double] = total > 0 ? parts.map { Double($0.1) / Double(total) } : [0, 0, 0, 0, 0]
         VStack(alignment: .leading, spacing: 10) {
-            TokenMixBar(
-                f0: fractions[0], f1: fractions[1], f2: fractions[2], f3: fractions[3], f4: fractions[4],
-                colors: parts.map { $0.2.opacity(0.8) }
-            )
-            .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: range)
+            ZStack {
+                Capsule().fill(WorkspaceStyle.localUsage.opacity(0.08))
+                TokenMixBar(
+                    f0: fractions[0], f1: fractions[1], f2: fractions[2], f3: fractions[3], f4: fractions[4],
+                    colors: parts.map { $0.2.opacity(0.8) }
+                )
+                .animation(reduceMotion || range == nil ? nil : DashboardMotion.grow, value: range)
+            }
             .frame(height: 5)
             .clipShape(Capsule())
             .accessibilityHidden(true)
@@ -964,7 +973,7 @@ private struct UsageRankingView: View {
                                     modelRows(models)
                                 }
                             }
-                            .padding(.leading, 16).padding(.vertical, 8)
+                            .padding(.vertical, 8)
                         } label: {
                             rankingRow(group, total: total, badgeSummary: badgeSummary)
                         }

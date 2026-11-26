@@ -337,23 +337,18 @@ struct WorkspaceDisclosureStyle: DisclosureGroupStyle {
                     configuration.isExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: 9) {
-                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
-                        .rotationEffect(.degrees(configuration.isExpanded ? 90 : 0)).frame(width: 12)
-                    configuration.label
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 12).padding(.vertical, 12)
-                .frame(minHeight: 36).contentShape(Rectangle())
+                configuration.label
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12).padding(.vertical, 12)
+                    .frame(minHeight: 36).contentShape(Rectangle())
             }
             .buttonStyle(WorkspaceHoverStyle())
             .padding(.horizontal, -12)
             .accessibilityValue(L(configuration.isExpanded ? "state.expanded" : "state.collapsed"))
             if configuration.isExpanded {
                 configuration.content.frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 21)
+                    .padding(.leading, 16)
                     .padding(.top, 8)
-                    .clipped()
                     .transition(.opacity)
             }
         }
