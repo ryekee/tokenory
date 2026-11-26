@@ -1,5 +1,5 @@
 // [INPUT]: Ledger records, turn and Codex activity evidence, and SQLite backups.
-// [OUTPUT]: Migrated analytics schema, local hour conversion, consistent restore and bounded transient storage.
+// [OUTPUT]: Migrated analytics schema, local hour conversion, monotonic revisions across restore and bounded transient storage.
 // [POS]: SQLite persistence and backup boundary.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::usage::UsageRecord;
@@ -137,9 +137,6 @@ impl Database {
             source.query_row("SELECT count(*) FROM effective_usage", [], |r| {
                 r.get::<_, i64>(0)
             })?;
-            source.query_row("SELECT value FROM meta WHERE key='revision'", [], |r| {
-                r.get::<_, i64>(0)
-            })?;
         }
         if version >= 4 {
             let mut statement = source.prepare("SELECT body FROM codex_turns")?;
@@ -151,6 +148,10 @@ impl Database {
         if version >= 6 {
             crate::codex_subagents::validate_backup(&source)?;
         }
+        let restored_revision = revision(&self.connection)?
+            .max(revision(&source)?)
+            .checked_add(1)
+            .context("ledger revision cannot advance after restore")?;
         self.backup_before("restore")?;
         // Keep the validated source read transaction open while copying it.
         // SQLite applies the replacement as one destination transaction.
@@ -180,7 +181,10 @@ impl Database {
         }
         next_preview_id(&self.connection)?;
         prune_previews(&self.connection)?;
-        advance_revision(&self.connection)?;
+        self.connection.execute(
+            "UPDATE meta SET value=?1 WHERE key='revision'",
+            [restored_revision],
+        )?;
         Ok(())
     }
     pub fn backup_before(&self, action: &str) -> Result<PathBuf> {

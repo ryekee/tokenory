@@ -380,6 +380,28 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertNil(store.error)
     }
 
+    func testQueuedManualScanRetainsProgressAndReportsFailure() async throws {
+        let (store, root) = try await makeScanRecoveryStore()
+        try Data().write(to: root.appending(path: "queue-scan"))
+        store.scan()
+        let queued = root.appending(path: "scan-queued").path
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !FileManager.default.fileExists(atPath: queued), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: queued))
+        _ = try await store.perform("status")
+        XCTAssertTrue(store.scanInProgress)
+
+        await store.consume(EngineEnvelope(version: 1, id: nil, result: nil, error: nil,
+                                           event: "scanStarted", payload: nil, message: nil, revision: nil))
+        await store.consume(EngineEnvelope(version: 1, id: nil, result: nil, error: nil,
+                                           event: "scanFailed", payload: nil, message: "Manual scan failed", revision: nil))
+        XCTAssertFalse(store.scanInProgress)
+        XCTAssertEqual(store.error, "Manual scan failed")
+        XCTAssertEqual(store.errorAction, .refresh)
+    }
+
     func testBackgroundScanFailureDoesNotInterruptOrReplaceAnActionError() async {
         let store = UsageStore()
         let event = EngineEnvelope(version: 1, id: nil, result: nil, error: nil,
@@ -421,7 +443,10 @@ final class UsageStoreTests: XCTestCase {
             request = json.loads(line)
             op, payload = request['operation'], request['payload']
             response = dict(version=1, id=request['id'])
-            if op in ('scan', 'activity') and op not in seen:
+            if op == 'scan' and (root / 'queue-scan').exists():
+                response['result'] = dict(started=False, queued=True)
+                (root / 'scan-queued').touch()
+            elif op in ('scan', 'activity') and op not in seen:
                 response['error'] = dict(code='timeout', message=op.capitalize() + ' timed out')
             elif op == 'scan':
                 (root / 'scan-accepted').touch()
@@ -518,6 +543,68 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(store.report?.summary.tokens, 200)
         let requests = try String(contentsOf: root.appending(path: "requests"), encoding: .utf8)
         XCTAssertEqual(requests.split(separator: "\n"), ["overview", "activity", "overview", "overview"])
+    }
+
+    func testRestoreRefreshesCachedDatesEvenWhenTheWorkerRevisionMatches() async throws {
+        let data = FileManager.default.temporaryDirectory.appending(path: "Tokenory-restore-\(UUID())")
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        let helper = data.appending(path: "worker.py")
+        try #"""
+        #!/usr/bin/python3
+        import json, pathlib, sys
+        root = pathlib.Path(sys.argv[2])
+        restored = root / 'restored'
+        if sys.argv[3] == 'restore':
+            restored.touch()
+            sys.exit(0)
+        for line in sys.stdin:
+            request = json.loads(line)
+            op, payload = request['operation'], request['payload']
+            response = dict(version=1, id=request['id'])
+            if op == 'overview':
+                tokens = 100 if restored.exists() else 200
+                summary = dict(tokens=tokens, tokenBreakdown=dict(input=tokens, output=0, cacheRead=0, cacheWrite=0, reasoning=0),
+                               unpricedTokens=tokens, costStatus='unknown', recordCount=1, activeDays=1)
+                response['result'] = dict(revision=2, summary=summary, daily=[], clients=[], providers=[], models=[], details=[])
+            elif op == 'activity':
+                response['result'] = dict(revision=2, daily=[], modelDays=[], **{'from':payload['from'], 'to':payload['to']})
+            elif op == 'status':
+                response['result'] = dict(scanning=False, dataDirectory=str(root), revision=2, refreshingPrices=False)
+            elif op == 'turnAnalytics':
+                models = ['saved-model'] if restored.exists() else ['live-model']
+                response['result'] = dict(revision=2, models=models, clients=[], capabilities=[], turns=[])
+            else:
+                response['result'] = {}
+            print(json.dumps(response), flush=True)
+        """#.write(to: helper, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+        let engine = EngineClient(helper: helper, directory: data)
+        addTeardownBlock {
+            await engine.stop()
+            try FileManager.default.removeItem(at: data)
+        }
+        try await engine.start()
+        let store = UsageStore(engine: engine, directory: data)
+        store.dateRange = .custom
+        let earlier = UsageFilter(from: "2026-10-01", to: "2026-10-01")
+        let later = UsageFilter(from: "2026-10-02", to: "2026-10-02")
+        store.filter = earlier
+        await store.refreshSelection(earlier)
+        XCTAssertEqual(store.report?.summary.tokens, 200)
+        store.filter = later
+        await store.refreshSelection(later)
+        XCTAssertEqual(store.report?.summary.tokens, 200)
+        await store.loadAgentTurns(TurnQuery(from: "2026-10-01", to: "2026-10-02", model: nil, client: nil))
+        XCTAssertEqual(store.turnAnalytics?.models, ["live-model"])
+
+        try await store.restore(from: data.appending(path: "backup.sqlite3"))
+        XCTAssertEqual(store.report?.summary.tokens, 100)
+        XCTAssertEqual(store.today?.summary.tokens, 100)
+        XCTAssertEqual(store.turnAnalytics?.models, ["saved-model"])
+        store.filter = earlier
+        await store.refreshSelection(earlier)
+
+        XCTAssertEqual(store.report?.summary.tokens, 100)
     }
 
     func testOlderFullRefreshCannotReplaceNewDayMenuMetrics() async throws {

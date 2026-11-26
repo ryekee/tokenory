@@ -1,5 +1,5 @@
 // [INPUT]: 接收统计报告、筛选状态和记录详情。
-// [OUTPUT]: 提供主窗口导航、侧栏设置入口、统计加载和错误卡片、日期工具栏、回合页和记录详情。
+// [OUTPUT]: 统计窗口按当前设备范围加载报告，明细只显示完整本机结果，失败时提供重试。
 // [POS]: 主工作区入口；宽窗口并排检查明细，窄窗口使用详情面板。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -24,19 +24,24 @@ struct DashboardView: View {
     @State private var datePickerDraft: DateRangeDraft?
     @State private var visited: Set<DashboardSection> = [.overview]
     @State private var progress: ReportProgress?
+    private var allowsOverviewPreview: Bool { !overviewLocalOnly && store.combinedOverview != nil }
     private var hasVisibleReport: Bool {
-        store.report != nil && (section != .overview || store.reportFilter?.conversation == nil)
+        displayReport(allowConversation: section == .details,
+                      allowProvisional: section == .overview && allowsOverviewPreview) != nil
+    }
+    private var activeReportError: String? {
+        displayError(allowProvisional: section == .overview && allowsOverviewPreview)
     }
     private var dashboardSelection: UsageFilter? {
         section == .overview || section == .details ? store.reportSelection : nil
     }
     private var reportIsPending: Bool {
-        dashboardSelection != nil && store.reportLoadError == nil && (!hasVisibleReport || store.loading)
+        dashboardSelection != nil && activeReportError == nil && (!hasVisibleReport || store.loading)
     }
     private var showsScanProgress: Bool { store.scanRequested || showsReportProgress }
 
     private var showsReportProgress: Bool {
-        dashboardSelection != nil && progress?.firstLoad == false && store.reportLoadError == nil
+        dashboardSelection != nil && progress?.firstLoad == false && activeReportError == nil
     }
     var body: some View {
         NavigationSplitView {
@@ -64,7 +69,7 @@ struct DashboardView: View {
                 }
         } detail: {
             VStack(spacing: 0) {
-                let showsErrorBanner = store.error != nil && (dashboardSelection == nil || store.connected || store.reportLoadError == nil)
+                let showsErrorBanner = store.error != nil && (dashboardSelection == nil || store.connected || activeReportError == nil)
                 if showsErrorBanner {
                     ErrorBanner().padding(.horizontal, 22).padding(.top, 12)
                         .transition(.opacity)
@@ -74,7 +79,7 @@ struct DashboardView: View {
                     VStack(spacing: 0) {
                         UsageFiltersView(showsSource: false, localOnly: overviewLocalOnly)
                             .padding(.horizontal, 22).padding(.vertical, 14)
-                        usageReport(allowConversationReport: false) { report in
+                        usageReport(allowConversationReport: false, allowProvisional: allowsOverviewPreview) { report in
                             OverviewView(report: report, localOnly: overviewLocalOnly, isActive: section == .overview, openDatePicker: openDatePicker)
                                 #if CLOUD_DEVELOPMENT
                                 .onAppear {
@@ -110,7 +115,7 @@ struct DashboardView: View {
                 }
             }
             .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion),
-                       value: store.error != nil && (dashboardSelection == nil || store.connected || store.reportLoadError == nil))
+                       value: store.error != nil && (dashboardSelection == nil || store.connected || activeReportError == nil))
             .background(WorkspaceStyle.canvas(scheme)).navigationTitle(section.title)
                 .toolbar {
                     ToolbarItemGroup {
@@ -133,7 +138,7 @@ struct DashboardView: View {
                         }
                         .accessibilityValue(store.scanInProgress ? L("status.scanning") : (showsReportProgress ? L("usage.loading_stats") : ""))
                         .disabled(store.scanInProgress || !store.connected)
-                        if !store.connected && store.errorAction != .reconnect && (dashboardSelection == nil || store.reportLoadError == nil) {
+                        if !store.connected && store.errorAction != .reconnect && (dashboardSelection == nil || activeReportError == nil) {
                             Button(L("action.reconnect")) { store.start() }
                         }
                     }
@@ -158,6 +163,10 @@ struct DashboardView: View {
             store.recordsAreActive = next == .details
             visited.insert(next)
             if next != .details { selectedRecordID = nil }
+            if next == .details, store.reportIsProvisional { refreshSelection(store.reportSelection) }
+        }
+        .onChange(of: overviewLocalOnly) { _, localOnly in
+            if localOnly, section == .overview, store.reportIsProvisional { refreshSelection(store.reportSelection) }
         }
         .onChange(of: store.reportFilter) { _, _ in
             if let id = selectedRecordID, store.report?.details.contains(where: { $0.id == id }) != true {
@@ -165,8 +174,13 @@ struct DashboardView: View {
             }
         }
         .onChange(of: dashboardSelection) { _, selection in
-            if let selection { Task { await store.refreshSelection(selection) } }
+            if let selection { refreshSelection(selection) }
         }
+    }
+
+    private func refreshSelection(_ selection: UsageFilter) {
+        let allowsProvisional = section == .overview && !overviewLocalOnly
+        Task { await store.refreshSelection(selection, allowsProvisional: allowsProvisional) }
     }
 
     private func records(_ report: UsageReport) -> some View {
@@ -219,21 +233,35 @@ struct DashboardView: View {
         case loading, content, error, empty
     }
 
-    private func reportPhase(allowConversationReport: Bool) -> ReportPhase {
-        if progress?.firstLoad == true, store.reportLoadError == nil { return .loading }
-        if store.report != nil, allowConversationReport || store.reportFilter?.conversation == nil { return .content }
-        if store.reportLoadError != nil { return .error }
+    private func displayReport(allowConversation: Bool, allowProvisional: Bool) -> UsageReport? {
+        guard allowProvisional || !store.reportIsProvisional,
+              allowConversation || store.reportFilter?.conversation == nil else { return nil }
+        return store.report
+    }
+
+    private func displayError(allowProvisional: Bool) -> String? {
+        allowProvisional && store.reportIsProvisional && store.reportFilter == store.reportSelection
+            ? nil : store.reportLoadError
+    }
+
+    private func reportPhase(report: UsageReport?, error: String?) -> ReportPhase {
+        if progress?.firstLoad == true, error == nil { return .loading }
+        if report != nil { return .content }
+        if error != nil { return .error }
         return .empty
     }
 
     @ViewBuilder
     private func usageReport<Content: View>(
         allowConversationReport: Bool = true,
+        allowProvisional: Bool = false,
         @ViewBuilder content: (UsageReport) -> Content
     ) -> some View {
-        let phase = reportPhase(allowConversationReport: allowConversationReport)
+        let report = displayReport(allowConversation: allowConversationReport, allowProvisional: allowProvisional)
+        let error = displayError(allowProvisional: allowProvisional)
+        let phase = reportPhase(report: report, error: error)
         VStack(spacing: 0) {
-            if progress?.firstLoad == true, store.reportLoadError == nil {
+            if phase == .loading {
                 if allowConversationReport {
                     ProgressView(L("usage.loading_stats")).frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
@@ -241,8 +269,8 @@ struct DashboardView: View {
                     OverviewLoadingPlaceholder()
                         .transition(.opacity)
                 }
-            } else if let report = store.report, allowConversationReport || store.reportFilter?.conversation == nil {
-                if let error = store.reportLoadError {
+            } else if let report {
+                if let error {
                     let note = store.reportFilter.map { filter in
                         let range = filter.from.flatMap { from in filter.to.map { Localization.dateRange(from, $0) } }
                         return LF("usage.previous_report", range ?? L("range.all"))
@@ -257,7 +285,7 @@ struct DashboardView: View {
                 }
                 content(report)
                     .transition(.opacity)
-            } else if let error = store.reportLoadError {
+            } else if let error {
                 ScrollView {
                     WorkspacePanel(surface: WorkspaceStyle.warningSurface) {
                         WorkspaceErrorMessage(title: L("usage.report_failed"), detail: error) {
@@ -272,7 +300,7 @@ struct DashboardView: View {
             }
         }
         .animation(DashboardMotion.animation(DashboardMotion.load, reduceMotion: reduceMotion), value: phase)
-        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: store.reportLoadError != nil)
+        .animation(DashboardMotion.animation(DashboardMotion.panel, reduceMotion: reduceMotion), value: error != nil)
     }
 
     private var reportRetryButton: some View {

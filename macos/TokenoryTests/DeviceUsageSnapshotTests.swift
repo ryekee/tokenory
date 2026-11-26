@@ -1,5 +1,5 @@
 // [INPUT]: Versioned aggregate snapshots for two devices.
-// [OUTPUT]: Checks replacement, additive totals, filtered model totals by tool, and unique day/model counts.
+// [OUTPUT]: Checks replacement, additive totals, scoped model and subagent totals, and unique day/model counts.
 // [POS]: Snapshot wire format and shared Overview calculations.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import XCTest
@@ -98,5 +98,59 @@ final class DeviceUsageSnapshotTests: XCTestCase {
     func testFutureSnapshotSchemaIsRejected() {
         let future = Data(#"{"schemaVersion":2,"revision":0,"timezone":"UTC","buckets":[],"subagentStarts":[]}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(DeviceUsageSnapshot.self, from: future))
+    }
+
+    func testRemoteAntigravitySubagentsKeepTheirToolAndFilterScope() throws {
+        let local = snapshot([
+            bucket(firstDay, hour: 11, tokens: 80, cost: 0.2, client: "antigravity-cli")
+        ])
+        // Build the additive v1 fields on the wire. The local Mac still has a legacy snapshot.
+        let remoteBase = snapshot([
+            bucket(secondDay, hour: 9, tokens: 50, cost: nil, client: "antigravity"),
+            bucket(secondDay, hour: 10, tokens: 10, cost: 0.1, client: "antigravity")
+        ])
+        var payload = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(remoteBase)) as? [String: Any])
+        var buckets = try XCTUnwrap(payload["buckets"] as? [[String: Any]])
+        buckets[0]["isAntigravitySubagent"] = true
+        payload["buckets"] = buckets
+        payload["antigravitySubagentStarts"] = [
+            ["client": "antigravity", "date": firstDay, "nearestBefore": firstDay, "nearestAfter": firstDay, "count": 1],
+            ["client": "antigravity", "date": firstDay, "model": "model", "nearestAfter": secondDay, "count": 1]
+        ]
+        let remote = try JSONDecoder().decode(DeviceUsageSnapshot.self, from: JSONSerialization.data(withJSONObject: payload))
+        let republished = try JSONDecoder().decode(DeviceUsageSnapshot.self, from: JSONEncoder().encode(remote))
+        let devices = ["local": local, "remote": republished]
+
+        let aggregate = DeviceUsageSnapshot.overview(devices: devices, filter: .init())
+        XCTAssertEqual(aggregate.summary.tokens, 140)
+        XCTAssertEqual(aggregate.antigravitySubagents?.tokens, 50)
+        XCTAssertEqual(aggregate.antigravitySubagents?.starts, 1)
+        XCTAssertEqual(aggregate.antigravitySubagents?.cost?.unpricedTokens, 50)
+        XCTAssertEqual(aggregate.antigravitySubagents?.conversations.count, 0)
+        XCTAssertNil(aggregate.codexSubagents)
+        XCTAssertEqual(aggregate.subagents(forTool: "antigravity")?.tokens, 50)
+        XCTAssertNil(aggregate.subagents(forTool: "antigravity-cli"))
+        let cli = DeviceUsageSnapshot.overview(devices: devices, filter: .init(client: "antigravity-cli"))
+        XCTAssertEqual(cli.summary.tokens, 80)
+        XCTAssertNil(cli.antigravitySubagents)
+        let firstDayOnly = DeviceUsageSnapshot.overview(devices: devices, filter: .init(from: firstDay, to: firstDay, model: "model"))
+        XCTAssertNil(firstDayOnly.antigravitySubagents)
+        let bothDays = DeviceUsageSnapshot.overview(devices: devices, filter: .init(from: firstDay, to: secondDay, model: "model"))
+        XCTAssertEqual(bothDays.antigravitySubagents?.starts, 1)
+        XCTAssertEqual(bothDays.antigravitySubagents?.tokens, 50)
+    }
+
+    func testAntigravityRankingUsesOnlyTheMatchingToolReport() throws {
+        let empty = DeviceUsageSnapshot.overview(devices: ["mac": snapshot([])], filter: .init())
+        let payload: [String: Any] = [
+            "revision": 4, "summary": try JSONSerialization.jsonObject(with: JSONEncoder().encode(empty.summary)),
+            "daily": [], "clients": [], "providers": [], "models": [], "details": [],
+            "antigravitySubagents": ["starts": 1, "tokens": 60, "conversations": []],
+            "antigravitySubagentsByClient": ["antigravity": ["starts": 1, "tokens": 60, "conversations": []]]
+        ]
+        let report = try JSONDecoder().decode(UsageReport.self, from: JSONSerialization.data(withJSONObject: payload))
+        XCTAssertEqual(report.subagents(forTool: "antigravity")?.starts, 1)
+        XCTAssertEqual(report.subagents(forTool: "antigravity")?.tokens, 60)
+        XCTAssertNil(report.subagents(forTool: "antigravity-cli"))
     }
 }

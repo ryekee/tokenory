@@ -1,5 +1,5 @@
 // [INPUT]: Selected-range and annual reports for this Mac and participating devices.
-// [OUTPUT]: Rolling totals, insights, expandable tool rankings, range charts and annual activity.
+// [OUTPUT]: Rolling totals and titled overview cards for insights, subagents, rankings and annual activity.
 // [POS]: Native overview composition; disclosure keeps detailed caveats off the canvas.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -11,7 +11,7 @@ private struct SubagentsCardView: View {
         let report: CodexSubagentReport
         let local: CodexSubagentReport?
         let remote: [CodexSubagentReport]
-        let toolSummary: UsageSummary?
+        let toolTokens: Int64
     }
 
     let entries: [ToolEntry]
@@ -55,18 +55,8 @@ private struct SubagentsCardView: View {
         WorkspacePanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 8) {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(WorkspaceStyle.selection)
-                        .frame(width: 22, height: 22)
-                        .background(WorkspaceStyle.selection.opacity(0.11), in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(WorkspaceStyle.selection.opacity(0.32), lineWidth: 1)
-                        )
-                        .accessibilityHidden(true)
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(L("subagents.card_title")).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                        OverviewCardTitle(title: L("subagents.card_title"), symbol: "arrow.triangle.branch")
                         Text(LF("subagents.started_value", totalStarts.formatted(.number.locale(Localization.locale))))
                             .font(.caption)
                             .foregroundStyle(WorkspaceStyle.subtext)
@@ -135,7 +125,7 @@ private struct SubagentsCardView: View {
     }
 
     private func toolRowLabel(_ entry: ToolEntry) -> some View {
-        let tokensPct = subagentShare(Double(entry.report.tokens), of: entry.toolSummary.map { Double($0.tokens) })
+        let tokensPct = subagentShare(Double(entry.report.tokens), of: Double(entry.toolTokens))
         let costText: String = {
             if entry.report.tokens == 0 && (entry.report.cost?.unpricedTokens ?? 0) == 0 {
                 return usd(0)
@@ -404,25 +394,14 @@ struct OverviewView: View {
         return calendar
     }
 
-    private var antigravityToolSummary: UsageSummary? {
-        let matching = overview.clients.filter { $0.key == "antigravity" || $0.key == "antigravity-cli" }.map(\.summary)
-        guard let first = matching.first else { return nil }
-        guard matching.count > 1 else { return first }
-        let tokens = matching.reduce(Int64(0)) { $0 + $1.tokens }
-        let unpriced = matching.reduce(Int64(0)) { $0 + $1.unpricedTokens }
-        let costs = matching.compactMap(\.knownEstimatedCostUsd)
-        let knownCost: Double? = costs.isEmpty ? nil : costs.reduce(0, +)
-        return UsageSummary(
-            tokens: tokens,
-            tokenBreakdown: first.tokenBreakdown,
-            knownEstimatedCostUsd: knownCost,
-            unpricedTokens: unpriced,
-            costStatus: knownCost == nil ? "unknown" : (unpriced > 0 ? "partial" : "complete"),
-            recordCount: matching.reduce(Int64(0)) { $0 + $1.recordCount },
-            activeDays: first.activeDays,
-            partialDays: first.partialDays,
-            requests: nil
-        )
+    private var antigravityToolTokens: Int64 {
+        overview.clients.filter { $0.key == "antigravity" || $0.key == "antigravity-cli" }
+            .reduce(0) { $0 + $1.summary.tokens }
+    }
+
+    private func localSubagentDetails(_ field: KeyPath<UsageReport, CodexSubagentReport?>) -> CodexSubagentReport? {
+        if multiDevice { return store.cloud.matchingSubagentDetails(in: report, for: reportFilter, field: field) }
+        return report[keyPath: field]
     }
 
     var body: some View {
@@ -458,8 +437,7 @@ struct OverviewView: View {
                                 : AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
                             WorkspacePanel {
                                 VStack(alignment: .leading, spacing: 16) {
-                                    Text(L("overview.tools_models")).font(.headline).foregroundStyle(WorkspaceStyle.text)
-                                        .accessibilityAddTraits(.isHeader)
+                                    OverviewCardTitle(title: L("overview.tools_models"), symbol: "square.grid.2x2")
                                     HStack(spacing: 12) {
                                         Picker(L("overview.sort"), selection: $rankingMetric) {
                                             ForEach(UsageMetric.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -477,11 +455,10 @@ struct OverviewView: View {
                                     Divider()
                                     layout {
                                         UsageRankingView(groups: overview.clients, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.clients), by: \.key), kind: .tool, metric: rankingMetric, range: range,
-                                                         childModels: overview.clientModels ?? [:], codexSubagents: overview.codexSubagents,
-                                                         antigravitySubagents: overview.antigravitySubagents ?? report.antigravitySubagents)
+                                                         childModels: overview.clientModels ?? [:], toolReport: overview)
                                         UsageRankingView(groups: overview.models, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.models), by: \.key), kind: .model, metric: rankingMetric, range: range,
-                                                         codexSubagents: multiDevice ? store.cloud.matchingSubagentDetails(in: report, for: reportFilter) : report.codexSubagents,
-                                                         antigravitySubagents: overview.antigravitySubagents ?? report.antigravitySubagents)
+                                                         codexSubagents: localSubagentDetails(\.codexSubagents),
+                                                         antigravitySubagents: localSubagentDetails(\.antigravitySubagents))
                                     }
                                 }
                             }
@@ -492,21 +469,19 @@ struct OverviewView: View {
                                         id: "codex",
                                         name: clientName("codex"),
                                         report: codex,
-                                        local: multiDevice
-                                            ? store.cloud.matchingSubagentDetails(in: report, for: reportFilter)
-                                            : report.codexSubagents,
+                                        local: localSubagentDetails(\.codexSubagents),
                                         remote: remoteReports.values.compactMap(\.codexSubagents),
-                                        toolSummary: overview.clients.first { $0.key == "codex" }?.summary
+                                        toolTokens: overview.clients.first { $0.key == "codex" }?.summary.tokens ?? 0
                                     ))
                                 }
-                                if let agy = overview.antigravitySubagents ?? report.antigravitySubagents, agy.hasActivity {
+                                if let agy = overview.antigravitySubagents, agy.hasActivity {
                                     list.append(.init(
                                         id: "antigravity",
                                         name: clientName("antigravity"),
                                         report: agy,
-                                        local: report.antigravitySubagents,
-                                        remote: [],
-                                        toolSummary: antigravityToolSummary
+                                        local: localSubagentDetails(\.antigravitySubagents),
+                                        remote: remoteReports.values.compactMap(\.antigravitySubagents),
+                                        toolTokens: antigravityToolTokens
                                     ))
                                 }
                                 return list
@@ -712,8 +687,7 @@ private struct OverviewInsightsView: View {
         if count > 0 {
             WorkspacePanel {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(L("overview.insights")).font(.headline).foregroundStyle(WorkspaceStyle.text)
-                        .accessibilityAddTraits(.isHeader)
+                    OverviewCardTitle(title: L("overview.insights"), symbol: "lightbulb")
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 18, alignment: .leading),
                                              count: min(wide ? 4 : 2, count)), alignment: .leading, spacing: 16) {
                         if let streak {
@@ -846,6 +820,7 @@ private struct UsageRankingView: View {
     let metric: UsageMetric
     let range: DashboardDateSpan?
     var childModels: [String: [UsageGroup]] = [:]
+    var toolReport: UsageReport? = nil
     var codexSubagents: CodexSubagentReport? = nil
     var antigravitySubagents: CodexSubagentReport? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -900,14 +875,7 @@ private struct UsageRankingView: View {
 
     private func subagentReport(for group: UsageGroup) -> CodexSubagentReport? {
         guard kind == .tool else { return nil }
-        switch group.key {
-        case "codex":
-            return codexSubagents?.hasActivity == true ? codexSubagents : nil
-        case "antigravity", "antigravity-cli":
-            return antigravitySubagents?.hasActivity == true ? antigravitySubagents : nil
-        default:
-            return nil
-        }
+        return toolReport?.subagents(forTool: group.key)
     }
 
     private func subagentTitle(for group: UsageGroup) -> String {

@@ -1,5 +1,5 @@
 // [INPUT]: 接收引擎报告、目录和设置协议。
-// [OUTPUT]: 按系统日期刷新统计及来源，在需要操作时展示提示，确认恢复后清除相应提示。
+// [OUTPUT]: 按系统日期刷新本机统计，区分设备汇总预览和完整报告，在手动扫描完成或失败后更新反馈。
 // [POS]: 原生界面与 worker 的状态边界。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -57,6 +57,7 @@ final class UsageStore {
     private(set) var todayDay: String?
     var report: UsageReport?
     var reportFilter: UsageFilter?
+    private(set) var reportIsProvisional = false
     var reportLoadError: String? {
         if let reportFailure, reportFailure.selection == reportSelection { return reportFailure.message }
         return connected || loading ? nil : error
@@ -131,12 +132,12 @@ final class UsageStore {
     private var requestedActivityFilter: UsageFilter?
     private var activityGeneration = 0
 
-    init(engine: EngineClient? = nil, directory: URL? = nil) {
+    init(engine: EngineClient? = nil, directory: URL? = nil, cloud: DeviceSyncStore? = nil) {
         let primaryLedger = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/Tokenory")
         let directory = directory ?? ProcessInfo.processInfo.environment["TOKENORY_DATA_DIR"].map { URL(fileURLWithPath: $0) } ?? primaryLedger
         dataDirectory = directory
         self.engine = engine ?? EngineClient(helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/tokenory"), directory: directory)
-        cloud = DeviceSyncStore(engine: self.engine, usesDefaultLedger: directory.standardizedFileURL.path == primaryLedger.standardizedFileURL.path)
+        self.cloud = cloud ?? DeviceSyncStore(engine: self.engine, usesDefaultLedger: directory.standardizedFileURL.path == primaryLedger.standardizedFileURL.path)
         updateDateRange()
     }
     static func day(_ date: Date) -> String { Localization.dayKey(date) }
@@ -339,14 +340,16 @@ final class UsageStore {
             }
         }
     }
-    func refreshSelection(_ selection: UsageFilter, now: Date = Date(), forceReport: Bool = false) async {
+    func refreshSelection(_ selection: UsageFilter, now: Date = Date(), forceReport: Bool = false,
+                          allowsProvisional: Bool = true) async {
         guard selection == reportSelection else { return }
-        await refreshReport(selection, now: now, force: forceReport)
+        await refreshReport(selection, now: now, force: forceReport, allowsProvisional: allowsProvisional)
         guard selection == reportSelection, reportFilter == selection else { return }
         await refreshActivity(for: selection, now: now, force: false)
     }
-    private func refreshReport(_ selection: UsageFilter, now: Date, force: Bool) async {
-        if !force, reportFilter == selection {
+    private func refreshReport(_ selection: UsageFilter, now: Date, force: Bool,
+                               allowsProvisional: Bool = false) async {
+        if !force, reportFilter == selection, !reportIsProvisional {
             if let pending = requestedReportFilter, pending != selection {
                 reportGeneration += 1
                 requestedReportFilter = nil
@@ -362,65 +365,50 @@ final class UsageStore {
         defer {
             if generation == reportGeneration { requestedReportFilter = nil; loading = false }
         }
+        let isCurrent = { self.reportGeneration == generation && self.reportSelection == selection }
+        let year = Self.reportingYear(ending: now)
         if !force, let cached = reportCache[selection] {
             if selection.conversation != nil {
-                report = cached
-                reportFilter = selection
+                publishReport(cached, for: selection)
                 return
             }
-            let year = Self.reportingYear(ending: now)
-            await cloud.select(selection, from: year.from, to: year.to, whileCurrent: {
-                self.reportGeneration == generation && self.reportSelection == selection
-            }) {
-                self.report = cached
-                self.reportFilter = selection
-            }
-            return
-        }
-        if !force, !recordsAreActive, selection.conversation == nil, selection.source == nil,
-           let instantLocal = cloud.instantLocalOverview(for: selection) {
-            let year = Self.reportingYear(ending: now)
-            await cloud.select(selection, from: year.from, to: year.to, whileCurrent: {
-                self.reportGeneration == generation && self.reportSelection == selection
-            }) {
-                self.report = instantLocal
-                self.reportFilter = selection
-            }
-            guard generation == reportGeneration, selection == reportSelection else { return }
-            // Silently fetch exact local report (records, local-TZ hourly, Codex subagent details) without re-triggering range animations.
-            do {
-                let selected = try await engine.request("overview", payload: .encode(selection), as: UsageReport.self)
-                guard generation == reportGeneration, selection == reportSelection else { return }
-                cacheReport(selected, for: selection)
-                report = selected
-                reportFilter = selection
-            } catch {
-                // Keep the instant snapshot reading visible; background refinement failure stays silent.
+            await cloud.select(selection, from: year.from, to: year.to, whileCurrent: isCurrent) {
+                self.publishReport(cached, for: selection)
             }
             return
         }
         loading = true
+        if !force, allowsProvisional, !recordsAreActive, reportFilter != selection,
+           let instantLocal = cloud.instantLocalOverview(for: selection) {
+            await cloud.select(selection, from: year.from, to: year.to, whileCurrent: isCurrent) {
+                // Snapshot days use the shared device time zone and have no record rows.
+                guard self.cloud.overview(for: selection) != nil else { return }
+                self.publishReport(instantLocal, for: selection, provisional: true)
+                self.loading = false
+            }
+        }
+        guard isCurrent() else { return }
         do {
             let selected = try await engine.request("overview", payload: .encode(selection), as: UsageReport.self)
-            guard generation == reportGeneration, selection == reportSelection else { return }
+            guard isCurrent() else { return }
             cacheReport(selected, for: selection)
-            if selection.conversation != nil {
-                report = selected
-                reportFilter = selection
+            if selection.conversation != nil || (reportIsProvisional && reportFilter == selection) {
+                publishReport(selected, for: selection)
             } else {
-                let year = Self.reportingYear(ending: now)
-                await cloud.select(selection, from: year.from, to: year.to, whileCurrent: {
-                    self.reportGeneration == generation && self.reportSelection == selection
-                }) {
-                    self.report = selected
-                    self.reportFilter = selection
+                await cloud.select(selection, from: year.from, to: year.to, whileCurrent: isCurrent) {
+                    self.publishReport(selected, for: selection)
                 }
             }
         } catch {
-            if generation == reportGeneration, selection == reportSelection {
+            if isCurrent() {
                 reportFailure = (selection, error.localizedDescription)
             }
         }
+    }
+    private func publishReport(_ selected: UsageReport, for selection: UsageFilter, provisional: Bool = false) {
+        report = selected
+        reportFilter = selection
+        reportIsProvisional = provisional
     }
     private static func reportingYear(ending now: Date) -> (from: String, to: String) {
         let calendar = Localization.reportingCalendar
@@ -498,7 +486,47 @@ final class UsageStore {
     func restore(from file: URL) async throws {
         do { try await engine.restore(from: file) }
         catch { start(); throw error }
-        try await engine.start(); dismissError(); cloud.refresh(localChanged: true); await refresh(); await loadManagement()
+        invalidateLedgerReports()
+        try await engine.start()
+        connected = true
+        dismissError()
+        cloud.refresh(localChanged: true)
+        await refresh()
+        await loadManagement()
+        if let query = requestedTurnQuery { await loadAgentTurns(query, force: true) }
+    }
+    private func invalidateLedgerReports() {
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        reportCache.removeAll(keepingCapacity: true)
+        reportCacheRevision = nil
+        historyCache.removeAll(keepingCapacity: true)
+        connected = false
+        loading = false
+        refreshGeneration += 1
+        reportGeneration += 1
+        requestedReportFilter = nil
+        reportFailure = nil
+        report = nil
+        reportFilter = nil
+        reportIsProvisional = false
+        activityGeneration += 1
+        requestedActivityFilter = nil
+        activity = nil
+        activityFilter = nil
+        activityCalendar = nil
+        catalog = nil
+        todayGeneration += 1
+        today = nil
+        todayTurns = nil
+        todayUsageError = nil
+        todaySpeedError = nil
+        turnsGeneration += 1
+        turnAnalytics = nil
+        turnsQuery = nil
+        turnsLoading = false
+        turnsError = nil
+        cloud.invalidateLocalSnapshot()
     }
     func loadSources() async {
         sourcesGeneration += 1
@@ -557,7 +585,7 @@ final class UsageStore {
         Task {
             do {
                 let response = try await perform("scan")
-                if response["started"].bool == false, !scanning {
+                if response["started"].bool == false, response["queued"].bool != true, !scanning {
                     scanRequested = false
                 }
             } catch {

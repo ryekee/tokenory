@@ -4,8 +4,8 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 ## 模块地图
 - `macos/Tokenory/`：原生菜单栏和统计窗口。通过 IPC 调用 Rust worker。超时记录在 macOS 统一日志的 `ee.ryek.tokenory / EngineIPC`。后台读取保留可用读数和内部诊断，需要重试或确认的错误卡片使用警告底色和文字按钮。总览包含洞察、原位日期检查、固定图表读数及工具下的模型聚合。历史导入由 worker 识别格式，保存与重估在原有卡片内反馈。
 - `macos/TokenoryTests/`：原生状态、展示和协议测试。
-- `cli/tokenory/`：本地账本、采集、导入、计价和 IPC。SQLite 实时监听跳过共享内存通知，手动扫描可在增量采集结束后执行。Codex 子代理活动与用量查询在 `src/codex_subagents`；data 保存离线全量目录。
-- 多 Mac 同步：`cli/tokenory/src/device_snapshot.rs` 导出有效账本的用量汇总。原生代码位于 `macos/Tokenory/`，其中 `Models/DeviceUsageSnapshot.swift` 按设备计算总览与活动图，`Services/DeviceCloudSync.swift` 管理私有库的设备授权、快照替换和撤回，`Stores/DeviceSyncStore.swift` 对接本机 worker、云端和界面。
+- `cli/tokenory/`：本地账本、采集、导入、计价和 IPC。SQLite 实时监听跳过共享内存通知，手动扫描可在增量采集结束后执行。子代理查询在 `src/codex_subagents` 和 `src/antigravity_subagents.rs`；data 保存离线全量目录。
+- 多 Mac 同步：`cli/tokenory/src/device_snapshot.rs` 导出有效账本的用量及子代理汇总。原生代码位于 `macos/Tokenory/`，其中 `Models/DeviceUsageSnapshot.swift` 按设备计算总览与活动图，`Services/DeviceCloudSync.swift` 管理私有库的设备授权、快照替换和撤回，`Stores/DeviceSyncStore.swift` 对接本机 worker、云端和界面。
 - `cli/tokens-core/`：上游日志解析及价格数据适配。Codex 补计上下文压缩用量，采集 `.jsonl.zst` 历史归档并与文本副本去重。Pi 按日志条目及时间区分独立请求。Devin CLI 按会话内请求去重，Antigravity App、Insiders 与 CLI 直读本地 SQLite 并与旧缓存去重。Copilot 合并 SDK 日志与既有来源，Hermes 按助手消息时间分配累计用量，TRAE CLI 直接读取独立的本机日志。
 - `assets/brand/`：产品图标和原生品牌资源的生成源；providers 为生成的全量供应商品牌源。
 - `script/`：构建、资源生成、签名和发布入口。
@@ -14,7 +14,7 @@ Swift 6 + SwiftUI + Rust + SQLite + Sparkle 2.10.1
 - `local-data/design-assets/`：本地设计原型、草图和审阅记录。
 - `local-data/dev-assets/`：本地开发笔记、决策、验收记录和工具配置副本。编译结果存放在忽略的 `.build/` 和 Cargo `target/`。
 - `codex/upstream-sync`：本地分支，跟踪 `upstream/main`。审阅 `cli/tokens-core/` 的增量，测试通过后合入。
-- 原生 HUD：`Views/MechanicalHUDView.swift`、`Services/HUDController.swift`；处理双击、三击、闲置自动隐藏和用量唤醒。界面和交互约定见 `DESIGN.md`。
+- 原生 HUD：`Views/MechanicalHUDView.swift`、`Services/HUDController.swift`；处理双击、三击、闲置自动隐藏、用量唤醒和屏幕跟随或固定。界面和交互约定见 `DESIGN.md`。
 
 ## 入口和约束
 - `macos/project.yml`：XcodeGen 项目源。不要手改生成的 Xcode 项目。

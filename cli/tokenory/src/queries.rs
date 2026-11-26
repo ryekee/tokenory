@@ -1,5 +1,5 @@
 // [INPUT]: Validated filters, the effective ledger view, and local Codex/Antigravity title indexes including Insiders.
-// [OUTPUT]: Effective usage reports with tool/model breakdowns, Fast and Codex subagent subsets, archived day totals, searchable conversations, and system-local hourly activity.
+// [OUTPUT]: Effective usage, tool/model and subagent breakdowns, archived day totals, searchable conversations, and system-local hourly activity.
 // [POS]: Read-only aggregation boundary; never aggregate paginated details.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -317,6 +317,8 @@ pub struct Report {
     pub codex_subagents: Option<crate::codex_subagents::Report>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub antigravity_subagents: Option<crate::codex_subagents::Report>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub antigravity_subagents_by_client: Option<BTreeMap<String, crate::codex_subagents::Report>>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -565,6 +567,10 @@ fn usage_report(db: &mut Database, f: &Filter, overview_home: Option<&Path>) -> 
             })
         })
         .collect::<Result<_>>()?;
+    let antigravity_subagents = overview_home
+        .map(|home| crate::antigravity_subagents::reports(&tx, f, home))
+        .transpose()?
+        .unwrap_or_default();
     let result = Report {
         revision: revision(&tx)?,
         summary,
@@ -584,11 +590,9 @@ fn usage_report(db: &mut Database, f: &Filter, overview_home: Option<&Path>) -> 
         } else {
             None
         },
-        antigravity_subagents: if let Some(home) = overview_home {
-            crate::antigravity_subagents::query(&tx, f, home)?
-        } else {
-            None
-        },
+        antigravity_subagents: antigravity_subagents.family,
+        antigravity_subagents_by_client: (!antigravity_subagents.by_client.is_empty())
+            .then_some(antigravity_subagents.by_client),
     };
     tx.commit()?;
     Ok(result)

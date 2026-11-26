@@ -53,8 +53,8 @@ fn reply(id: &str, r: Result<Value>) -> Result<()> {
 const SNAPSHOT_CHUNK_BYTES: usize = 1024 * 1024;
 const MAX_REPLY_BYTES: usize = 64 * 1024 * 1024;
 
-fn reply_snapshot(db: &mut Database, timezone: &str, id: &str, stream: bool) -> Result<()> {
-    let snapshot = match crate::device_snapshot::export(db, timezone)
+fn reply_snapshot(db: &mut Database, config: &Config, id: &str, stream: bool) -> Result<()> {
+    let snapshot = match crate::device_snapshot::export_with_home(db, &config.timezone, &config.home_dir)
         .and_then(|snapshot| Ok(serde_json::to_string(&snapshot)?))
     {
         Ok(snapshot) => snapshot,
@@ -430,9 +430,19 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
           let before=revision(&db.connection)?;
           match r.operation.as_str() {
            "shutdown"=>{reply(&r.id,Ok(json!({"stopped":true})))?;break;},
-           "scan"=>{let started=scan.is_none();if started {scan=Some(start_scan(config.clone(),cache.take().unwrap_or_else(DiagnosticCache::persistent), None));send(json!({"version":1,"event":"scanStarted"}))?;}else if scan_is_live {manual_scan_pending=true;}reply(&r.id,Ok(json!({"started":started})))?;},
+           "scan"=>{
+               let started = scan.is_none();
+               let queued = scan_is_live;
+               if started {
+                   scan = Some(start_scan(config.clone(), cache.take().unwrap_or_else(DiagnosticCache::persistent), None));
+                   send(json!({"version":1,"event":"scanStarted"}))?;
+               } else if queued {
+                   manual_scan_pending = true;
+               }
+               reply(&r.id, Ok(json!({"started":started,"queued":queued})))?;
+           },
            "status"=>reply(&r.id,Ok(json!({"scanning":scan.is_some(),"lastScan":last_scan,"dataDirectory":db.directory,"revision":before,"refreshingPrices":price_task.is_some()})))?,
-           "deviceUsageSnapshot"=>reply_snapshot(db,&config.timezone,&r.id,r.payload["stream"].as_bool() == Some(true))?,
+           "deviceUsageSnapshot"=>reply_snapshot(db,&config,&r.id,r.payload["stream"].as_bool() == Some(true))?,
            "refreshPrices"=>{
             if price_task.is_some(){reply(&r.id,Err(anyhow!("price refresh already running")))?;}else{price_task=Some(tokio::spawn(fetch_prices(r.id)));}
            },

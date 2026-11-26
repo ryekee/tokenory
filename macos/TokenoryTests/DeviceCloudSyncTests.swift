@@ -111,6 +111,61 @@ final class DeviceCloudSyncTests: XCTestCase {
                 .init(backend: cloud, preferences: .init(defaults: defaults, host: "B")))
     }
 
+    func testRecordsRetryFailedExactReportAfterAnInstantCloudOverview() async throws {
+        let transport = FakeDeviceCloud(), (local, peer) = devices(transport)
+        try await local.enable()
+        try await peer.enable()
+        try await peer.publish(JSONEncoder().encode(snapshot(tokens: 40)), revision: 40)
+        let localSnapshot = snapshot(tokens: 100)
+        let cloud = DeviceSyncStore(service: local) { localSnapshot }
+        cloud.refresh()
+        try await waitForStore { !cloud.busy && cloud.hasLocalSnapshot }
+
+        let data = FileManager.default.temporaryDirectory.appending(path: "Tokenory-exact-\(UUID())")
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        let helper = data.appending(path: "worker.py")
+        try #"""
+        #!/usr/bin/python3
+        import json, sys
+        fail_overview = True
+        for line in sys.stdin:
+            request = json.loads(line)
+            response = dict(version=1, id=request['id'])
+            if request['operation'] == 'overview':
+                if fail_overview:
+                    response['error'] = dict(code='timeout', message='Exact local report timed out')
+                    fail_overview = False
+                else:
+                    summary = dict(tokens=120, tokenBreakdown=dict(input=120, output=0, cacheRead=0, cacheWrite=0, reasoning=0),
+                                   unpricedTokens=120, costStatus='unknown', recordCount=1, activeDays=1)
+                    response['result'] = dict(revision=120, summary=summary, daily=[], clients=[], providers=[], models=[], details=[])
+            else:
+                payload = request['payload']
+                response['result'] = dict(revision=120, daily=[], modelDays=[], **{'from':payload['from'], 'to':payload['to']})
+            print(json.dumps(response), flush=True)
+        """#.write(to: helper, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+        let engine = EngineClient(helper: helper, directory: data)
+        addTeardownBlock {
+            await engine.stop()
+            try FileManager.default.removeItem(at: data)
+        }
+        try await engine.start()
+        let store = UsageStore(engine: engine, directory: data, cloud: cloud)
+        store.connected = true
+        let selection = UsageFilter(from: "2026-11-23", to: "2026-11-23")
+        store.filter = selection
+        await store.refreshSelection(selection)
+        XCTAssertEqual(store.combinedOverview?.summary.tokens, 140)
+        XCTAssertEqual(store.reportLoadError, "Exact local report timed out")
+
+        store.recordsAreActive = true
+        await store.refreshSelection(selection)
+
+        XCTAssertEqual(store.report?.summary.tokens, 120)
+        XCTAssertNil(store.reportLoadError)
+    }
+
     func testDefaultOffStopPreservesDataAndDeletionClearsOnlyRequestedScope() async throws {
         let cloud = FakeDeviceCloud(), (a, b) = devices(cloud)
         XCTAssertFalse(a.isEnabled)

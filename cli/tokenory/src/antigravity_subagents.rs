@@ -1,5 +1,5 @@
 // [INPUT]: Antigravity transcript.jsonl files under ~/.gemini/*/brain/<parent>/.system_generated/logs/ and effective_usage records.
-// [OUTPUT]: Scoped Antigravity subagent spawn counts, tokens, and ledger estimates grouped by parent conversation.
+// [OUTPUT]: Tool-scoped Antigravity subagent reports and local child identities for aggregate device export.
 // [POS]: Read-only Antigravity subagent analytics reusing the shared subagent Report schema.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
@@ -10,6 +10,7 @@ use crate::{
 use anyhow::Result;
 use chrono::{DateTime, TimeZone};
 use rusqlite::{params_from_iter, Connection};
+use serde::Serialize;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
@@ -26,6 +27,7 @@ const ANTIGRAVITY_BRAIN_DIRS: [(&str, &str); 4] = [
     ("antigravity-insiders", "antigravity"),
     ("antigravity-cli", "antigravity-cli"),
 ];
+const CLIENTS: [&str; 2] = ["antigravity", "antigravity-cli"];
 
 const CREATED_MARKER: &str = "Created the following subagent:";
 
@@ -255,7 +257,101 @@ fn load_spawns(home: &Path, client_filter: Option<&str>) -> Vec<SpawnRecord> {
 }
 
 pub fn query(db: &Connection, f: &Filter, home: &Path) -> Result<Option<Report>> {
-    query_with_timezone(db, f, home, Config::system_timezone())
+    Ok(reports(db, f, home)?.family)
+}
+
+#[derive(Default)]
+pub(crate) struct ScopedReports {
+    pub family: Option<Report>,
+    pub by_client: BTreeMap<String, Report>,
+}
+
+pub(crate) fn reports(db: &Connection, f: &Filter, home: &Path) -> Result<ScopedReports> {
+    let mut reports = ScopedReports::default();
+    let zone = Config::system_timezone();
+    for client in CLIENTS {
+        if f.client.as_deref().is_some_and(|filter| filter != client) {
+            continue;
+        }
+        let mut scoped = f.clone();
+        scoped.client = Some(client.into());
+        let Some(mut report) = query_with_timezone(db, &scoped, home, zone)? else {
+            continue;
+        };
+        let family = reports.family.get_or_insert_with(empty_report);
+        family.starts += report.starts;
+        family.tokens += report.tokens;
+        family.cost.merge(&report.cost);
+        family.conversations.append(&mut report.conversations);
+        // Rankings only need summary values. Keep local conversation details in the family report.
+        reports.by_client.insert(client.into(), report);
+    }
+    if let Some(family) = &mut reports.family {
+        family.conversations.sort_by(|left, right| {
+            right
+                .tokens
+                .cmp(&left.tokens)
+                .then(right.starts.cmp(&left.starts))
+                .then(left.id.cmp(&right.id))
+        });
+        add_titles(family, home);
+    }
+    Ok(reports)
+}
+
+fn empty_report() -> Report {
+    Report {
+        starts: 0,
+        tokens: 0,
+        cost: Cost::default(),
+        conversations: Vec::new(),
+    }
+}
+
+// These identities stay in the worker and are used only to join effective ledger rows.
+#[derive(Serialize)]
+pub(crate) struct SnapshotChild {
+    client: &'static str,
+    id: String,
+    started_ms: Option<i64>,
+}
+
+pub(crate) fn snapshot_children(home: &Path) -> Vec<SnapshotChild> {
+    CLIENTS
+        .into_iter()
+        .flat_map(|client| {
+            unique_children(load_spawns(home, Some(client)))
+                .into_values()
+                .map(move |record| SnapshotChild {
+                    client,
+                    id: record.child_id,
+                    started_ms: record.started_ms,
+                })
+        })
+        .collect()
+}
+
+fn unique_children(raw_spawns: Vec<SpawnRecord>) -> HashMap<String, SpawnRecord> {
+    // App variants can repeat the same spawn. Retain the first available name and earliest start.
+    let mut children = HashMap::<String, SpawnRecord>::new();
+    for record in raw_spawns {
+        children
+            .entry(record.child_id.clone())
+            .and_modify(|existing| {
+                if existing.name.is_none() && record.name.is_some() {
+                    existing.name = record.name.clone();
+                }
+                if let Some(started_ms) = record.started_ms {
+                    existing.started_ms = Some(
+                        existing
+                            .started_ms
+                            .map_or(started_ms, |current| current.min(started_ms)),
+                    );
+                }
+            })
+            .or_insert(record);
+    }
+    children
 }
 
 fn query_with_timezone(
@@ -274,27 +370,9 @@ fn query_with_timezone(
         return Ok(None);
     }
 
-    let raw_spawns = load_spawns(home, f.client.as_deref());
-    if raw_spawns.is_empty() {
+    let children = unique_children(load_spawns(home, f.client.as_deref()));
+    if children.is_empty() {
         return Ok(None);
-    }
-
-    // Deduplicate by child_id, preserving earliest start timestamp and non-empty name.
-    let mut children = HashMap::<String, SpawnRecord>::new();
-    for record in raw_spawns {
-        children
-            .entry(record.child_id.clone())
-            .and_modify(|existing| {
-                if existing.name.is_none() && record.name.is_some() {
-                    existing.name = record.name.clone();
-                }
-                match (existing.started_ms, record.started_ms) {
-                    (None, Some(ms)) => existing.started_ms = Some(ms),
-                    (Some(cur), Some(ms)) if ms < cur => existing.started_ms = Some(ms),
-                    _ => {}
-                }
-            })
-            .or_insert(record);
     }
 
     let mut relevant_sessions = HashSet::<String>::new();
@@ -328,12 +406,7 @@ fn query_with_timezone(
         }
     }
 
-    let mut report = Report {
-        starts: 0,
-        tokens: 0,
-        cost: Cost::default(),
-        conversations: Vec::new(),
-    };
+    let mut report = empty_report();
     let mut conversations = HashMap::<String, Conversation>::new();
 
     for record in children.values() {
@@ -404,14 +477,6 @@ fn query_with_timezone(
             .agents
             .sort_by(|left, right| left.id.cmp(&right.id));
     }
-    report.conversations.sort_by(|left, right| {
-        right
-            .tokens
-            .cmp(&left.tokens)
-            .then(right.starts.cmp(&left.starts))
-            .then(left.id.cmp(&right.id))
-    });
-    add_titles(&mut report, home);
     Ok(Some(report))
 }
 
@@ -451,6 +516,26 @@ mod tests {
         fs::write(log_dir.join("transcript.jsonl"), lines.join("\n") + "\n").unwrap();
     }
 
+    fn write_spawns(home: &Path, dir: &str, parent: &str, children: &[(&str, &str)]) {
+        let lines: Vec<String> = children
+            .iter()
+            .map(|(id, date)| {
+                let child = serde_json::json!({ "conversationId": id });
+                serde_json::json!({
+                    "type": "GENERIC", "created_at": date,
+                    "content": format!("{CREATED_MARKER} {child}"),
+                })
+                .to_string()
+            })
+            .collect();
+        write_transcript(
+            home,
+            dir,
+            parent,
+            &lines.iter().map(String::as_str).collect::<Vec<_>>(),
+        );
+    }
+
     fn record(
         key: &str,
         client: &str,
@@ -483,6 +568,159 @@ mod tests {
             price_snapshot_id: None,
             metadata: Value::Null,
         }
+    }
+
+    #[test]
+    fn overview_keeps_app_subagents_out_of_an_ordinary_cli_row() {
+        let fixture = TempDir::new().unwrap();
+        let home = fixture.path();
+        let mut db = Database::open(&home.join("db")).unwrap();
+        write_spawns(
+            home,
+            "antigravity",
+            "app-parent",
+            &[("app-child", "2026-05-10T08:00:00Z")],
+        );
+        for row in [
+            record(
+                "app",
+                "antigravity",
+                "app-child",
+                "2026-05-10",
+                "app-model",
+                60,
+                Some(0.1),
+            ),
+            record(
+                "cli",
+                "antigravity-cli",
+                "cli-ordinary",
+                "2026-05-10",
+                "cli-model",
+                20,
+                None,
+            ),
+        ] {
+            add_local_record(&db, &row);
+        }
+
+        let payload = serde_json::to_value(
+            crate::queries::overview(&mut db, &Filter::default(), home).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(payload["clients"].as_array().unwrap().len(), 2);
+        assert_eq!(payload["antigravitySubagents"]["tokens"], 60);
+        assert_eq!(
+            payload["antigravitySubagentsByClient"]["antigravity"]["tokens"],
+            60
+        );
+        assert!(payload["antigravitySubagentsByClient"]["antigravity-cli"].is_null());
+    }
+
+    #[test]
+    fn device_snapshot_exports_scoped_antigravity_activity_without_conversation_ids() {
+        let fixture = TempDir::new().unwrap();
+        let home = fixture.path();
+        let mut db = Database::open(&home.join("db")).unwrap();
+        let app_spawn = ("private-app-child", "2026-05-10T17:00:00Z");
+        write_spawns(
+            home,
+            "antigravity",
+            "private-parent",
+            &[app_spawn, ("private-unused-child", "2026-05-10T19:00:00Z")],
+        );
+        write_spawns(home, "antigravity-insiders", "private-copy", &[app_spawn]);
+        write_spawns(
+            home,
+            "antigravity-cli",
+            "private-cli-parent",
+            &[("private-cli-child", "2026-05-10T18:00:00Z")],
+        );
+
+        let mut app = record(
+            "app",
+            "antigravity",
+            "private-app-child",
+            "2026-05-10",
+            "app-model",
+            60,
+            Some(0.1),
+        );
+        app.timestamp_ms = Some(
+            chrono::DateTime::parse_from_rfc3339("2026-05-10T17:01:00Z")
+                .unwrap()
+                .timestamp_millis(),
+        );
+        for row in [
+            app,
+            record(
+                "cli",
+                "antigravity-cli",
+                "private-cli-child",
+                "2026-05-12",
+                "cli-model",
+                20,
+                None,
+            ),
+            record(
+                "same-id",
+                "antigravity-cli",
+                "private-app-child",
+                "2026-05-12",
+                "cli-model",
+                5,
+                None,
+            ),
+        ] {
+            add_local_record(&db, &row);
+        }
+
+        let payload = serde_json::to_value(
+            crate::device_snapshot::export_with_home(&mut db, "UTC", home).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(payload["schemaVersion"], 1);
+        let buckets = payload["buckets"].as_array().unwrap();
+        let subagent_buckets: Vec<_> = buckets
+            .iter()
+            .filter(|b| b["isAntigravitySubagent"] == true)
+            .collect();
+        assert_eq!(subagent_buckets.len(), 2);
+        assert_eq!(subagent_buckets[0]["client"], "antigravity");
+        assert_eq!(subagent_buckets[0]["date"], "2026-05-11");
+        assert_eq!(subagent_buckets[0]["summary"]["tokens"], 60);
+        assert_eq!(subagent_buckets[0]["summary"]["knownEstimatedCostUsd"], 0.1);
+        assert_eq!(subagent_buckets[1]["summary"]["tokens"], 20);
+        assert_eq!(subagent_buckets[1]["summary"]["unpricedTokens"], 20);
+        assert!(buckets.iter().all(|b| b["isSubagent"] == false));
+        let starts = payload["antigravitySubagentStarts"].as_array().unwrap();
+        let find = |client: &str, model: Option<&str>| {
+            starts
+                .iter()
+                .find(|b| {
+                    b["client"] == client && b["provider"].is_null() && b["model"].as_str() == model
+                })
+                .unwrap()
+        };
+        let app = find("antigravity", None);
+        assert_eq!(app["date"], "2026-05-11");
+        assert_eq!(app["count"], 2);
+        let scoped_cli = find("antigravity-cli", Some("cli-model"));
+        assert_eq!(scoped_cli["date"], "2026-05-11");
+        assert!(scoped_cli["nearestBefore"].is_null());
+        assert_eq!(scoped_cli["nearestAfter"], "2026-05-12");
+        assert_eq!(scoped_cli["count"], 1);
+        assert!(!serde_json::to_string(&payload)
+            .unwrap()
+            .contains("private-"));
+    }
+
+    fn add_local_record(db: &Database, row: &UsageRecord) {
+        put_record(&db.connection, "local", "", row).unwrap();
+        db.connection.execute(
+            "INSERT OR IGNORE INTO coverage_choices (date, client, source, batch_id) VALUES (?1, ?2, 'local', '')",
+            rusqlite::params![row.date, row.client],
+        ).unwrap();
     }
 
     #[test]

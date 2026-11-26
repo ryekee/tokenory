@@ -338,6 +338,31 @@ final class HUDTests: XCTestCase {
         XCTAssertTrue(String(reflecting: type(of: reopened)).contains("NSHostingView"))
     }
 
+    func testDisablingPointerFollowPinsTheVisibleDisplayOverAnOlderPin() async throws {
+        let name = "Tokenory-HUD-follow-\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = HUDPreferences(defaults: defaults)
+        preferences.enabled = true
+        preferences.pinnedDisplayID = .max
+        let controller = HUDController(preferences: preferences, store: UsageStore(), reduceMotion: { true })
+        controller.start()
+        defer { controller.stop() }
+
+        let screen = try XCTUnwrap(controller.panel?.screen)
+        let visibleDisplayID = try XCTUnwrap(HUDDisplayMetrics.displayID(for: screen))
+        XCTAssertNotEqual(preferences.pinnedDisplayID, visibleDisplayID)
+
+        preferences.followPointer = false
+        let deadline = ContinuousClock.now + .seconds(1)
+        while preferences.pinnedDisplayID != visibleDisplayID, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(preferences.pinnedDisplayID, visibleDisplayID)
+        XCTAssertEqual(HUDPreferences(defaults: defaults).pinnedDisplayID, visibleDisplayID)
+    }
+
     func testIdleHUDWakesForUsageAndTripleClickHonorsSavedAction() async throws {
         let name = "Tokenory-HUD-visibility-\(UUID())"
         let defaults = UserDefaults(suiteName: name)!
