@@ -7,7 +7,7 @@ if [[ -x "$ROOT_DIR/.tools/cargo/bin/cargo" ]]; then
   export CARGO_HOME="$ROOT_DIR/.tools/cargo" RUSTUP_HOME="$ROOT_DIR/.tools/rustup"
   export PATH="$CARGO_HOME/bin:$PATH"
 fi
-if [[ "$CONFIGURATION" == Release ]]; then
+if [[ "$CONFIGURATION" == Release || "$CONFIGURATION" == CloudDebug ]]; then
   cargo build --manifest-path cli/Cargo.toml -p tokenory --release
 else
   cargo build --manifest-path cli/Cargo.toml -p tokenory

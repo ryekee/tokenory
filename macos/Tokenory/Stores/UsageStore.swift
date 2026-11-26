@@ -104,7 +104,7 @@ final class UsageStore {
     var dateRange: UsageDateRange = .week
     var status: EngineStatus?
     var scanning = false
-    private var scanRequested = false
+    private(set) var scanRequested = false
     var scanInProgress: Bool { scanning || scanRequested }
     var connected = false
     var loading = false
@@ -555,8 +555,12 @@ final class UsageStore {
         guard !scanRequested else { return }
         scanRequested = true
         Task {
-            do { _ = try await perform("scan") }
-            catch {
+            do {
+                let response = try await perform("scan")
+                if response["started"].bool == false, !scanning {
+                    scanRequested = false
+                }
+            } catch {
                 scanRequested = false
                 fail(error, recovery: .scan, action: .refresh)
             }
@@ -598,8 +602,11 @@ final class UsageStore {
             } catch {
                 fail(error, recovery: .status, action: userRequested ? .refresh : nil)
             }
-            if userRequested { scanRequested = false }
-            if previous?.recovery == .statistics || previous?.recovery == .activity ||
+            if userRequested {
+                scanRequested = false
+                reportCache.removeAll(keepingCapacity: true)
+            }
+            if userRequested || previous?.recovery == .statistics || previous?.recovery == .activity ||
                 reportFailure?.selection == reportSelection {
                 await refresh()
             } else {
