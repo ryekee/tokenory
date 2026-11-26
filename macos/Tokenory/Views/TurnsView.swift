@@ -56,7 +56,7 @@ struct TurnsView: View {
                 }.frame(width: 16, height: 16)
             }.padding(.horizontal, 22).padding(.vertical, 14)
             VStack(spacing: 0) {
-                if let data = store.turnAnalytics, !data.points.isEmpty, let displayed = store.turnsQuery,
+                if let data = store.turnAnalytics, let displayed = store.turnsQuery,
                    requestedQuery == nil || displayed == requestedQuery || waiting {
                     if let error = store.turnsError {
                         errorCard(error).padding(.bottom, 12)
@@ -214,12 +214,22 @@ private struct TurnsContent: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     WorkspacePanel { summary }
-                    if data.speedTimeline?.buckets.isEmpty == false {
-                        WorkspacePanel {
+                    WorkspacePanel {
+                        if data.speedTimeline?.buckets.isEmpty == false {
                             TurnSpeedChart(data: data, range: range, animateRangeChanges: isActive,
                                            selected: selected, selectedBucketStart: selectedBucket?.start,
                                            hasChartSelection: chartTurnID != nil || selectedBucket != nil,
                                            onSelect: select, onClearSelection: clearChartSelection)
+                        } else {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text(L("turns.trend")).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                                        .accessibilityAddTraits(.isHeader)
+                                    Spacer()
+                                    Text("tokens/s").font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+                                }
+                                Color.clear.frame(height: 210)
+                            }
                         }
                     }
                     let wide = geometry.size.width - 44 >= 720
@@ -266,25 +276,29 @@ private struct TurnsContent: View {
 
     private var summary: some View {
         HStack(alignment: .top, spacing: 18) {
-            metric("turns.average_speed", (data.containsEstimates ? "≈ " : "") + TurnFormat.number(data.averageSpeed),
-                   amount: data.averageSpeed, unit: "tokens/s")
-            if let averageTTFT = data.averageTTFTSeconds {
-                Divider().frame(height: 58)
-                metric("turns.average_ttft", TurnFormat.number(averageTTFT), amount: averageTTFT, unit: L("turns.seconds_unit"))
-            }
-            if let averageReasoning = data.averageReasoning {
-                Divider().frame(height: 58)
-                metric("turns.average_reasoning", averageReasoning.formatted(.number.precision(.fractionLength(0)).locale(Localization.locale)),
-                       amount: averageReasoning, unit: L("turns.tokens_per_turn"))
-            }
+            let speedText = data.averageSpeed.map { (data.containsEstimates ? "≈ " : "") + TurnFormat.number($0) } ?? "—"
+            metric("turns.average_speed", speedText,
+                   amount: data.averageSpeed, unit: data.averageSpeed == nil ? "" : "tokens/s")
+            Divider().frame(height: 58)
+            metric("turns.average_ttft",
+                   data.averageTTFTSeconds.map(TurnFormat.number) ?? "—",
+                   amount: data.averageTTFTSeconds,
+                   unit: data.averageTTFTSeconds == nil ? "" : L("turns.seconds_unit"))
+            Divider().frame(height: 58)
+            metric("turns.average_reasoning",
+                   data.averageReasoning.map { $0.formatted(.number.precision(.fractionLength(0)).locale(Localization.locale)) } ?? "—",
+                   amount: data.averageReasoning,
+                   unit: data.averageReasoning == nil ? "" : L("turns.tokens_per_turn"))
         }
     }
     private func metric(_ key: String, _ value: String, amount: Double?, unit: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(L(key)).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(L(key)).font(.subheadline).foregroundStyle(WorkspaceStyle.subtext).fixedSize(horizontal: false, vertical: true)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                DashboardRollingValue(text: value, value: amount, range: isActive ? range : nil, style: .displayNumber(32))
-                Text(unit).font(.caption).foregroundStyle(.secondary)
+                DashboardRollingValue(text: value, value: amount, range: isActive ? range : nil, style: .displayNumber(32), themed: true)
+                if !unit.isEmpty {
+                    Text(unit).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+                }
             }
             .lineLimit(1).minimumScaleFactor(0.75).textSelection(.enabled)
             .accessibilityElement(children: .ignore)
@@ -303,17 +317,15 @@ private struct TurnsContent: View {
                     }
                     rowColumns {
                         Text(L("turns.project")); Text(L("turns.duration")); Text(L("token.reasoning")); Text("tokens/s")
-                    }.font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 5)
+                    }.font(.caption2).foregroundStyle(WorkspaceStyle.subtext).padding(.horizontal, 5)
                     Divider()
                 }
                 VStack(spacing: 0) {
-                    if visible.isEmpty {
+                    if visible.isEmpty, !search.isEmpty {
                         HStack {
-                            Text(L("turns.search_empty")).font(.callout).foregroundStyle(.secondary)
+                            Text(L("turns.search_empty")).font(.callout).foregroundStyle(WorkspaceStyle.subtext)
                             Spacer(minLength: 8)
-                            if !search.isEmpty {
-                                Button(L("turns.clear_search")) { updateSearch("") }.controlSize(.small)
-                            }
+                            Button(L("turns.clear_search")) { updateSearch("") }.controlSize(.small)
                         }.padding(.vertical, 18)
                     }
                     ForEach(visible) { turn in
@@ -325,19 +337,19 @@ private struct TurnsContent: View {
                                 VStack(alignment: .leading, spacing: 5) {
                                     HStack(spacing: 5) {
                                         BrandIcon(name: turn.client, kind: .tool)
-                                        Text(turn.project).fontWeight(.medium).lineLimit(1).truncationMode(.middle)
+                                        Text(turn.project).fontWeight(.medium).foregroundStyle(WorkspaceStyle.text).lineLimit(1).truncationMode(.middle)
                                         if let mode = turn.inferenceSpeed, mode.isFast {
                                             FastModeMark(helpText: mode.fastHelp)
                                         }
                                     }
                                     let subtitle = data.matchingSubtitle(for: turn, search: search.trimmingCharacters(in: .whitespacesAndNewlines))
                                         ?? TurnFormat.timestamp(turn.start)
-                                    Text(subtitle).font(.caption2).foregroundStyle(.secondary)
+                                    Text(subtitle).font(.caption2).foregroundStyle(WorkspaceStyle.subtext)
                                         .lineLimit(1).truncationMode(.middle)
                                 }
-                                Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.clockDuration(turn.durationMs))
-                                Text(turn.reasoningTokens.map { compactTokens($0) } ?? "—")
-                                Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.number(turn.speed))
+                                Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.clockDuration(turn.durationMs)).foregroundStyle(WorkspaceStyle.text)
+                                Text(turn.reasoningTokens.map { compactTokens($0) } ?? "—").foregroundStyle(WorkspaceStyle.text)
+                                Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.number(turn.speed)).foregroundStyle(WorkspaceStyle.text)
                             }
                             .font(.callout).monospacedDigit().padding(.horizontal, 5)
                             .frame(height: rowHeight)
@@ -482,7 +494,7 @@ private struct TurnDetail: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(TurnFormat.timestamp(turn.start)).font(.caption).foregroundStyle(.secondary)
+                    Text(TurnFormat.timestamp(turn.start)).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                     Spacer()
                     WorkspaceInfoPopover(title: L("turns.basis")) {
                         VStack(alignment: .leading, spacing: 10) {
@@ -492,10 +504,10 @@ private struct TurnDetail: View {
                         }.font(.caption).textSelection(.enabled).padding(14).frame(width: 320)
                     }.accessibilityHint(basis)
                 }
-                Text(turn.project).font(.title3.weight(.semibold)).textSelection(.enabled)
+                Text(turn.project).font(.title3.weight(.semibold)).foregroundStyle(WorkspaceStyle.text).textSelection(.enabled)
                 if let title {
                     Text(title)
-                        .font(.callout).foregroundStyle(.secondary).lineLimit(2)
+                        .font(.callout).foregroundStyle(WorkspaceStyle.subtext).lineLimit(2)
                         .textSelection(.enabled)
                         .accessibilityLabel(L("record.conversation"))
                         .accessibilityValue(title)
@@ -509,13 +521,14 @@ private struct TurnDetail: View {
                         FastModeMark(title: L("fast.title"), helpText: mode.fastHelp)
                     }
                     if let effort = turn.effort {
-                        Text(effort).foregroundStyle(.secondary).fixedSize()
+                        Text(effort).foregroundStyle(WorkspaceStyle.subtext).fixedSize()
                     }
                 }.font(.caption)
             }
             VStack(alignment: .leading, spacing: 5) {
-                Text(L("turns.duration")).font(.caption).foregroundStyle(.secondary)
-                Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.duration(turn.durationMs)).font(DisplayNumberFont.font(size: 32))
+                Text(L("turns.duration")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+                Text((turn.durationEstimated ? "≈ " : "") + TurnFormat.duration(turn.durationMs))
+                    .font(DisplayNumberFont.font(size: 32)).foregroundStyle(WorkspaceStyle.text)
             }
             if let wait = turn.toolWaitMs {
                 VStack(spacing: 8) {
@@ -528,7 +541,7 @@ private struct TurnDetail: View {
                     ViewThatFits(in: .horizontal) {
                         HStack { waitLabel(wait); Spacer(); remainingLabel(wait) }
                         VStack(alignment: .leading, spacing: 4) { waitLabel(wait); remainingLabel(wait) }
-                    }.font(.caption2).foregroundStyle(.secondary)
+                    }.font(.caption2).foregroundStyle(WorkspaceStyle.subtext)
                 }
             }
             HStack(alignment: .top, spacing: 12) {
@@ -537,8 +550,8 @@ private struct TurnDetail: View {
                 detailMetric("turns.ttft", value: TurnFormat.number(turn.ttftMs.map { Double($0) / 1000 }), unit: L("turns.seconds_unit"))
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text(LF("turns.responses_tools", turn.requests.map { $0.formatted(.number.locale(Localization.locale)) } ?? "—", turn.toolCalls.map { $0.formatted(.number.locale(Localization.locale)) } ?? "—")).font(.caption).foregroundStyle(.secondary)
-                HStack { Text(L("turns.generated")); Spacer(); Text(turn.generatedTokens.formatted(.number.locale(Localization.locale))).monospacedDigit() }.font(.caption)
+                Text(LF("turns.responses_tools", turn.requests.map { $0.formatted(.number.locale(Localization.locale)) } ?? "—", turn.toolCalls.map { $0.formatted(.number.locale(Localization.locale)) } ?? "—")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+                HStack { Text(L("turns.generated")).foregroundStyle(WorkspaceStyle.subtext); Spacer(); Text(turn.generatedTokens.formatted(.number.locale(Localization.locale))).foregroundStyle(WorkspaceStyle.text).monospacedDigit() }.font(.caption)
                 if let reasoning = turn.reasoningTokens {
                     GeometryReader { geometry in
                         HStack(spacing: 0) {
@@ -559,15 +572,15 @@ private struct TurnDetail: View {
     }
     private func detailMetric(_ key: String, value: String, unit: String = "") -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(L(key)).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(L(key)).font(.caption).foregroundStyle(WorkspaceStyle.subtext).fixedSize(horizontal: false, vertical: true)
             TurnMetricValue(value: value, unit: unit, size: 24)
         }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
     }
     private func mixLabel(_ key: String, value: Int64, color: Color) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Circle().fill(color).frame(width: 5, height: 5).accessibilityHidden(true)
-            Text(L(key)).foregroundStyle(.secondary)
-            Text(value.formatted(.number.locale(Localization.locale))).monospacedDigit()
+            Text(L(key)).foregroundStyle(WorkspaceStyle.subtext)
+            Text(value.formatted(.number.locale(Localization.locale))).foregroundStyle(WorkspaceStyle.text).monospacedDigit()
         }.font(.caption2).accessibilityElement(children: .combine)
     }
     private func waitLabel(_ ms: Int64) -> some View {
@@ -589,7 +602,7 @@ private struct TurnMetricValue: View {
     let unit: String
     let size: CGFloat
     var body: some View {
-        Text("\(Text(value).font(DisplayNumberFont.font(size: size)).foregroundStyle(.primary))\(Text(unit.isEmpty ? "" : " " + unit).font(.caption).foregroundStyle(.secondary))")
+        Text("\(Text(value).font(DisplayNumberFont.font(size: size)).foregroundStyle(WorkspaceStyle.text))\(Text(unit.isEmpty ? "" : " " + unit).font(.caption).foregroundStyle(WorkspaceStyle.subtext))")
             .monospacedDigit().lineLimit(1).minimumScaleFactor(0.75).textSelection(.enabled)
     }
 }

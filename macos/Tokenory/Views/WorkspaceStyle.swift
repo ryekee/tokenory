@@ -43,8 +43,8 @@ enum WorkspaceStyle {
     static let cacheRead = Color(WorkspaceTone(light: 0x5260BD, dark: 0x5C6BC0))
     static let cacheWrite = Color(WorkspaceTone(light: 0xC31978, dark: 0xF50057))
     static let reasoningTokens = Color(WorkspaceTone(light: 0x716B80, dark: 0xA19EA6))
-    static let toolWait = Color.brown
-    static let otherTurnTime = Color.indigo
+    static let toolWait = Color(WorkspaceTone(light: 0xB86B2B, dark: 0xFFB067))
+    static let otherTurnTime = Color(WorkspaceTone(light: 0x5260BD, dark: 0x7986CB))
 
     static func canvas(_ scheme: ColorScheme) -> Color { page.color(for: scheme) }
     static func surface(_ scheme: ColorScheme) -> Color { panel.color(for: scheme) }
