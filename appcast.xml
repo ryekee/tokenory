@@ -4,13 +4,13 @@
         <title>Tokenory</title>
         <item>
             <title>0.2.7</title>
-            <pubDate>Fri, 27 Nov 2026 01:05:34 +0800</pubDate>
+            <pubDate>Fri, 27 Nov 2026 01:47:09 +0800</pubDate>
             <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.7</link>
-            <sparkle:version>31</sparkle:version>
+            <sparkle:version>33</sparkle:version>
             <sparkle:shortVersionString>0.2.7</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.7/Tokenory-0.2.7-macOS-arm64.zip" length="21646406" type="application/octet-stream" sparkle:edSignature="3Ludnbv4UkgSiBQJ34SFdWHbYqw/34B3MIImTYoech1jOeT+P0ruJ6SHJXTikVhb/pMGq0ZFA54NkTW3oyLfAg==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.7/Tokenory-0.2.7-build33-macOS-arm64.zip" length="21681155" type="application/octet-stream" sparkle:edSignature="FbJjFujTy8vjU7g3bSf8YDN/o+8nmzOHeKDGC+/hgYo4vEzFq33KfcBk/dKNvCTelHWMKHFA7ol2N/OIpTYSDQ==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
 - Overview card titles use matching symbols so you can find tools, insights, and charts at a glance.
@@ -19,6 +19,11 @@
 
 ## Fixes
 
+- Subagent rows with local activity keep their hover highlight and stay expandable while synced totals and details refresh.
+- Weekday and hourly bars in Coding patterns highlight immediately, with the readout appearing after a short pause.
+- Antigravity launches sync across Macs even when a subagent stops before using any tokens.
+- In the combined Overview, expanded Antigravity conversations use the same dates as the totals.
+- Clicking the expanded edge of a date in the activity calendar opens the same day shown by the pointer.
 - Overview, Records, and Speed reload their data after you restore a backup.
 - Records and This Mac only offer Retry when the full local report fails to load.
 - The refresh button keeps showing progress while a manual scan waits for an incremental scan to finish.
@@ -31,6 +36,11 @@
 
 ## 修复
 
+- 有本机活动的子代理工具行在同步刷新期间仍可悬停高亮并展开。
+- 使用习惯里的每周和每小时柱形在悬停时立即提亮，读数浮层稍后出现。
+- Antigravity 子代理启动后即使在产生用量前停止，启动次数也会同步到其他 Mac。
+- 合并总览中，展开的 Antigravity 会话和汇总使用相同的日期范围。
+- 点击活动日历放大格的边缘，会打开鼠标所指日期的详情。
 - 恢复备份后，总览、明细和速度页会重新载入数据。
 - 完整本机报告加载失败时，明细页和「只看本机」会提供重试。
 - 手动扫描等待本次增量采集完成时，刷新按钮会持续显示进度。
