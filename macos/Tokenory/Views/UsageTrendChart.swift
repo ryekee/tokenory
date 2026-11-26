@@ -71,58 +71,53 @@ struct UsageTrendChart: View {
         let presence = DashboardPlotPresence(range: range, hasData: report.summary.recordCount > 0 && hasHourlyData)
         let unallocatedTokens = report.hourly?.unallocated.tokens ?? 0
         VStack(alignment: .leading, spacing: 12) {
-            if report.summary.recordCount > 0 {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(L(hourly ? "usage.hourly" : "usage.trend")).font(.headline).foregroundStyle(WorkspaceStyle.text)
-                        .accessibilityAddTraits(.isHeader)
-                    if unallocatedTokens > 0 {
-                        Text(LF("usage.hourly_unallocated", compactTokens(unallocatedTokens)))
-                            .font(.caption).foregroundStyle(WorkspaceStyle.subtext)
-                            .lineLimit(1)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(L(hourly ? "usage.hourly" : "usage.trend")).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                    .accessibilityAddTraits(.isHeader)
+                if unallocatedTokens > 0 {
+                    Text(LF("usage.hourly_unallocated", compactTokens(unallocatedTokens)))
+                        .font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                if !sources.isEmpty { OverviewDeviceLegend() } else {
+                    HStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 2).fill(WorkspaceStyle.localUsage)
+                            .frame(width: OverviewDeviceLegend.swatchWidth, height: 12)
+                        Text("Tokens")
                     }
-                    Spacer(minLength: 8)
-                    if hasHourlyData {
-                        if !sources.isEmpty { OverviewDeviceLegend() } else {
-                            HStack(spacing: 6) {
-                                RoundedRectangle(cornerRadius: 2).fill(WorkspaceStyle.localUsage)
-                                    .frame(width: OverviewDeviceLegend.swatchWidth, height: 12)
-                                Text("Tokens")
-                            }
+                }
+                HStack(spacing: 6) {
+                    Capsule().fill(costColor).frame(width: OverviewDeviceLegend.swatchWidth, height: 2)
+                    Text(L(report.summary.costStatus == "partial" ? "cost.known" : "cost.estimate"))
+                }.padding(.leading, 10)
+            }.font(.caption)
+            HStack {
+                Text("Tokens").foregroundStyle(WorkspaceStyle.subtext)
+                Spacer()
+                Text("USD").foregroundStyle(WorkspaceStyle.subtext)
+            }.font(.caption2).monospacedDigit()
+            if hasHourlyData {
+                let selected = inspection.selection.flatMap { trend.point(containing: $0) }
+                plot(trend, sources: sources, selected: selected, presence: presence).frame(height: 210)
+                if let selected, inspection.pinned == selected.id {
+                    PinnedChartReadout(clear: {
+                        DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+                            inspection.clear()
                         }
-                        HStack(spacing: 6) {
-                            Capsule().fill(costColor).frame(width: OverviewDeviceLegend.swatchWidth, height: 2)
-                            Text(L(report.summary.costStatus == "partial" ? "cost.known" : "cost.estimate"))
-                        }.padding(.leading, 10)
+                    }) {
+                        readout(selected, hourly: trend.hourly, sources: sources)
                     }
-                }.font(.caption)
-                if hasHourlyData {
-                    HStack {
-                        Text("Tokens").foregroundStyle(WorkspaceStyle.subtext)
-                        Spacer()
-                        Text("USD").foregroundStyle(WorkspaceStyle.subtext)
-                    }.font(.caption2).monospacedDigit()
-                    let selected = inspection.selection.flatMap { trend.point(containing: $0) }
-                    plot(trend, sources: sources, selected: selected, presence: presence).frame(height: 210)
-                    if let selected, inspection.pinned == selected.id {
-                        PinnedChartReadout(clear: {
-                            DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
-                                inspection.clear()
-                            }
-                        }) {
-                            readout(selected, hourly: trend.hourly, sources: sources)
-                        }
-                        .transition(.opacity)
-                    }
-                } else {
-                    Text(L("usage.no_hourly")).font(.callout).foregroundStyle(WorkspaceStyle.subtext)
+                    .transition(.opacity)
                 }
             } else {
-                ContentUnavailableView {
-                    Label(L("usage.empty"), systemImage: "chart.bar.xaxis")
-                } actions: {
-                    Button(L("record.change_dates"), action: openDatePicker)
+                ZStack {
+                    plot(trend, sources: sources, selected: nil, presence: presence).allowsHitTesting(false)
+                    if report.summary.recordCount > 0 {
+                        Text(L("usage.no_hourly")).font(.callout).foregroundStyle(WorkspaceStyle.subtext)
+                    }
                 }
-                .frame(maxWidth: .infinity, minHeight: 210)
+                .frame(height: 210)
             }
         }
         .onChange(of: presence, initial: true) { _, next in transition.commit(next) }

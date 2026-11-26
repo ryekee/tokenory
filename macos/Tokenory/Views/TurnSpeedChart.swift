@@ -45,9 +45,9 @@ struct TurnSpeedChart: View {
         let presence = DashboardPlotPresence(range: range, hasData: data.speedTimeline?.buckets.isEmpty == false)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(L("turns.trend")).font(.headline)
+                Text(L("turns.trend")).font(.headline).foregroundStyle(WorkspaceStyle.text)
                 Spacer()
-                Text("tokens/s").font(.caption).foregroundStyle(.secondary)
+                Text("tokens/s").font(.caption).foregroundStyle(WorkspaceStyle.subtext)
             }
             if let timeline = data.speedTimeline, let domain = timeline.domain, !timeline.buckets.isEmpty {
                 plot(timeline, domain: domain)
@@ -220,7 +220,7 @@ struct TurnSpeedChart: View {
                 line(center, upper, center, high, color: accent.opacity(0.55), width: 0.8)
                 let box = Path(roundedRect: rect, cornerRadius: min(4, width / 2))
                 context.fill(box, with: .color(accent.opacity(bucket.start == highlightedBucket ? 0.68 : 0.38)))
-                line(rect.minX + inset, median, rect.maxX - inset, median, color: .primary.opacity(0.85), width: 1.5)
+                line(rect.minX + inset, median, rect.maxX - inset, median, color: WorkspaceStyle.text.opacity(0.88), width: 1.5)
             }
             for turn in bucket.visiblePoints { dot(turn, radius: 2.5, hollow: bucket.distribution != nil) }
         }
