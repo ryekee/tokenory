@@ -1,5 +1,5 @@
 // [INPUT]: 接收 worker 的 JSON 数据流和协议字段。
-// [OUTPUT]: 类型化报告、工具下的模型汇总、设备快照分块、Codex 和按客户端拆分的 Antigravity 子代理统计、Fast 用量和费用、对话身份与标题及增量分行器。
+// [OUTPUT]: 类型化报告、设备快照分块、Antigravity 本机和多设备日期口径的子代理明细、模型和用量汇总、对话身份与标题。
 // [POS]: 原生 IPC 的解析边界；已扫描的数据不重复遍历。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -122,6 +122,7 @@ struct UsageReport: Decodable, Sendable {
     var codexSubagents: CodexSubagentReport? = nil
     var antigravitySubagents: CodexSubagentReport? = nil
     var antigravitySubagentsByClient: [String: CodexSubagentReport]? = nil
+    var sharedAntigravitySubagents: CodexSubagentReport? = nil
 
     func subagents(forTool client: String) -> CodexSubagentReport? {
         let report = client == "codex" ? codexSubagents : antigravitySubagentsByClient?[client]

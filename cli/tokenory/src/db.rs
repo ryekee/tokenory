@@ -1,4 +1,4 @@
-// [INPUT]: Ledger records, turn and Codex activity evidence, and SQLite backups.
+// [INPUT]: Ledger records, turn and subagent activity evidence, and SQLite backups.
 // [OUTPUT]: Migrated analytics schema, local hour conversion, monotonic revisions across restore and bounded transient storage.
 // [POS]: SQLite persistence and backup boundary.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
@@ -23,7 +23,7 @@ impl Database {
         crate::queries::register_local_hour(&connection)?;
         let version: i64 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(
-            version <= 6,
+            version <= 7,
             "database was created by a newer Tokenory version"
         );
         if version == 0 {
@@ -36,8 +36,8 @@ impl Database {
             connection,
             directory: directory.to_owned(),
         };
-        if (1..6).contains(&version) {
-            db.backup_before("schema-6")?;
+        if (1..7).contains(&version) {
+            db.backup_before("schema-7")?;
         }
         if version < 3 {
             db.migrate_local_keys()?;
@@ -53,6 +53,10 @@ impl Database {
         if version < 6 {
             db.connection
                 .execute_batch(include_str!("../migrations/006_codex_subagents.sql"))?;
+        }
+        if version < 7 {
+            db.connection
+                .execute_batch(include_str!("../migrations/007_antigravity_subagents.sql"))?;
         }
         next_preview_id(&db.connection)?;
         prune_previews(&db.connection)?;
@@ -118,7 +122,7 @@ impl Database {
         ensure!(integrity == "ok", "backup integrity check failed");
         let version: i64 = source.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(
-            (1..=6).contains(&version),
+            (1..=7).contains(&version),
             "unsupported backup schema version"
         );
         {
@@ -147,6 +151,9 @@ impl Database {
         }
         if version >= 6 {
             crate::codex_subagents::validate_backup(&source)?;
+        }
+        if version >= 7 {
+            crate::antigravity_subagents::validate_backup(&source)?;
         }
         let restored_revision = revision(&self.connection)?
             .max(revision(&source)?)
@@ -178,6 +185,10 @@ impl Database {
         if version < 6 {
             self.connection
                 .execute_batch(include_str!("../migrations/006_codex_subagents.sql"))?;
+        }
+        if version < 7 {
+            self.connection
+                .execute_batch(include_str!("../migrations/007_antigravity_subagents.sql"))?;
         }
         next_preview_id(&self.connection)?;
         prune_previews(&self.connection)?;
@@ -234,6 +245,7 @@ impl Database {
                     | "schema-4"
                     | "schema-5"
                     | "schema-6"
+                    | "schema-7"
             ) {
                 continue;
             }

@@ -8,10 +8,10 @@ collector/hermes.rs: 替换 Hermes 本机会话快照时，按原用量组保留
 turn_analytics.rs / turn_analytics/: 泛化完成回合、来源能力与别名过滤；含 `antigravity.rs` 解析 Antigravity App/CLI 的 SQLite `steps` + `gen_metadata` 主链完成回合与合并工具等待；证据不足不估 token；有效来源重开回合返回精确撤销 ID。Claude 回合只在各回复报告的推理速度一致时返回速度。
 codex_turns.rs: 从文本日志和压缩归档校验完成主回合，缓存未变化日志，保存无正文的统计并按日期和模型查询。按回合开头的同线程、同模型设置保存所选推理速度。
 codex_subagents.rs / codex_subagents/logs.rs: 从文本日志和压缩归档识别明确派生的 Codex 子代理和用户发起的主代理回合，持久化线程、父关系及回合开始证据。用有效账本汇总可归属的 Tokens、已有费用估算和未计价 Tokens，独立计算启动数。
-antigravity_subagents.rs: 按 App 与 CLI 区分本机启动证据和有效账本用量，同时提供子代理卡片的合计与本机对话明细。
+antigravity_subagents.rs: 将 App 与 CLI 的启动证据与账本修订一同保存，按有效账本生成本机日期和多 Mac 共享日期的子代理对话明细。
 config.rs: 读取系统时区用于新记录归档并保存采集配置；读取扫描器实际默认路径，拒绝新添重复目录并保留历史配置。
 db.rs: 维护 SQLite schema、记录和备份；恢复后修订号大于恢复前账本与备份的修订号。迁移/恢复包含独立回合表，自动备份保留 3 份，预览保留 24 小时内最近 3 份。
-device_snapshot.rs: 从单一 SQLite 读事务导出有效历史，包含按工具、来源、供应商、模型汇总的用量和可筛选的 Codex、Antigravity 子代理启动数。支持读取旧版设备快照，原始对话与日志路径留在本机。云端事件按北京时间分日、小时，按日导入和近似时间保留原日期。
+device_snapshot.rs: 从单一 SQLite 读事务导出有效历史，包含按工具、来源、供应商、模型汇总的用量和可筛选的 Codex、Antigravity 子代理启动数。支持读取旧版设备快照，原始对话与日志路径留在本机。云端与本机展开明细共用日期规则，精确事件按北京时间归日，按日导入和近似时间保留原日期。
 import.rs: 识别历史文件格式，预览、提交和撤销历史导入。
 ipc.rs: 每次开始扫描时读取系统时区。增量采集中收到手动扫描请求时返回排队状态，在增量批次后启动一次全量扫描。向原生应用提供 worker JSON 协议、默认采集路径、有效账本的已用模型、对话目录、按会话查标题、总览子代理卡及 codexTurns / turnAnalytics 查询。列表用的 turnAnalytics 可附按工具和会话分组的本地标题，供速度页搜索。时间戳窗口查询省略标题。`dailySourceUsage` 接受空对象，一次返回全部日期的有效用量，每行仅有 date、client、source、tokens。 `deviceUsageSnapshot` 接受 `stream: true`，按同一请求 ID 返回有序 UTF-8 分块及完成帧。旧单帧请求超过 64 MiB 时返回可恢复错误。
 lib.rs: 导出账本引擎模块。

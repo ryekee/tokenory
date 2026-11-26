@@ -1,5 +1,5 @@
 // [INPUT]: Isolated device preferences and a CloudKit-shaped atomic storage fake.
-// [OUTPUT]: Lifecycle, replay, rollback, account isolation and offline Overview recovery checks.
+// [OUTPUT]: Device sync lifecycle, offline recovery and revision checks for cross-device conversation details.
 import Foundation
 import XCTest
 @testable import Tokenory
@@ -419,7 +419,7 @@ final class DeviceCloudSyncTests: XCTestCase {
         XCTAssertEqual(reopenedStore.message, DeviceCloudError.revoked.localizedDescription)
     }
 
-    func testSubagentDetailsMatchTheLocalSnapshotRevision() async throws {
+    func testSubagentDetailsMatchTheLocalSnapshotRevisionAndSharedCalendar() async throws {
         let cloud = FakeDeviceCloud(), (local, peer) = devices(cloud)
         try await local.enable()
         try await peer.enable()
@@ -428,16 +428,35 @@ final class DeviceCloudSyncTests: XCTestCase {
         let store = DeviceSyncStore(service: local) { localSnapshot }
         store.refresh()
         try await waitForStore { !store.busy }
-        let filter = UsageFilter()
+        let filter = UsageFilter(from: "2026-11-23", to: "2026-11-23")
         await store.select(filter, from: "2026-01-01", to: "2026-11-23")
 
-        func report(_ revision: Int64) -> UsageReport {
-            UsageReport(revision: revision, summary: localSnapshot.buckets[0].summary, daily: [], clients: [],
-                        providers: [], models: [], details: [], hourly: nil,
-                        codexSubagents: .init(starts: 1, tokens: 1, conversations: []))
+        func subagents(_ conversation: String, tokens: Int64) -> JSONValue {
+            .object(["starts": .integer(1), "tokens": .integer(tokens), "conversations": .array([
+                .object(["id": .string(conversation), "starts": .integer(1), "tokens": .integer(tokens), "agents": .array([])])
+            ])])
         }
-        XCTAssertEqual(store.matchingSubagentDetails(in: report(1), for: filter)?.starts, 1)
-        XCTAssertNil(store.matchingSubagentDetails(in: report(3), for: filter))
+        func report(_ revision: Int64, includesSharedCalendar: Bool = true) throws -> UsageReport {
+            var payload: [String: JSONValue] = [
+                "revision": .integer(revision), "summary": try .encode(localSnapshot.buckets[0].summary),
+                "daily": .array([]), "clients": .array([]), "providers": .array([]),
+                "models": .array([]), "details": .array([]),
+                "codexSubagents": subagents("codex", tokens: 1),
+                "antigravitySubagents": subagents("local-day", tokens: 10)
+            ]
+            if includesSharedCalendar { payload["sharedAntigravitySubagents"] = subagents("shared-day", tokens: 20) }
+            return try JSONValue.object(payload).decode(UsageReport.self)
+        }
+
+        let current = try report(1)
+        let shared = \UsageReport.sharedAntigravitySubagents
+        XCTAssertEqual(store.matchingSubagentDetails(in: current, for: filter)?.starts, 1)
+        XCTAssertEqual(current.antigravitySubagents?.conversations.first?.id, "local-day")
+        XCTAssertEqual(store.matchingSubagentDetails(in: current, for: filter, field: shared)?.conversations.first?.id, "shared-day")
+        XCTAssertNil(try store.matchingSubagentDetails(in: report(3), for: filter))
+        XCTAssertNil(try store.matchingSubagentDetails(in: report(3), for: filter, field: shared))
+        XCTAssertNil(store.matchingSubagentDetails(in: current, for: .init(), field: shared))
+        XCTAssertNil(try store.matchingSubagentDetails(in: report(1, includesSharedCalendar: false), for: filter, field: shared))
     }
 
     func testFailedManagementDoesNotConsumeThePendingLocalRefresh() async throws {

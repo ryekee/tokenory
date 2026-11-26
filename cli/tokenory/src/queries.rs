@@ -319,6 +319,8 @@ pub struct Report {
     pub antigravity_subagents: Option<crate::codex_subagents::Report>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub antigravity_subagents_by_client: Option<BTreeMap<String, crate::codex_subagents::Report>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared_antigravity_subagents: Option<crate::codex_subagents::Report>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -571,6 +573,10 @@ fn usage_report(db: &mut Database, f: &Filter, overview_home: Option<&Path>) -> 
         .map(|home| crate::antigravity_subagents::reports(&tx, f, home))
         .transpose()?
         .unwrap_or_default();
+    let shared_antigravity_subagents = overview_home
+        .map(|home| crate::antigravity_subagents::shared_report(&tx, f, home))
+        .transpose()?
+        .flatten();
     let result = Report {
         revision: revision(&tx)?,
         summary,
@@ -593,6 +599,7 @@ fn usage_report(db: &mut Database, f: &Filter, overview_home: Option<&Path>) -> 
         antigravity_subagents: antigravity_subagents.family,
         antigravity_subagents_by_client: (!antigravity_subagents.by_client.is_empty())
             .then_some(antigravity_subagents.by_client),
+        shared_antigravity_subagents,
     };
     tx.commit()?;
     Ok(result)

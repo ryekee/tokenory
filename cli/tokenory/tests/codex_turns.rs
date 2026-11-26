@@ -250,7 +250,7 @@ fn legacy_restore_adds_turn_schema() {
     let dir = tempfile::tempdir().unwrap();
     let db = Database::open(dir.path()).unwrap();
     db.connection
-        .execute_batch("DROP TABLE codex_main_turn_starts; DROP TABLE codex_activity_aliases; DROP TABLE codex_activity_threads; DROP TABLE codex_turns; PRAGMA user_version=3;")
+        .execute_batch("DROP TABLE antigravity_subagent_spawns; DROP TABLE codex_main_turn_starts; DROP TABLE codex_activity_aliases; DROP TABLE codex_activity_threads; DROP TABLE codex_turns; PRAGMA user_version=3;")
         .unwrap();
     let backup = dir.path().join("old.sqlite3");
     db.backup(&backup).unwrap();
@@ -263,7 +263,7 @@ fn legacy_restore_adds_turn_schema() {
         db.connection
             .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        6
+        7
     );
 }
 #[test]

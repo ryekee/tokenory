@@ -1,5 +1,5 @@
 // [INPUT]: Daily aggregates with gaps, free and unknown costs.
-// [OUTPUT]: Regression coverage for calendar layout and hover geometry, model history and rounded axis ticks.
+// [OUTPUT]: Regression coverage for calendar layout and pointer geometry, model history and rounded axis ticks.
 // [POS]: Pure native presentation tests.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import XCTest
@@ -116,6 +116,26 @@ final class UsageActivityTests: XCTestCase {
         XCTAssertEqual(layout.position(at: CGPoint(x: next.midX, y: next.midY), retaining: day), day + 7)
         XCTAssertNil(layout.position(at: CGPoint(x: layout.plot.maxX + 1, y: cell.midY), retaining: day))
     }
+
+    func testCalendarPointerResolvesExpandedDaysAndRejectsGapsAndPadding() {
+        let layout = ActivityCalendarLayout(width: 896, weeks: 53, dayPositions: 2..<369)
+        let day = 24 * 7 + 3
+        let cell = layout.cellFrame(at: day)
+        let below = layout.cellFrame(at: day + 1)
+        let expandedEdge = CGPoint(x: cell.midX, y: below.minY + 0.5)
+        XCTAssertEqual(layout.position(at: expandedEdge), day + 1)
+        XCTAssertEqual(layout.position(at: expandedEdge, retaining: day), day)
+
+        let gap = CGPoint(x: cell.midX, y: below.minY + 2)
+        XCTAssertNil(layout.position(at: gap, retaining: day))
+        XCTAssertEqual(layout.position(at: CGPoint(x: below.midX, y: below.midY), retaining: day), day + 1)
+
+        for position in [0, 1, 369, 370] {
+            let padding = layout.cellFrame(at: position)
+            XCTAssertNil(layout.position(at: CGPoint(x: padding.midX, y: padding.midY), retaining: position))
+        }
+    }
+
     func testActivityStreakAndAverageUseOnlyDaysWithTokens() {
         let activity = UsageActivity(report: report)
         XCTAssertEqual(activity.streak.current, 0)

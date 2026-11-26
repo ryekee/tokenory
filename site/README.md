@@ -7,7 +7,7 @@ python3 site/build.py
 python3 -m http.server 8772 --bind 127.0.0.1 --directory site/dist
 ```
 
-构建使用 Python 标准库，默认读取本地 `releases.json`。使用 `python3 site/build.py --refresh-releases` 可通过已认证的 `gh` 刷新正式发布数据、下载链接和更新说明。每个版本号链接至 GitHub Release。双语说明跟随页面语言，历史版本使用 GitHub 渲染的已发布正文。
+构建使用 Python 标准库，默认读取本地 `releases.json`。使用 `python3 site/build.py --refresh-releases` 可通过已认证的 `gh` 刷新正式发布数据、下载链接和更新说明。同一版本有多个 Mac 安装包时，下载按钮优先指向 build 编号最高的正式附件，并保留历史版本的文件名兼容性。每个版本号链接至 GitHub Release。双语说明跟随页面语言，历史版本使用 GitHub 渲染的已发布正文。
 
 `site_copy.py` 保存界面文案，`page.html` 保存共享页面结构。构建从品牌目录读取应用图标，从 `site/fonts/` 复制机械 HUD 数字字体及许可证。该 Saira Extra Condensed SemiBold 字体提取自最初的机械 HUD 原型。共享导航使用与 RuaKey 相同的 Phosphor 图标，许可证在 `site/icons/LICENSE.txt`。
 

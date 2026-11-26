@@ -1,5 +1,5 @@
 // [INPUT]: Selected-range and annual reports for this Mac and participating devices.
-// [OUTPUT]: Rolling totals and titled overview cards for insights, subagents, rankings and annual activity.
+// [OUTPUT]: Rolling totals and overview cards with Antigravity details scoped to the active reporting calendar.
 // [POS]: Native overview composition; disclosure keeps detailed caveats off the canvas.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -399,9 +399,16 @@ struct OverviewView: View {
             .reduce(0) { $0 + $1.summary.tokens }
     }
 
-    private func localSubagentDetails(_ field: KeyPath<UsageReport, CodexSubagentReport?>) -> CodexSubagentReport? {
-        if multiDevice { return store.cloud.matchingSubagentDetails(in: report, for: reportFilter, field: field) }
-        return report[keyPath: field]
+    private var localCodexSubagentDetails: CodexSubagentReport? {
+        if multiDevice { return store.cloud.matchingSubagentDetails(in: report, for: reportFilter) }
+        return report.codexSubagents
+    }
+
+    private var localAntigravitySubagentDetails: CodexSubagentReport? {
+        if multiDevice {
+            return store.cloud.matchingSubagentDetails(in: report, for: reportFilter, field: \.sharedAntigravitySubagents)
+        }
+        return report.antigravitySubagents
     }
 
     var body: some View {
@@ -457,8 +464,8 @@ struct OverviewView: View {
                                         UsageRankingView(groups: overview.clients, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.clients), by: \.key), kind: .tool, metric: rankingMetric, range: range,
                                                          childModels: overview.clientModels ?? [:], toolReport: overview)
                                         UsageRankingView(groups: overview.models, remoteGroups: Dictionary(grouping: remoteReports.values.flatMap(\.models), by: \.key), kind: .model, metric: rankingMetric, range: range,
-                                                         codexSubagents: localSubagentDetails(\.codexSubagents),
-                                                         antigravitySubagents: localSubagentDetails(\.antigravitySubagents))
+                                                         codexSubagents: localCodexSubagentDetails,
+                                                         antigravitySubagents: localAntigravitySubagentDetails)
                                     }
                                 }
                             }
@@ -469,7 +476,7 @@ struct OverviewView: View {
                                         id: "codex",
                                         name: clientName("codex"),
                                         report: codex,
-                                        local: localSubagentDetails(\.codexSubagents),
+                                        local: localCodexSubagentDetails,
                                         remote: remoteReports.values.compactMap(\.codexSubagents),
                                         toolTokens: overview.clients.first { $0.key == "codex" }?.summary.tokens ?? 0
                                     ))
@@ -479,7 +486,7 @@ struct OverviewView: View {
                                         id: "antigravity",
                                         name: clientName("antigravity"),
                                         report: agy,
-                                        local: localSubagentDetails(\.antigravitySubagents),
+                                        local: localAntigravitySubagentDetails,
                                         remote: remoteReports.values.compactMap(\.antigravitySubagents),
                                         toolTokens: antigravityToolTokens
                                     ))

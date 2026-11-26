@@ -35,6 +35,16 @@ ICONS = {
 }
 
 
+def mac_archive(tag, assets):
+    pattern = re.compile(rf"Tokenory-{re.escape(tag[1:])}(?:-build([1-9][0-9]*))?-macOS-arm64\.zip")
+    candidates = []
+    for asset in assets:
+        match = pattern.fullmatch(asset["name"])
+        if match and asset["state"] == "uploaded":
+            candidates.append((int(match[1] or 0), asset["name"]))
+    return max(candidates)[1] if candidates else None
+
+
 def refresh_releases(expect_tag):
     result = subprocess.run(
         ["gh", "api", "--paginate", "--slurp", "-H", "Accept: application/vnd.github.full+json",
@@ -48,13 +58,14 @@ def refresh_releases(expect_tag):
             tag = release["tag_name"]
             if release["draft"] or release["prerelease"] or not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
                 continue
-            filename = f"Tokenory-{tag[1:]}-macOS-arm64.zip"
-            asset = next((item for item in release["assets"] if item["name"] == filename), None)
-            if not asset or not release["published_at"]:
+            filename = mac_archive(tag, release["assets"])
+            if not filename or not release["published_at"]:
                 continue
             date = datetime.fromisoformat(release["published_at"].replace("Z", "+00:00"))
             notes = published_notes(release["body"] or "")
             entry = {"tag": tag, "date": date.astimezone(china_time).date().isoformat()}
+            if filename != f"Tokenory-{tag[1:]}-macOS-arm64.zip":
+                entry["archive"] = filename
             if notes:
                 entry["notes"] = notes
             else:
@@ -94,8 +105,10 @@ def published_notes(body):
     return notes if all(sections["features"] or sections["fixes"] for sections in notes.values()) else None
 
 
-def download(tag):
-    return f"{REPO}/releases/download/{tag}/Tokenory-{tag[1:]}-macOS-arm64.zip"
+def download(release):
+    tag = release["tag"]
+    filename = release.get("archive", f"Tokenory-{tag[1:]}-macOS-arm64.zip")
+    return f"{REPO}/releases/download/{tag}/{filename}"
 
 
 def nav_link(href, label, icon, *, current=None, footer=False):
@@ -160,7 +173,7 @@ def feature_showcases(copy, models):
 """
 
 
-def home(copy, tag, models):
+def home(copy, release, models):
     first, second = copy["headline"]
     emphasis = copy["headline_emphasis"]
     before, after = second.split(emphasis, 1)
@@ -176,8 +189,8 @@ def home(copy, tag, models):
     <h1>{headline}</h1>
     <p>{escape(copy['intro'])}</p>
     <div class="download-row">
-      <a class="download" href="{download(tag)}">{ICONS['download']}{escape(copy['download'])}</a>
-      <p class="requirements">{tag} · {escape(copy['requirements'])}</p>
+      <a class="download" href="{download(release)}">{ICONS['download']}{escape(copy['download'])}</a>
+      <p class="requirements">{release['tag']} · {escape(copy['requirements'])}</p>
     </div>
   </div>
   <figure class="stage" aria-label="{escape(copy['demo'])}">
@@ -242,7 +255,7 @@ def changelog(copy, language, releases):
 
 def build():
     releases = json.loads(METADATA.read_text(encoding="utf-8"))
-    latest = releases[0]["tag"]
+    latest = releases[0]
     models = demo_prices()
     dist = SITE / "dist"
     assets = dist / "assets"
