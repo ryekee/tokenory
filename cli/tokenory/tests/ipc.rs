@@ -17,72 +17,112 @@ use tokenory::{
 #[test]
 #[cfg(target_os = "macos")]
 fn manual_scan_waits_for_running_incremental_collection() {
+    struct Worker(std::process::Child);
+    impl Drop for Worker {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
     let data = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
     let sessions = home.path().join(".codex/sessions");
     std::fs::create_dir_all(&sessions).unwrap();
+    let rollout = sessions.join("rollout-live.jsonl");
+    let finished_rollout = home.path().join("finished-rollout");
+    // The first scan registers this rollout with the active-file poller.
+    std::fs::write(&rollout, "{}\n").unwrap();
+    std::fs::write(&finished_rollout, "{}\n").unwrap();
     tokenory::config::Config {
         home_dir: home.path().into(),
         interval_seconds: 86400,
         ..Default::default()
-    }.save(data.path()).unwrap();
-    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("tokenory"))
-        .args(["--data-dir", data.path().to_str().unwrap(), "worker", "--stdio"])
-        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit())
-        .spawn().unwrap();
-    let mut input = child.stdin.take().unwrap();
-    let output = child.stdout.take().unwrap();
+    }
+    .save(data.path())
+    .unwrap();
+    let mut child = Worker(
+        Command::new(assert_cmd::cargo::cargo_bin!("tokenory"))
+            .args([
+                "--data-dir",
+                data.path().to_str().unwrap(),
+                "worker",
+                "--stdio",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap(),
+    );
+    let mut input = child.0.stdin.take().unwrap();
+    let output = child.0.stdout.take().unwrap();
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         for line in BufReader::new(output).lines() {
-            if tx.send(serde_json::from_str::<Value>(&line.unwrap()).unwrap()).is_err() { break; }
-        }
-    });
-    let deadline = std::time::Instant::now() + Duration::from_secs(40);
-    let receive = || rx.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now())).expect("worker response timeout");
-    while receive()["event"] != "scanFinished" {}
-
-    // A large changed rollout keeps the incremental scan in flight long enough
-    // to send the manual request while it runs.
-    let path = sessions.join("rollout-live.jsonl");
-    let mut file = std::fs::File::create(&path).unwrap();
-    let line = format!("{}\n", " ".repeat(4095));
-    for _ in 0..16_384 { file.write_all(line.as_bytes()).unwrap(); }
-    drop(file);
-    let mut in_live_scan = false;
-    while std::time::Instant::now() < deadline {
-        writeln!(input, "{}", json!({"version":1,"id":"status","operation":"status"})).unwrap();
-        input.flush().unwrap();
-        loop {
-            let message = receive();
-            if message["id"] == "status" {
-                in_live_scan = message["result"]["scanning"] == true;
+            if tx
+                .send(serde_json::from_str::<Value>(&line.unwrap()).unwrap())
+                .is_err()
+            {
                 break;
             }
         }
-        if in_live_scan { break; }
+    });
+    let deadline = std::time::Instant::now() + Duration::from_secs(40);
+    let receive = |phase| {
+        let message = rx
+            .recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
+            .unwrap_or_else(|error| panic!("worker timeout during {phase}: {error}"));
+        assert_ne!(
+            message["event"], "scanFailed",
+            "worker scan failed during {phase}: {message}"
+        );
+        message
+    };
+    while receive("initial scan")["event"] != "scanFinished" {}
+
+    // The replacement is visible to the active-file poller even without FSEvents.
+    // A held pipe keeps the incremental reader blocked until the manual request is queued.
+    let pipe = home.path().join("blocked-rollout");
+    assert!(Command::new("/usr/bin/mkfifo")
+        .arg(&pipe)
+        .status()
+        .unwrap()
+        .success());
+    let hold = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&pipe)
+        .unwrap();
+    std::fs::rename(&pipe, &rollout).unwrap();
+    let mut query = |operation| {
+        writeln!(
+            input,
+            "{}",
+            json!({"version":1,"id":operation,"operation":operation})
+        )
+        .unwrap();
+        input.flush().unwrap();
+        loop {
+            let message = receive(operation);
+            if message["id"] == operation {
+                break message;
+            }
+        }
+    };
+    while query("status")["result"]["scanning"] != true {
+        assert!(std::time::Instant::now() < deadline, "missing incremental scan");
         std::thread::sleep(Duration::from_millis(10));
     }
-    assert!(in_live_scan, "fixture must enter an incremental scan");
-    writeln!(input, "{}", json!({"version":1,"id":"scan","operation":"scan"})).unwrap();
-    input.flush().unwrap();
-    let mut replied = false;
-    let mut started = false;
-    let mut completed = false;
-    while !completed {
-        let message = receive();
-        if message["id"] == "scan" {
-            assert_eq!(message["result"]["started"], false, "manual request must arrive during the incremental scan");
-            assert_eq!(message["result"]["queued"], true);
-            replied = true;
-        }
-        if message["event"] == "scanStarted" { started = true; }
-        if message["event"] == "scanFinished" { completed = true; }
-    }
-    assert!(replied, "manual request must receive a reply");
-    assert!(started, "queued manual scan must publish scanStarted");
+    let reply = query("scan");
+    assert_eq!(reply["result"], json!({"started":false,"queued":true}));
+    // The next read must see a regular rollout. Closing the pipe ends a read already in progress.
+    std::fs::rename(&finished_rollout, &rollout).unwrap();
+    drop(hold);
+    while receive("waiting for queued scan to start")["event"] != "scanStarted" {}
+    while receive("waiting for queued scan to finish")["event"] != "scanFinished" {}
     drop(input);
-    assert!(child.wait().unwrap().success());
+    assert!(child.0.wait().unwrap().success());
 }
 
 #[test]
