@@ -24,20 +24,23 @@ enum HUDPlacement: String, CaseIterable {
 
     var label: String { L("hud.position." + rawValue) }
 
-    func origin(in bounds: CGRect, screenFrame: CGRect, size: CGSize) -> CGPoint {
-        // Match visible case-edge margins as fractions of the full screen dimensions.
-        // The bottom reference includes the Dock and the window's 5 pt transparent padding.
-        let sideMargin = (bounds.minY - screenFrame.minY + 5) * screenFrame.width / screenFrame.height
-        let left = max(bounds.minX, screenFrame.minX + sideMargin - 5)
-        let right = min(bounds.maxX - size.width, screenFrame.maxX - sideMargin + 5 - size.width)
-        let x: CGFloat
+    var anchor: HUDDockAnchor {
         switch self {
-        case .topLeft, .bottomLeft: x = left
-        case .topCenter, .bottomCenter: x = bounds.midX - size.width / 2
-        case .topRight, .bottomRight: x = right
+        case .topLeft: HUDDockAnchor(edge: .top, along: 0)
+        case .topCenter: HUDDockAnchor(edge: .top, along: 0.5)
+        case .topRight: HUDDockAnchor(edge: .top, along: 1)
+        case .bottomLeft: HUDDockAnchor(edge: .bottom, along: 0)
+        case .bottomCenter: HUDDockAnchor(edge: .bottom, along: 0.5)
+        case .bottomRight: HUDDockAnchor(edge: .bottom, along: 1)
         }
-        let top = self == .topLeft || self == .topCenter || self == .topRight
-        return CGPoint(x: x, y: top ? bounds.maxY - size.height : bounds.minY)
+    }
+
+    func origin(in bounds: CGRect, screenFrame: CGRect, size: CGSize) -> CGPoint {
+        HUDLayoutSolver.origin(
+            for: anchor,
+            in: HUDDisplayMetrics(screenFrame: screenFrame, visibleFrame: bounds),
+            size: size
+        )
     }
 }
 
@@ -47,8 +50,31 @@ final class HUDPreferences {
     @ObservationIgnored private let defaults: UserDefaults
     var enabled: Bool { didSet { defaults.set(enabled, forKey: "hud.enabled") } }
     var autoHideWhenIdle: Bool { didSet { defaults.set(autoHideWhenIdle, forKey: "hud.autoHideWhenIdle") } }
+    var followPointer: Bool { didSet { defaults.set(followPointer, forKey: "hud.followPointer") } }
     var dismissal: HUDDismissal { didSet { defaults.set(dismissal.rawValue, forKey: "hud.dismissal") } }
-    var placement: HUDPlacement { didSet { defaults.set(placement.rawValue, forKey: "hud.placement") } }
+    var anchor: HUDDockAnchor {
+        didSet {
+            defaults.set(anchor.edge.rawValue, forKey: "hud.anchor.edge")
+            defaults.set(anchor.along, forKey: "hud.anchor.along")
+            if let matched = anchor.matchingPreset() {
+                defaults.set(matched.rawValue, forKey: "hud.placement")
+            }
+        }
+    }
+    var pinnedDisplayID: UInt32? {
+        didSet {
+            if let pinnedDisplayID {
+                defaults.set(Int(pinnedDisplayID), forKey: "hud.pinnedDisplayID")
+            } else {
+                defaults.removeObject(forKey: "hud.pinnedDisplayID")
+            }
+        }
+    }
+    var placement: HUDPlacement {
+        get { anchor.matchingPreset() ?? .bottomRight }
+        set { anchor = newValue.anchor }
+    }
+    var matchedPlacement: HUDPlacement? { anchor.matchingPreset() }
     var metric: HUDMetric { didSet { defaults.set(metric.rawValue, forKey: "hud.metric") } }
     var soundEnabled: Bool { didSet { defaults.set(soundEnabled, forKey: "hud.soundEnabled") } }
     var volume: Double { didSet { defaults.set(volume, forKey: "hud.volume") } }
@@ -57,8 +83,21 @@ final class HUDPreferences {
         self.defaults = defaults
         enabled = defaults.bool(forKey: "hud.enabled")
         autoHideWhenIdle = defaults.bool(forKey: "hud.autoHideWhenIdle")
+        followPointer = defaults.object(forKey: "hud.followPointer") as? Bool ?? true
         dismissal = HUDDismissal(rawValue: defaults.string(forKey: "hud.dismissal") ?? "") ?? .disable
-        placement = HUDPlacement(rawValue: defaults.string(forKey: "hud.placement") ?? "") ?? .bottomRight
+        if let edgeRaw = defaults.string(forKey: "hud.anchor.edge"),
+           let edge = HUDEdge(rawValue: edgeRaw),
+           let along = defaults.object(forKey: "hud.anchor.along") as? Double {
+            anchor = HUDDockAnchor(edge: edge, along: along)
+        } else {
+            let legacy = HUDPlacement(rawValue: defaults.string(forKey: "hud.placement") ?? "") ?? .bottomRight
+            anchor = legacy.anchor
+        }
+        if let storedDisplay = defaults.object(forKey: "hud.pinnedDisplayID") as? Int, storedDisplay > 0 {
+            pinnedDisplayID = UInt32(storedDisplay)
+        } else {
+            pinnedDisplayID = nil
+        }
         metric = HUDMetric(rawValue: defaults.string(forKey: "hud.metric") ?? "") ?? .tokens
         soundEnabled = defaults.bool(forKey: "hud.soundEnabled")
         let stored = defaults.object(forKey: "hud.volume") as? Double ?? 0.35

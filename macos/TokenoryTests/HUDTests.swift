@@ -221,30 +221,67 @@ final class HUDTests: XCTestCase {
         defaults.set(8, forKey: "hud.volume")
         XCTAssertEqual(HUDPreferences(defaults: defaults).volume, 1)
     }
-    func testPlacementUsesVisibleScreenEdgesIncludingOffsetDisplays() {
+    func testPlacementUsesCompactScreenEdgesIncludingOffsetDisplays() {
         let bounds = CGRect(x: -1440, y: 80, width: 1440, height: 790)
+        let screen = CGRect(x: -1440, y: 0, width: 1440, height: 900)
         let size = CGSize(width: 220, height: 92)
+        // Compact 10pt visual edge inset (= 5pt frame inset) and 3pt clearance below menu bar.
         let expected: [CGPoint] = [
-            CGPoint(x: -1309, y: 778), CGPoint(x: -830, y: 778), CGPoint(x: -351, y: 778),
-            CGPoint(x: -1309, y: 80), CGPoint(x: -830, y: 80), CGPoint(x: -351, y: 80)
+            CGPoint(x: -1435, y: 775), CGPoint(x: -830, y: 775), CGPoint(x: -225, y: 775),
+            CGPoint(x: -1435, y: 80), CGPoint(x: -830, y: 80), CGPoint(x: -225, y: 80)
         ]
         for (placement, origin) in zip(HUDPlacement.allCases, expected) {
-            XCTAssertEqual(placement.origin(in: bounds, screenFrame: CGRect(x: -1440, y: 0, width: 1440, height: 900), size: size), origin)
-            XCTAssertTrue(bounds.contains(CGRect(origin: origin, size: size)))
+            XCTAssertEqual(placement.origin(in: bounds, screenFrame: screen, size: size), origin)
+            XCTAssertTrue(screen.contains(CGRect(origin: origin, size: size)))
         }
     }
-    func testCornerMarginsMatchScreenAspectRatioAndAvoidSideDock() {
-        let screen = CGRect(x: 0, y: 0, width: 900, height: 1600)
-        let visible = CGRect(x: 80, y: 0, width: 820, height: 1570)
+    func testBottomCornersSitFlushWhenDockDoesNotOverlapAndLiftWhenOverlapping() {
+        let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let visible = CGRect(x: 0, y: 70, width: 1440, height: 800)
         let size = CGSize(width: 220, height: 92)
-        let left = HUDPlacement.bottomLeft.origin(in: visible, screenFrame: screen, size: size)
-        XCTAssertEqual(left.x, 80)
-        let right = HUDPlacement.bottomRight.origin(in: visible, screenFrame: screen, size: size)
-        XCTAssertEqual(right.x, 680) // Keep the entire panel inside the usable area.
-        let bottomDock = CGRect(x: 0, y: 80, width: 900, height: 1490)
-        let corner = HUDPlacement.bottomRight.origin(in: bottomDock, screenFrame: screen, size: size)
-        XCTAssertEqual((screen.maxX - (corner.x + size.width - 5)) / screen.width,
-                       (corner.y + 5 - screen.minY) / screen.height, accuracy: 0.000001)
+
+        // Centered narrow Dock (width 500 -> x: 470...970): bottomLeft and bottomRight sit flush at bottom!
+        let narrowDock = CGRect(x: 470, y: 0, width: 500, height: 68)
+        let narrowMetrics = HUDDisplayMetrics(screenFrame: screen, visibleFrame: visible, dockRect: narrowDock, menuBarHeight: 30)
+        let leftOrigin = HUDLayoutSolver.origin(for: HUDPlacement.bottomLeft.anchor, in: narrowMetrics, size: size)
+        let rightOrigin = HUDLayoutSolver.origin(for: HUDPlacement.bottomRight.anchor, in: narrowMetrics, size: size)
+        let centerOrigin = HUDLayoutSolver.origin(for: HUDPlacement.bottomCenter.anchor, in: narrowMetrics, size: size)
+        XCTAssertEqual(leftOrigin, CGPoint(x: 5, y: 5))
+        XCTAssertEqual(rightOrigin, CGPoint(x: 1215, y: 5))
+        XCTAssertEqual(centerOrigin.y, 71) // Lifted above Dock (68 + 3pt frame clearance).
+
+        // Wide Dock reaching corners: bottomLeft and bottomRight lift above Dock.
+        let wideDock = CGRect(x: 120, y: 0, width: 1200, height: 68)
+        let wideMetrics = HUDDisplayMetrics(screenFrame: screen, visibleFrame: visible, dockRect: wideDock, menuBarHeight: 30)
+        XCTAssertEqual(HUDLayoutSolver.origin(for: HUDPlacement.bottomLeft.anchor, in: wideMetrics, size: size).y, 71)
+        XCTAssertEqual(HUDLayoutSolver.origin(for: HUDPlacement.bottomRight.anchor, in: wideMetrics, size: size).y, 71)
+
+        // Auto-hidden Dock collapsed (dockRect == nil, dockAutoHidden == true): bottomCenter sits flush too.
+        let hiddenDockMetrics = HUDDisplayMetrics(screenFrame: screen, visibleFrame: screen, dockRect: nil, menuBarHeight: 0, dockAutoHidden: true, menuBarAutoHidden: true)
+        XCTAssertEqual(HUDLayoutSolver.origin(for: HUDPlacement.bottomCenter.anchor, in: hiddenDockMetrics, size: size).y, 5)
+
+        // Notch avoidance when menu bar is auto-hidden and collapsed.
+        let notch = CGRect(x: 620, y: 866, width: 200, height: 34)
+        let notchMetrics = HUDDisplayMetrics(screenFrame: screen, visibleFrame: screen, dockRect: nil, menuBarHeight: 0, notchRect: notch, dockAutoHidden: true, menuBarAutoHidden: true)
+        XCTAssertEqual(HUDLayoutSolver.origin(for: HUDPlacement.topCenter.anchor, in: notchMetrics, size: size).y, 866 - 3 - size.height)
+        XCTAssertEqual(HUDLayoutSolver.origin(for: HUDPlacement.topLeft.anchor, in: notchMetrics, size: size).y, 900 - 5 - size.height)
+    }
+    func testMagneticSnapChoosesNearestEdgeAndScalesBounceWithDistance() {
+        let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let metrics = HUDDisplayMetrics(screenFrame: screen, visibleFrame: screen, dockRect: nil, menuBarHeight: 0, dockAutoHidden: true, menuBarAutoHidden: true)
+        let size = CGSize(width: 220, height: 92)
+
+        let leftSnap = HUDLayoutSolver.snap(from: CGPoint(x: 40, y: 400), velocity: .zero, in: metrics, size: size)
+        XCTAssertEqual(leftSnap.edge, .left)
+        XCTAssertNil(leftSnap.matchingPreset())
+
+        let rightSnap = HUDLayoutSolver.snap(from: CGPoint(x: 1180, y: 400), velocity: .zero, in: metrics, size: size)
+        XCTAssertEqual(rightSnap.edge, .right)
+
+        let near = HUDLayoutSolver.magneticSnapParameters(from: CGPoint(x: 25, y: 10), to: CGPoint(x: 5, y: 10), releaseVelocity: .zero)
+        let far = HUDLayoutSolver.magneticSnapParameters(from: CGPoint(x: 400, y: 10), to: CGPoint(x: 5, y: 10), releaseVelocity: .zero)
+        XCTAssertLessThan(far.damping, near.damping, "Farther release should have lower effective damping for stronger bounce")
+        XCTAssertGreaterThan(abs(far.initialVelocity.dx), abs(near.initialVelocity.dx))
     }
     func testReducedMotionUnavailableAndLargestCounterSettleExactly() {
         let model = HUDAnimator()
@@ -285,7 +322,8 @@ final class HUDTests: XCTestCase {
         XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenNone))
         let screen = try XCTUnwrap(panel.screen)
         XCTAssertEqual(panel.frame.size, MechanicalHUDView.windowSize)
-        XCTAssertEqual(panel.frame.maxY, screen.visibleFrame.maxY)
+        XCTAssertLessThanOrEqual(panel.frame.maxY, screen.visibleFrame.maxY)
+        XCTAssertGreaterThanOrEqual(panel.frame.maxY, screen.visibleFrame.maxY - 10)
         XCTAssertGreaterThanOrEqual(panel.frame.minX, screen.visibleFrame.minX)
         let originalOrigin = panel.frame.origin
         preferences.volume = 0.2
