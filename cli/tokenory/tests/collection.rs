@@ -46,7 +46,7 @@ async fn provider_correction_updates_one_event_across_scans_and_legacy_keys_merg
     tokenory::db::put_record(&db.connection, "local", "", &legacy_first).unwrap();
     tokenory::db::put_record(&db.connection, "local", "", &legacy_corrected).unwrap();
     db.connection
-        .execute_batch("DROP TABLE codex_main_turn_starts; DROP TABLE codex_activity_aliases; DROP TABLE codex_activity_threads; PRAGMA user_version=2;")
+        .execute_batch("DROP TABLE antigravity_subagent_spawns; DROP TABLE codex_main_turn_starts; DROP TABLE codex_activity_aliases; DROP TABLE codex_activity_threads; PRAGMA user_version=2;")
         .unwrap();
     let backup = data.path().join("legacy.sqlite3");
     db.backup(&backup).unwrap();

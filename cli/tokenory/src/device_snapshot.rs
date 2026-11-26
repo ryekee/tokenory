@@ -3,15 +3,13 @@
 // [POS]: The worker's export boundary for Apple-device usage sync.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 use crate::{
-    antigravity_subagents::snapshot_children,
     codex_subagents::UNIQUE_ALIASES_SQL,
     db::{revision, Database},
     queries::{read_summary, reporting_hour_sql, Summary, SUMMARY_SQL},
 };
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use serde::Serialize;
-use std::path::Path;
 
 const REPORTING_TIMEZONE: &str = "Asia/Shanghai";
 
@@ -66,29 +64,29 @@ const AGENT_JOIN: &str = "LEFT JOIN aliases a ON r.client='codex' AND r.source='
        AND a.ledger_id=json_extract(r.body,'$.sessionId')
     LEFT JOIN codex_activity_threads t ON r.client='codex' AND r.source='local'
        AND t.depth>0 AND t.id=coalesce(a.thread_id,json_extract(r.body,'$.sessionId'))";
-const ANTIGRAVITY_CHILDREN: &str = "SELECT json_extract(value,'$.client') AS client,
-        json_extract(value,'$.id') AS id, json_extract(value,'$.started_ms') AS started_ms
-    FROM json_each(?2)";
-const ANTIGRAVITY_JOIN: &str = "LEFT JOIN agy_children agy ON r.source='local'
-        AND r.client=agy.client AND json_extract(r.body,'$.sessionId')=agy.id";
+const ANTIGRAVITY_JOIN: &str = "LEFT JOIN antigravity_subagent_spawns agy ON r.source='local'
+        AND r.client=agy.client AND json_extract(r.body,'$.sessionId')=agy.child_id";
 
 // Only individual local events can move to the common reporting day. Import
 // days and approximate session timestamps describe their original buckets.
-const REPORTING_DATE: &str = "CASE WHEN r.source='local'
-        AND coalesce(json_extract(r.body, '$.timezone'), ?1) <> 'Asia/Shanghai'
+pub(crate) fn reporting_date_sql(timezone: &str) -> String {
+    format!("CASE WHEN r.source='local'
+        AND coalesce(json_extract(r.body, '$.timezone'), {timezone}) <> 'Asia/Shanghai'
         AND coalesce(json_extract(r.body, '$.metadata.granularity') NOT IN ('day', 'sourceRecord'), 1)
     THEN coalesce(strftime('%Y-%m-%d', json_extract(r.body, '$.timestampMs') / 1000.0, 'unixepoch', '+8 hours'), r.date)
-    ELSE r.date END";
+    ELSE r.date END")
+}
 const AGENT_START_DATE: &str =
     "coalesce(strftime('%Y-%m-%d', t.started_ms / 1000.0, 'unixepoch', '+8 hours'), t.date)";
 
-fn buckets(db: &Connection, timezone: &str, antigravity_children: &str) -> Result<Vec<Bucket>> {
+fn buckets(db: &Connection, timezone: &str) -> Result<Vec<Bucket>> {
     let (timed, hour) = reporting_hour_sql("%H");
+    let reporting_date = reporting_date_sql("?1");
     let mut stmt = db.prepare(&format!(
-        "WITH aliases AS ({UNIQUE_ALIASES_SQL}), agy_children AS MATERIALIZED ({ANTIGRAVITY_CHILDREN}), selected AS (
-           SELECT {REPORTING_DATE} AS date, r.body, r.client, r.provider, r.model, r.source,
+        "WITH aliases AS ({UNIQUE_ALIASES_SQL}), selected AS (
+           SELECT {reporting_date} AS date, r.body, r.client, r.provider, r.model, r.source,
                   r.tokens, r.input, r.output, r.cache_read, r.cache_write, r.reasoning,
-                  r.estimated_cost, r.requests, t.id IS NOT NULL AS agent, agy.id IS NOT NULL AS agy_agent
+                  r.estimated_cost, r.requests, t.id IS NOT NULL AS agent, agy.child_id IS NOT NULL AS agy_agent
            FROM effective_usage r {AGENT_JOIN} {ANTIGRAVITY_JOIN}
          )
          SELECT date, CASE WHEN {timed} THEN CAST({hour} AS INTEGER) END AS h,
@@ -96,7 +94,7 @@ fn buckets(db: &Connection, timezone: &str, antigravity_children: &str) -> Resul
          FROM selected GROUP BY date,h,client,provider,model,source,agent,agy_agent
          ORDER BY date,h,client,provider,model,source,agent,agy_agent"
     ))?;
-    let rows = stmt.query_map(params![timezone, antigravity_children], |row| {
+    let rows = stmt.query_map([timezone], |row| {
         Ok(Bucket {
             date: row.get(0)?,
             hour: row.get(1)?,
@@ -120,25 +118,26 @@ fn buckets(db: &Connection, timezone: &str, antigravity_children: &str) -> Resul
 fn starts(
     db: &Connection,
     timezone: &str,
-    antigravity_children: &str,
 ) -> Result<(Vec<StartCount>, Vec<AntigravityStartCount>)> {
     const ANTIGRAVITY_START_DATE: &str =
         "strftime('%Y-%m-%d', agy.started_ms / 1000.0, 'unixepoch', '+8 hours')";
+    let reporting_date = reporting_date_sql("?1");
     let mut stmt = db.prepare(&format!(
-        "WITH aliases AS ({UNIQUE_ALIASES_SQL}), agy_children AS MATERIALIZED ({ANTIGRAVITY_CHILDREN}),
+        "WITH aliases AS ({UNIQUE_ALIASES_SQL}),
          codex_starts AS (
            SELECT t.id, {AGENT_START_DATE} AS date,t.provider FROM codex_activity_threads t WHERE t.depth>0
          ),
          codex_seen AS (
-           SELECT DISTINCT t.id,{AGENT_START_DATE} AS start,{REPORTING_DATE} AS evidence,r.provider,r.model
+           SELECT DISTINCT t.id,{AGENT_START_DATE} AS start,{reporting_date} AS evidence,r.provider,r.model
            FROM effective_usage r {AGENT_JOIN}
            WHERE r.client='codex' AND r.source='local' AND t.id IS NOT NULL
          ),
          agy_starts AS (
-           SELECT agy.client,agy.id,{ANTIGRAVITY_START_DATE} AS date FROM agy_children agy WHERE agy.started_ms IS NOT NULL
+           SELECT agy.client,agy.child_id AS id,{ANTIGRAVITY_START_DATE} AS date
+           FROM antigravity_subagent_spawns agy WHERE agy.started_ms IS NOT NULL
          ),
          agy_seen AS (
-           SELECT DISTINCT agy.client,agy.id,{ANTIGRAVITY_START_DATE} AS start,{REPORTING_DATE} AS evidence,r.provider,r.model
+           SELECT DISTINCT agy.client,agy.child_id AS id,{ANTIGRAVITY_START_DATE} AS start,{reporting_date} AS evidence,r.provider,r.model
            FROM effective_usage r {ANTIGRAVITY_JOIN}
            WHERE r.client IN ('antigravity','antigravity-cli') AND r.source='local' AND agy.started_ms IS NOT NULL
          ),
@@ -162,7 +161,7 @@ fn starts(
          SELECT client,start,provider,model,earlier,later,count(*) FROM per_agent
          GROUP BY client,start,provider,model,earlier,later ORDER BY client,start,provider,model,earlier,later"
     ))?;
-    let mut rows = stmt.query(params![timezone, antigravity_children])?;
+    let mut rows = stmt.query([timezone])?;
     let mut codex = Vec::new();
     let mut antigravity = Vec::new();
     while let Some(row) = rows.next()? {
@@ -185,30 +184,13 @@ fn starts(
 }
 
 pub fn export(db: &mut Database, timezone: &str) -> Result<DeviceUsageSnapshot> {
-    export_with_children(db, timezone, "[]")
-}
-
-pub fn export_with_home(
-    db: &mut Database,
-    timezone: &str,
-    home: &Path,
-) -> Result<DeviceUsageSnapshot> {
-    let children = serde_json::to_string(&snapshot_children(home))?;
-    export_with_children(db, timezone, &children)
-}
-
-fn export_with_children(
-    db: &mut Database,
-    timezone: &str,
-    children: &str,
-) -> Result<DeviceUsageSnapshot> {
     let tx = db.connection.transaction()?;
-    let (subagent_starts, antigravity_subagent_starts) = starts(&tx, timezone, children)?;
+    let (subagent_starts, antigravity_subagent_starts) = starts(&tx, timezone)?;
     let snapshot = DeviceUsageSnapshot {
         schema_version: 1,
         revision: revision(&tx)?,
         timezone: REPORTING_TIMEZONE.to_owned(),
-        buckets: buckets(&tx, timezone, children)?,
+        buckets: buckets(&tx, timezone)?,
         subagent_starts,
         antigravity_subagent_starts,
     };

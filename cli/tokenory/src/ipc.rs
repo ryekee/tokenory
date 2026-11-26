@@ -53,8 +53,8 @@ fn reply(id: &str, r: Result<Value>) -> Result<()> {
 const SNAPSHOT_CHUNK_BYTES: usize = 1024 * 1024;
 const MAX_REPLY_BYTES: usize = 64 * 1024 * 1024;
 
-fn reply_snapshot(db: &mut Database, config: &Config, id: &str, stream: bool) -> Result<()> {
-    let snapshot = match crate::device_snapshot::export_with_home(db, &config.timezone, &config.home_dir)
+fn reply_snapshot(db: &mut Database, id: &str, stream: bool) -> Result<()> {
+    let snapshot = match crate::device_snapshot::export(db, Config::system_timezone().name())
         .and_then(|snapshot| Ok(serde_json::to_string(&snapshot)?))
     {
         Ok(snapshot) => snapshot,
@@ -442,7 +442,7 @@ pub async fn run(db: &mut Database, mut config: Config) -> Result<()> {
                reply(&r.id, Ok(json!({"started":started,"queued":queued})))?;
            },
            "status"=>reply(&r.id,Ok(json!({"scanning":scan.is_some(),"lastScan":last_scan,"dataDirectory":db.directory,"revision":before,"refreshingPrices":price_task.is_some()})))?,
-           "deviceUsageSnapshot"=>reply_snapshot(db,&config,&r.id,r.payload["stream"].as_bool() == Some(true))?,
+           "deviceUsageSnapshot"=>reply_snapshot(db,&r.id,r.payload["stream"].as_bool() == Some(true))?,
            "refreshPrices"=>{
             if price_task.is_some(){reply(&r.id,Err(anyhow!("price refresh already running")))?;}else{price_task=Some(tokio::spawn(fetch_prices(r.id)));}
            },

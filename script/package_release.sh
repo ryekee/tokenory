@@ -20,7 +20,13 @@ IDENTITY="$(python3 ./script/cloudkit_release_profile.py prepare "${PROFILE_OPTI
 TOKENORY_CONFIGURATION=Release ./script/build.sh
 BUILT_APP="$ROOT_DIR/.build/xcode/Build/Products/Release/Tokenory.app"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$BUILT_APP/Contents/Info.plist")"
-OUT="$ROOT_DIR/.build/releases/v$VERSION"
+SUFFIX=""
+if [[ "${TOKENORY_RELEASE_BUILD_SUFFIX:-0}" == 1 ]]; then
+    BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$BUILT_APP/Contents/Info.plist")"
+    [[ "$BUILD" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid release build number" >&2; exit 1; }
+    SUFFIX="-build$BUILD"
+fi
+OUT="$ROOT_DIR/.build/releases/v$VERSION$SUFFIX"
 [[ ! -e "$OUT/Tokenory.app" ]] || { echo "Release directory already contains an app: $OUT" >&2; exit 1; }
 mkdir -p "$OUT"
 cp "$NOTES_SNAPSHOT" "$OUT/release-notes.json"
@@ -41,7 +47,7 @@ cp "$SIGNING_TEMP/embedded.provisionprofile" "$APP/Contents/embedded.provisionpr
 codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$SIGNING_TEMP/CloudKit.entitlements" "$APP"
 codesign --verify --deep --strict "$APP"
 python3 ./script/cloudkit_release_profile.py verify "$APP" "$SIGNING_TEMP/CloudKit.entitlements"
-ARCHIVE="Tokenory-$VERSION-macOS-arm64.zip"
+ARCHIVE="Tokenory-$VERSION$SUFFIX-macOS-arm64.zip"
 ditto -c -k --keepParent "$APP" "$OUT/$ARCHIVE"
 xcrun notarytool submit "$OUT/$ARCHIVE" --keychain-profile "$PROFILE" --wait --output-format json > "$OUT/notarization.json"
 python3 - "$OUT/notarization.json" <<'PY'

@@ -79,6 +79,7 @@ pub struct ScanBatch {
     incomplete_copilot_sdk_sessions: HashSet<String>,
     pub codex_turns: Vec<crate::codex_turns::CodexTurn>,
     codex_activity: Vec<crate::codex_subagents::ThreadActivity>,
+    antigravity_spawns: Vec<crate::antigravity_subagents::ClientSpawn>,
     pub invalidated_turn_ids: Vec<String>,
     pub timezone: String,
     pub result: ScanResult,
@@ -661,6 +662,7 @@ async fn collect(
         incomplete_copilot_sdk_sessions,
         codex_turns,
         codex_activity,
+        antigravity_spawns: crate::antigravity_subagents::collect_spawns(&config.home_dir, selected),
         invalidated_turn_ids,
         timezone: config.timezone.clone(),
         result: ScanResult {
@@ -953,7 +955,8 @@ pub fn persist(db: &mut Database, mut batch: ScanBatch) -> Result<ScanResult> {
     }
     batch.result.changed += crate::codex_turns::persist(&tx, &batch.codex_turns, &batch.timezone)?;
     let activity_changed = crate::codex_subagents::persist(&tx, &batch.codex_activity, &batch.timezone)?;
-    batch.result.revision = if batch.result.changed > 0 || activity_changed {
+    let antigravity_changed = crate::antigravity_subagents::persist(&tx, &batch.antigravity_spawns)?;
+    batch.result.revision = if batch.result.changed > 0 || activity_changed || antigravity_changed {
         advance_revision(&tx)?
     } else {
         crate::db::revision(&tx)?

@@ -4,7 +4,7 @@
 activity.rs: 验证有效来源、维度与对话筛选、对话搜索、分页独立、未知费用和工具/模型分组下的 Fast tokens 与已知估算费用。
 antigravity.rs: 验证 Antigravity App、Insiders 和 CLI SQLite 直读、旧缓存去重、模型枚举不计入 input、小时分布、会话标题、完成回合与工具等待、子代理排除以及 WAL 实时监听推送。回归覆盖空闲 WAL 数据库不重复扫描、旧缓存通知、跨会话账本迁移、历史计价继承、回退时间不分配小时，以及多库与部分读取保护。
 storage_retention.rs: 验证自动备份轮替、手工备份保留、预览过期及 ID 不重用、压缩后账本与撤销历史不变、连续升级只备份一次。
-backup_restore.rs: 验证 backup_restore 的账本接口和行为。
+backup_restore.rs: 验证备份恢复和修订递增、v6 升级前的自动备份，以及 v7 子代理证据保留和缺表校验。
 cli.rs: 验证 cli 的账本接口和行为。
 clients.rs: 验证客户端目录、额外扫描路径、快照更新，以及 TRAE CLI 与 Trae 账户缓存的独立归类和归档副本去重。
 copilot.rs: 验证 SDK 累计检查点的跨日增量、同会话来源去重、轮转日志缺失和重扫行为。

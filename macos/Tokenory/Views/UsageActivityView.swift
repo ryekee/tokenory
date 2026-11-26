@@ -1,5 +1,5 @@
 // [INPUT]: Combined annual activity, per-device calendars and day navigation callback.
-// [OUTPUT]: Titled width-fitting YlGnBu calendar with immediate hover emphasis, delayed readouts and inline day details.
+// [OUTPUT]: Titled width-fitting YlGnBu calendar with shared hover and click targets, delayed readouts and inline day details.
 // [POS]: Native overview history section; no palette customization.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -51,6 +51,7 @@ struct UsageActivityView: View {
     }
     private func calendar(_ activity: UsageActivity) -> some View {
         let weeks = (activity.leadingDays + activity.days.count + 6) / 7
+        let dayPositions = activity.leadingDays..<(activity.leadingDays + activity.days.count)
         let maxTokens = activity.days.map(\.tokens).max() ?? 0
         let palette = palette
         let fill: (ActivityDay) -> Color = { day in
@@ -62,7 +63,7 @@ struct UsageActivityView: View {
         let names = showsDeviceBreakdown ? [L("cloud.overview.total"), store.localDeviceName] + store.remoteActivityCalendars.keys.map(store.deviceName) : []
         let width = CursorTooltipLayout.summaryWidth(names: names, tokens: maxTokens, cost: activity.days.compactMap(\.cost).max(), partial: partial)
         return GeometryReader { geometry in
-            let layout = ActivityCalendarLayout(width: geometry.size.width, weeks: weeks)
+            let layout = ActivityCalendarLayout(width: geometry.size.width, weeks: weeks, dayPositions: dayPositions)
             let months = ActivityMonthLabelLayout.months(activity: activity, weeks: weeks, cell: layout.cellWidth,
                                                         columnGap: layout.columnGap)
             HStack(alignment: .bottom, spacing: ActivityCalendarLayout.weekdayGap) {
@@ -101,17 +102,24 @@ struct UsageActivityView: View {
                 }
                 .padding(.horizontal, layout.horizontalExpansion)
                 .padding(.bottom, ActivityCalendarLayout.verticalExpansion)
-                .contentShape(Rectangle())
-                .onContinuousHover { phase in
-                    switch phase {
-                    case .active(let point):
-                        let next = layout.position(at: point, retaining: hover.target).flatMap { position in
-                            activity.days.indices.contains(position - activity.leadingDays) ? position : nil
+                .overlay {
+                    // The day buttons retain their keyboard and accessibility actions.
+                    // One pointer layer follows the painted geometry, including the space between buttons.
+                    Rectangle().fill(.clear)
+                        .contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let point):
+                                hover.update(layout.position(at: point, retaining: hover.target))
+                                tooltipPointer.move(to: point, reposition: hover.readoutTarget != nil)
+                            case .ended: hover.update(nil)
+                            }
                         }
-                        hover.update(next)
-                        tooltipPointer.move(to: point, reposition: hover.readoutTarget != nil)
-                    case .ended: hover.update(nil)
-                    }
+                        .onTapGesture(count: 1, coordinateSpace: .local) { point in
+                            guard let position = layout.position(at: point, retaining: hover.target) else { return }
+                            toggleDay(activity.days[position - activity.leadingDays].key)
+                        }
+                        .accessibilityHidden(true)
                 }
                 .onChange(of: report.from) { _, _ in hover.update(nil) }
                 .onDisappear { hover.update(nil) }
@@ -126,12 +134,16 @@ struct UsageActivityView: View {
         }.frame(height: ActivityCalendarLayout.height)
     }
 
+    private func toggleDay(_ key: String) {
+        DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
+            inspectedDay = key == inspectedDay ? nil : key
+        }
+    }
+
     private func dayButton(_ day: ActivityDay, position: Int, layout: ActivityCalendarLayout, fill: Color) -> some View {
         let inspected = day.key == inspectedDay
         return Button {
-            DashboardMotion.withAnimation(DashboardMotion.disclosure, reduceMotion: reduceMotion) {
-                inspectedDay = inspected ? nil : day.key
-            }
+            toggleDay(day.key)
         } label: {
             Color.clear.frame(width: layout.cellWidth, height: ActivityCalendarLayout.cellHeight)
                 .contentShape(Rectangle())
@@ -243,10 +255,12 @@ struct ActivityCalendarLayout {
     let columnGap: CGFloat
     let cellWidth: CGFloat
     let plot: CGRect
+    private let dayPositions: Range<Int>
     var horizontalExpansion: CGFloat { cellWidth * Self.expansionRatio }
 
-    init(width: CGFloat, weeks: Int) {
+    init(width: CGFloat, weeks: Int, dayPositions: Range<Int>? = nil) {
         self.weeks = weeks
+        self.dayPositions = dayPositions ?? 0..<(weeks * 7)
         let gridWidth = max(0, width - Self.weekdayWidth - Self.weekdayGap)
         let columns = CGFloat(max(1, weeks))
         columnGap = min(Self.rowGap, gridWidth / columns * 0.25)
@@ -263,6 +277,7 @@ struct ActivityCalendarLayout {
 
     func position(at point: CGPoint, retaining hovered: Int? = nil) -> Int? {
         guard cellWidth > 0, plot.contains(point) else { return nil }
+        let hovered = hovered.flatMap { dayPositions.contains($0) ? $0 : nil }
         // Once expanded, the painted cell owns its new bounds. Crossing the original
         // edge must not make it shrink back beneath a pointer that is still over it.
         if let hovered, focusFrame(at: hovered).contains(point) { return hovered }
@@ -270,6 +285,7 @@ struct ActivityCalendarLayout {
         let row = Int(floor((point.y - Self.dayTop) / Self.rowStride))
         guard (0..<weeks).contains(column), (0..<7).contains(row) else { return nil }
         let position = 7 * column + row
+        guard dayPositions.contains(position) else { return nil }
         return insets(at: position, selected: hovered).frame(in: cellFrame(at: position)).contains(point) ? position : nil
     }
 
