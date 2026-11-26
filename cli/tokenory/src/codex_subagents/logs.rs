@@ -86,6 +86,43 @@ struct PendingTurn {
     mixed_models: bool,
 }
 
+fn format_spawn_name(spawn: &Value, meta: &Value) -> Option<String> {
+    let nickname = nonempty(&spawn["agent_nickname"])
+        .or_else(|| nonempty(&meta["agent_nickname"]))
+        .map(str::trim);
+    let role = nonempty(&spawn["agent_role"])
+        .or_else(|| nonempty(&meta["agent_role"]))
+        .map(capitalize_first);
+    let path_label = nonempty(&spawn["agent_path"])
+        .or_else(|| nonempty(&meta["agent_path"]))
+        .and_then(|raw| raw.rsplit('/').find(|segment| !segment.trim().is_empty()))
+        .map(|segment| segment.replace('_', " ").trim().to_owned())
+        .filter(|label| !label.is_empty());
+
+    let head = match (role.as_deref(), nickname) {
+        (Some(role), Some(nick)) => Some(format!("{role}: {nick}")),
+        (None, Some(nick)) => Some(nick.to_owned()),
+        (Some(role), None) => Some(role.to_owned()),
+        (None, None) => None,
+    };
+    let combined = match (head, path_label) {
+        (Some(head), Some(label)) => format!("{head} - {label}"),
+        (Some(head), None) => head,
+        (None, Some(label)) => label,
+        (None, None) => return None,
+    };
+    Some(combined.chars().take(120).collect())
+}
+
+fn capitalize_first(text: &str) -> String {
+    let trimmed = text.trim();
+    let mut chars = trimmed.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
 fn nonempty(value: &Value) -> Option<&str> {
     value.as_str().filter(|text| !text.trim().is_empty())
 }
@@ -115,9 +152,7 @@ fn own_metadata(row: &Value, alias: &str) -> Option<ThreadActivity> {
         ThreadKind::Spawned {
             parent_id: parent_id.to_owned(),
             depth,
-            name: nonempty(&spawn["agent_nickname"])
-                .or_else(|| nonempty(&meta["agent_nickname"]))
-                .map(|name| name.trim().chars().take(80).collect()),
+            name: format_spawn_name(spawn, meta),
         }
     } else if matches!(thread_source, None | Some("user"))
         && matches!(

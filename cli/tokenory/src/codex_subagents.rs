@@ -107,11 +107,11 @@ pub(crate) fn persist(
     let mut thread = db.prepare_cached(
         "INSERT INTO codex_activity_threads VALUES (?1,?2,?3,?4,?5,?6,?7)
          ON CONFLICT(id) DO UPDATE SET
-             name=COALESCE(codex_activity_threads.name,excluded.name),
+             name=COALESCE(excluded.name,codex_activity_threads.name),
              provider=COALESCE(codex_activity_threads.provider,excluded.provider)
          WHERE codex_activity_threads.parent_id IS excluded.parent_id
            AND codex_activity_threads.depth=excluded.depth
-           AND ((codex_activity_threads.name IS NULL AND excluded.name IS NOT NULL)
+           AND ((excluded.name IS NOT NULL AND codex_activity_threads.name IS NOT excluded.name)
              OR (codex_activity_threads.provider IS NULL AND excluded.provider IS NOT NULL))",
     )?;
     let mut alias = db.prepare_cached(
