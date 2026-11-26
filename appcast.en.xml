@@ -3,26 +3,24 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.2.3</title>
-            <pubDate>Thu, 26 Nov 2026 02:24:15 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.3</link>
-            <sparkle:version>21</sparkle:version>
-            <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
+            <title>0.2.4</title>
+            <pubDate>Thu, 26 Nov 2026 17:08:46 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.4</link>
+            <sparkle:version>22</sparkle:version>
+            <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.3/Tokenory-0.2.3-macOS-arm64.zip" length="21545539" type="application/octet-stream" sparkle:edSignature="JtCwXEsbP6Kv+aIBl3AdrmqbRGQGaCvtskmpRswxx5y42VvyeQNS7XxNVSzw9fj/5u3pkz6fprSu8qgLbYioAA==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.4/Tokenory-0.2.4-macOS-arm64.zip" length="21546234" type="application/octet-stream" sparkle:edSignature="DO2ue1eCxCdbzHDUv7+GppEOYwO2GUdqj3QDGRl2UMfv+E5n/S+l3JnHV7AMQTo2hxyY3c2sAV1QxYJVN/iIAw==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- Unified macOS workspace motion with smooth per-digit rolling counters, morphing cost curves, animated ranking bars, and instant in-memory date-range switching.
-- Added Antigravity subagent tracking and merged Codex and Antigravity into a single Subagents overview card with inline tool and model badges.
-- Added per-segment hover readouts on Tool and Model bars to inspect local, remote, and Fast shares individually.
-- Recognize historical import formats automatically and keep range previews and conflict choices inside the Data card.
+- Format Codex subagent display names as Role: Nickname - path label (with trailing ellipsis truncation) and automatically backfill existing records.
 
 ## Fixes
 
-- Fixed Mechanical HUD drum rolling alignment, interruptible fade transitions, and VSync-synced frame pacing.
-- Fixed Records pagination indicator drift, conversation search popover flicker, overview vertical jumps when switching dates, and redundant system tooltips.
-- Improved scan recovery and avoided repeated live scans when database WAL files close.
+- Keep empty-state overview, trend, and speed cards at a stable layout with zeroed values instead of collapsing their size.
+- Align the Speed tab chart and breakdown colors with the updated overview palette.
+- Fix zero-usage and failed subagent row alignment, remove legacy leading disclosure chevrons in favor of clean indentation, and fix nested hover highlight clipping.
+- Prevent background scans from locking the toolbar refresh icon in a spinning state.
 </description></item>
     </channel>
 </rss>

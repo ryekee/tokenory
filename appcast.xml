@@ -3,38 +3,34 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.2.3</title>
-            <pubDate>Thu, 26 Nov 2026 02:24:15 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.3</link>
-            <sparkle:version>21</sparkle:version>
-            <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
+            <title>0.2.4</title>
+            <pubDate>Thu, 26 Nov 2026 17:08:46 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.4</link>
+            <sparkle:version>22</sparkle:version>
+            <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.3/Tokenory-0.2.3-macOS-arm64.zip" length="21545539" type="application/octet-stream" sparkle:edSignature="JtCwXEsbP6Kv+aIBl3AdrmqbRGQGaCvtskmpRswxx5y42VvyeQNS7XxNVSzw9fj/5u3pkz6fprSu8qgLbYioAA==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.4/Tokenory-0.2.4-macOS-arm64.zip" length="21546234" type="application/octet-stream" sparkle:edSignature="DO2ue1eCxCdbzHDUv7+GppEOYwO2GUdqj3QDGRl2UMfv+E5n/S+l3JnHV7AMQTo2hxyY3c2sAV1QxYJVN/iIAw==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- Unified macOS workspace motion with smooth per-digit rolling counters, morphing cost curves, animated ranking bars, and instant in-memory date-range switching.
-- Added Antigravity subagent tracking and merged Codex and Antigravity into a single Subagents overview card with inline tool and model badges.
-- Added per-segment hover readouts on Tool and Model bars to inspect local, remote, and Fast shares individually.
-- Recognize historical import formats automatically and keep range previews and conflict choices inside the Data card.
+- Format Codex subagent display names as Role: Nickname - path label (with trailing ellipsis truncation) and automatically backfill existing records.
 
 ## Fixes
 
-- Fixed Mechanical HUD drum rolling alignment, interruptible fade transitions, and VSync-synced frame pacing.
-- Fixed Records pagination indicator drift, conversation search popover flicker, overview vertical jumps when switching dates, and redundant system tooltips.
-- Improved scan recovery and avoided repeated live scans when database WAL files close.
+- Keep empty-state overview, trend, and speed cards at a stable layout with zeroed values instead of collapsing their size.
+- Align the Speed tab chart and breakdown colors with the updated overview palette.
+- Fix zero-usage and failed subagent row alignment, remove legacy leading disclosure chevrons in favor of clean indentation, and fix nested hover highlight clipping.
+- Prevent background scans from locking the toolbar refresh icon in a spinning state.
 </description><description xml:lang="zh-Hans" sparkle:format="markdown">## 新功能
 
-- 统一 macOS 统计窗口动效语言：升级逐位独立滚动数字、费用曲线平滑形态变形、无跳动进度条，并接入内存快照实现任意日期范围瞬时切换。
-- 新增 Antigravity 子代理统计，将 Codex 与 Antigravity 合并为统一的「子代理」总览卡片，并在工具与模型排行中展示子代理占比角标。
-- 工具与模型排行条新增按分段悬停读数，可分别查看本机、其他设备与 Fast 模式的数值和占比。
-- 历史导入自动识别文件格式，并在数据卡片内就地展示预览与重叠日期处理选项。
+- Codex 子代理名称升级为「角色: 昵称 - 路径标签」格式，支持过长尾部省略号截断，并在扫描时自动更新历史记录。
 
 ## 修复
 
-- 修复桌面机械 HUD 滚轮显示对齐、可打断的淡入淡出过渡与跟随屏幕刷新率的帧率同步。
-- 修复记录分页高亮滑块错位、会话搜索弹窗高度闪烁、切换日期时总览上下跳动，并清理重复的系统原生悬停提示。
-- 改进后台扫描恢复逻辑，避免数据库 WAL 关闭时重复触发实时扫描。
+- 修复空数据日期下总览、趋势与速度卡片尺寸塌陷的问题，保持原有版式并展示为 0 或空图表。
+- 统一速度页图表与耗时拆分的配色方案，与新版总览色盘保持一致。
+- 修复启动失败或 0 用量子代理的对齐与样式，移除折叠行首的旧式箭头图标改用纯缩进层次，并修复嵌套悬停高亮右侧被裁切的问题。
+- 修复后台自动扫描导致右上角刷新按钮长时间停留在加载旋转状态的问题。
 </description></item>
     </channel>
 </rss>
