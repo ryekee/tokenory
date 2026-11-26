@@ -1,8 +1,22 @@
 use tokenory::{
-    db::Database,
+    db::{advance_revision, revision, Database},
     import::{apply_import, preview_import, ApplyOptions},
     queries::{report, Filter},
 };
+
+#[test]
+fn restoring_an_older_backup_advances_the_current_ledger_revision() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = Database::open(&root.path().join("ledger")).unwrap();
+    let backup = root.path().join("backup.sqlite3");
+    db.backup(&backup).unwrap();
+    let before = advance_revision(&db.connection).unwrap();
+
+    db.restore(&backup).unwrap();
+
+    assert_eq!(revision(&db.connection).unwrap(), before + 1);
+}
+
 #[test]
 fn valid_backup_restores_usage_and_corrupt_backup_keeps_current_database() {
     let root = tempfile::tempdir().unwrap();

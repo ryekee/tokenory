@@ -1,5 +1,5 @@
 // [INPUT]: Real daily client/model aggregates for the annual range.
-// [OUTPUT]: Raw and averaged model history with immediate date emphasis, delayed readouts and instant pinning.
+// [OUTPUT]: Titled model history card with raw and averaged trends, immediate date emphasis and delayed readouts.
 // [POS]: Annual overview chart; known costs remain visible when another model has unpriced usage.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -23,10 +23,7 @@ struct UsageHistoryChart: View {
         return WorkspacePanel {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(L("history.title")).font(.headline).accessibilityAddTraits(.isHeader)
-                        Text(L("activity.year")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
-                    }
+                    OverviewCardTitle(title: L("history.title"), symbol: "chart.xyaxis.line", subtitle: L("activity.year"))
                     Spacer()
                     VStack(alignment: .trailing, spacing: 5) {
                         Text(L(metric == .tokens ? "history.total_tokens" : data.unpricedTokens > 0 ? "cost.known" : "cost.estimate"))

@@ -1,5 +1,5 @@
 // [INPUT]: HUD preferences, shared usage store, live display/Dock metrics, and drag gestures.
-// [OUTPUT]: Nonactivating floating panel with free drag, magnetic edge snapping, Dock/menu-bar dodge, and edge retract/pop-out motion.
+// [OUTPUT]: Nonactivating panel with edge docking, Dock/menu-bar avoidance, and a pin captured when pointer following stops.
 // [POS]: App lifecycle owner; a HUD never changes the app's Dock activation policy.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -67,6 +67,7 @@ final class HUDController {
     private var dragSamples: [DragSample] = []
 
     // Pointer-follow screen switch debounce
+    private var wasFollowingPointer = true
     private var pendingSwitchDisplayID: UInt32?
     private var pendingSwitchTask: Task<Void, Never>?
     private var isSwitchingScreen = false
@@ -91,6 +92,7 @@ final class HUDController {
     func start() {
         guard !observing else { return }
         observing = true
+        wasFollowingPointer = preferences.followPointer
         _ = Self.fontRegistered
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -127,7 +129,13 @@ final class HUDController {
             }
 
             let followPointer = preferences.followPointer
-            if !followPointer, preferences.pinnedDisplayID == nil, let currentID = activeDisplayID {
+            let stoppedFollowing = wasFollowingPointer && !followPointer
+            wasFollowingPointer = followPointer
+            if stoppedFollowing { cancelPointerScreenSwitch() }
+            if !followPointer, visibility == .visible, panel?.isVisible == true,
+               stoppedFollowing || preferences.pinnedDisplayID == nil,
+               let currentID = activeDisplayID,
+               NSScreen.screens.contains(where: { HUDDisplayMetrics.displayID(for: $0) == currentID }) {
                 preferences.pinnedDisplayID = currentID
             } else if followPointer, visibility == .visible {
                 evaluateEnvironmentTick()
@@ -550,22 +558,7 @@ final class HUDController {
                 }
                 return true
             } else {
-                // Pointer returned to the HUD's current screen: cancel pending switch or interrupt retract!
-                pendingSwitchTask?.cancel(); pendingSwitchTask = nil; pendingSwitchDisplayID = nil
-                if isSwitchingScreen, case .retracting = motionMode {
-                    isSwitchingScreen = false
-                    switchingTargetScreen = nil
-                    if let rest = lastRestingOrigin {
-                        motionPosition = panel.frame.origin
-                        motionVelocity = .zero
-                        startSpring(
-                            to: rest,
-                            stiffness: HUDMotionSpec.popStiffness,
-                            damping: HUDMotionSpec.popDamping,
-                            fadeIn: true
-                        )
-                    }
-                }
+                cancelPointerScreenSwitch()
             }
         } else {
             pendingSwitchTask?.cancel(); pendingSwitchTask = nil; pendingSwitchDisplayID = nil
@@ -627,6 +620,17 @@ final class HUDController {
         return nearAutoHiddenDock || nearAutoHiddenMenu
     }
 
+    private func cancelPointerScreenSwitch() {
+        pendingSwitchTask?.cancel(); pendingSwitchTask = nil; pendingSwitchDisplayID = nil
+        guard isSwitchingScreen else { return }
+        isSwitchingScreen = false
+        switchingTargetScreen = nil
+        guard let panel, let rest = lastRestingOrigin else { return }
+        motionPosition = panel.frame.origin
+        motionVelocity = .zero
+        startSpring(to: rest, stiffness: HUDMotionSpec.popStiffness, damping: HUDMotionSpec.popDamping, fadeIn: true)
+    }
+
     private func switchToScreen(_ targetScreen: NSScreen) {
         guard let panel, panel.isVisible, !isHiding else { return }
         let anchor = preferences.anchor
@@ -663,6 +667,10 @@ final class HUDController {
 
         startRetract(from: start, to: retractEnd) { [weak self] in
             guard let self, self.motionGeneration == generation, let panel = self.panel, !self.isHiding else { return }
+            guard self.preferences.followPointer else {
+                self.cancelPointerScreenSwitch()
+                return
+            }
             self.isSwitchingScreen = false
             let destination = self.switchingTargetScreen ?? targetScreen
             self.switchingTargetScreen = nil

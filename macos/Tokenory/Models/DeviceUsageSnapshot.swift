@@ -1,5 +1,5 @@
 // [INPUT]: One versioned, aggregate-only worker snapshot per selected Mac.
-// [OUTPUT]: Filtered Overview including models by tool, and activity reports for one Mac or their sum.
+// [OUTPUT]: Filtered per-tool models, subagent summaries and activity reports for one Mac or their sum.
 // [POS]: Shared device-snapshot wire format and presentation aggregation.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import Foundation
@@ -13,6 +13,7 @@ struct DeviceUsageSnapshot: Codable, Sendable {
     let timezone: String
     let buckets: [Bucket]
     let subagentStarts: [StartCount]
+    var antigravitySubagentStarts: [StartCount]? = nil
 
     struct Bucket: Codable, Sendable {
         let date: String
@@ -23,6 +24,7 @@ struct DeviceUsageSnapshot: Codable, Sendable {
         let source: String
         let isSubagent: Bool
         let summary: UsageSummary
+        var isAntigravitySubagent: Bool? = nil
 
         fileprivate func matches(_ filter: UsageFilter) -> Bool {
             filter.conversation == nil && filter.includesDay(date)
@@ -40,6 +42,7 @@ struct DeviceUsageSnapshot: Codable, Sendable {
         let nearestBefore: String?
         let nearestAfter: String?
         let count: Int64
+        var client: String? = nil
 
         fileprivate func matches(_ filter: UsageFilter) -> Bool {
             provider == filter.provider && model == filter.model && filter.includesDay(date)
@@ -50,30 +53,45 @@ struct DeviceUsageSnapshot: Codable, Sendable {
     // Input uniqueness is structural: the caller replaces the snapshot at the same device ID.
     static func overview(devices: [String: Self], filter: UsageFilter) -> UsageReport {
         var result = DeviceOverviewAccumulator()
-        var subagents = DeviceUsageAccumulator()
-        var starts: Int64 = 0
-        let includeSubagents = filter.conversation == nil && filter.timestampFromMs == nil
-            && (filter.client == nil || filter.client == "codex")
+        var codex = DeviceSubagentTotals()
+        var antigravity = DeviceSubagentTotals()
+        var antigravityByClient: [String: DeviceSubagentTotals] = [:]
+        let includeSubagents = filter.conversation == nil && filter.timestampFromMs == nil && filter.timestampToMs == nil
             && (filter.source == nil || filter.source == "local")
         for id in devices.keys.sorted() {
             guard let snapshot = devices[id] else { continue }
             for bucket in snapshot.buckets where bucket.matches(filter) {
                 result.add(bucket)
-                if includeSubagents && bucket.isSubagent { subagents.add(bucket) }
+                guard includeSubagents, bucket.source == "local" else { continue }
+                if bucket.client == "codex", bucket.isSubagent { codex.add(bucket.summary) }
+                if Self.isAntigravity(bucket.client), bucket.isAntigravitySubagent == true {
+                    antigravity.add(bucket.summary)
+                    antigravityByClient[bucket.client, default: .init()].add(bucket.summary)
+                }
             }
-            if includeSubagents {
-                for start in snapshot.subagentStarts where start.matches(filter) { starts += start.count }
+            guard includeSubagents else { continue }
+            if filter.client == nil || filter.client == "codex" {
+                for start in snapshot.subagentStarts where start.matches(filter) { codex.starts += start.count }
+            }
+            for start in snapshot.antigravitySubagentStarts ?? [] where start.matches(filter) {
+                guard let client = start.client, Self.isAntigravity(client),
+                      filter.client == nil || filter.client == client else { continue }
+                antigravity.starts += start.count
+                antigravityByClient[client, default: .init()].starts += start.count
             }
         }
-        let costs = CodexSubagentCost(knownEstimatedCostUsd: subagents.cost, unpricedTokens: subagents.unpriced)
-        let agents = CodexSubagentReport(starts: starts, tokens: subagents.tokens, conversations: [], cost: costs)
         return UsageReport(
             revision: combinedRevision(devices), summary: result.total.summary, daily: ordered(result.days),
             clients: ranked(result.clients), providers: ranked(result.providers), models: ranked(result.models),
             details: [], hourly: filter.from != nil && filter.from == filter.to ? result.hourly : nil,
             clientModels: result.clientModels.mapValues(ranked),
-            codexSubagents: agents.hasActivity ? agents : nil
+            codexSubagents: codex.report, antigravitySubagents: antigravity.report,
+            antigravitySubagentsByClient: antigravityByClient.compactMapValues(\.report)
         )
+    }
+
+    private static func isAntigravity(_ client: String) -> Bool {
+        client == "antigravity" || client == "antigravity-cli"
     }
 
     static func activity(devices: [String: Self], filter: UsageFilter, from: String, to: String) -> ActivityReport {
@@ -125,6 +143,26 @@ extension DeviceUsageSnapshot {
         timezone = try fields.decode(String.self, forKey: .timezone)
         buckets = try fields.decode([Bucket].self, forKey: .buckets)
         subagentStarts = try fields.decode([StartCount].self, forKey: .subagentStarts)
+        antigravitySubagentStarts = try fields.decodeIfPresent([StartCount].self, forKey: .antigravitySubagentStarts)
+    }
+}
+
+private struct DeviceSubagentTotals {
+    var starts: Int64 = 0
+    private var tokens: Int64 = 0
+    private var cost: Double?
+    private var unpriced: Int64 = 0
+
+    mutating func add(_ summary: UsageSummary) {
+        tokens += summary.tokens
+        if let amount = summary.knownEstimatedCostUsd { cost = (cost ?? 0) + amount }
+        unpriced += summary.unpricedTokens
+    }
+
+    var report: CodexSubagentReport? {
+        let amount = CodexSubagentCost(knownEstimatedCostUsd: cost, unpricedTokens: unpriced)
+        let report = CodexSubagentReport(starts: starts, tokens: tokens, conversations: [], cost: amount)
+        return report.hasActivity ? report : nil
     }
 }
 

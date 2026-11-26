@@ -1,5 +1,5 @@
 // [INPUT]: Combined annual activity, per-device calendars and day navigation callback.
-// [OUTPUT]: Width-fitting YlGnBu calendar with immediate spring-loaded hover emphasis, delayed readouts and inline day details.
+// [OUTPUT]: Titled width-fitting YlGnBu calendar with immediate hover emphasis, delayed readouts and inline day details.
 // [POS]: Native overview history section; no palette customization.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
@@ -25,7 +25,7 @@ struct UsageActivityView: View {
         WorkspacePanel {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Text(L("activity.title")).font(.headline).accessibilityAddTraits(.isHeader)
+                    OverviewCardTitle(title: L("activity.title"), symbol: "calendar")
                     Text(L("activity.year")).font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Text(LF("activity.days", activity.activeDays)).font(.caption).foregroundStyle(.secondary)

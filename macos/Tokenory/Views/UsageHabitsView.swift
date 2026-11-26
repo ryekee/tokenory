@@ -1,5 +1,5 @@
 // [INPUT]: Annual effective-ledger days and timestamp-qualified hour totals.
-// [OUTPUT]: Coding patterns with weekday share, biggest day and hour distribution with delayed readouts.
+// [OUTPUT]: Titled coding patterns card with weekday share, biggest day and hour distribution.
 // [POS]: Independent overview panel; daily-only imports remain unallocated by hour.
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import SwiftUI
@@ -13,7 +13,7 @@ struct UsageHabitsView: View {
         WorkspacePanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(L("habits.title")).font(.headline).accessibilityAddTraits(.isHeader).foregroundStyle(WorkspaceStyle.text)
+                    OverviewCardTitle(title: L("habits.title"), symbol: "clock")
                     Spacer()
                     Text(L("activity.year")).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
                 }

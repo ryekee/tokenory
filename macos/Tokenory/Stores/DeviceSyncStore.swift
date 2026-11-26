@@ -1,5 +1,5 @@
 // [INPUT]: A local worker, the signed private CloudKit store and the selected reporting period.
-// [OUTPUT]: Sync controls, device sources and atomically selected per-device reports with reusable annual activity.
+// [OUTPUT]: Sync controls, device sources and selected reports with matching local details, reusable annual activity and snapshot invalidation on restore.
 // [POS]: Keeps remote summaries outside the local ledger, HUD, records and speed queries.
 import CloudKit
 import Foundation
@@ -78,9 +78,10 @@ final class DeviceSyncStore {
     func overview(for filter: UsageFilter?) -> UsageReport? { projection?.filter == filter ? projection?.overview : nil }
     func remote(for filter: UsageFilter?) -> [String: UsageReport] { projection?.filter == filter ? projection?.remote ?? [:] : [:] }
     func local(for filter: UsageFilter?) -> UsageReport? { projection?.filter == filter ? projection?.local : nil }
-    func matchingSubagentDetails(in report: UsageReport, for filter: UsageFilter) -> CodexSubagentReport? {
+    func matchingSubagentDetails(in report: UsageReport, for filter: UsageFilter,
+                                 field: KeyPath<UsageReport, CodexSubagentReport?> = \.codexSubagents) -> CodexSubagentReport? {
         guard let projection, projection.filter == filter, projection.localRevision == report.revision else { return nil }
-        return report.codexSubagents
+        return report[keyPath: field]
     }
     var localCalendar: UsageActivity? { projection?.annual.localCalendar }
     var activity: ActivityReport? { projection?.annual.activity }
@@ -200,6 +201,16 @@ final class DeviceSyncStore {
     }
 
     func markDirty() { localDirty = true }
+
+    func invalidateLocalSnapshot() {
+        generation += 1
+        snapshots.removeValue(forKey: service.deviceID)
+        localDirty = true
+        uploadPending = false
+        snapshotVersion += 1
+        annualVersion += 1
+        projection = nil
+    }
 
     func refresh(localChanged: Bool = false) {
         guard availableForLedger else { return }

@@ -1,9 +1,38 @@
 // [INPUT]: 接收导航项、选项、说明、错误信息和折叠内容。
-// [OUTPUT]: 统一下拉选择和可清除搜索，以及设置、导航、悬停、折叠、说明和错误反馈。
+// [OUTPUT]: 统一总览卡片标题、下拉选择和搜索，以及设置、导航、悬停、折叠和错误反馈。
 // [POS]: 共享控件保持同一前缘。设置操作和下拉使用系统失焦颜色，保留原生交互反馈。
 // [PROTOCOL]: Update this header on change, then check AGENTS.md
 import AppKit
 import SwiftUI
+
+struct OverviewCardTitle: View {
+    let title: String
+    let symbol: String
+    var subtitle: String? = nil
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(WorkspaceStyle.selection)
+                .frame(width: 22, height: 22)
+                .background(WorkspaceStyle.selection.opacity(0.11), in: RoundedRectangle(cornerRadius: 6))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(WorkspaceStyle.selection.opacity(0.32), lineWidth: 1)
+                }
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(.headline).foregroundStyle(WorkspaceStyle.text)
+                    .frame(minHeight: 22, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                if let subtitle {
+                    Text(subtitle).font(.caption).foregroundStyle(WorkspaceStyle.subtext)
+                }
+            }
+        }
+    }
+}
 
 struct SettingsSwitch: View {
     let label: String

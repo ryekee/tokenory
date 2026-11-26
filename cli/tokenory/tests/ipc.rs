@@ -73,6 +73,7 @@ fn manual_scan_waits_for_running_incremental_collection() {
         let message = receive();
         if message["id"] == "scan" {
             assert_eq!(message["result"]["started"], false, "manual request must arrive during the incremental scan");
+            assert_eq!(message["result"]["queued"], true);
             replied = true;
         }
         if message["event"] == "scanStarted" { started = true; }
