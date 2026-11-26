@@ -3,34 +3,34 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.2.4</title>
-            <pubDate>Thu, 26 Nov 2026 17:08:46 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.4</link>
-            <sparkle:version>22</sparkle:version>
-            <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
+            <title>0.2.5</title>
+            <pubDate>Thu, 26 Nov 2026 18:47:27 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.5</link>
+            <sparkle:version>23</sparkle:version>
+            <sparkle:shortVersionString>0.2.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.4/Tokenory-0.2.4-macOS-arm64.zip" length="21546234" type="application/octet-stream" sparkle:edSignature="DO2ue1eCxCdbzHDUv7+GppEOYwO2GUdqj3QDGRl2UMfv+E5n/S+l3JnHV7AMQTo2hxyY3c2sAV1QxYJVN/iIAw==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.5/Tokenory-0.2.5-macOS-arm64.zip" length="21574905" type="application/octet-stream" sparkle:edSignature="0KIuuBwkzsavPGfLL+lOVxcqPDnSye39PzAWpMh28q7InDVJtEGSJYIOAeYDTii103mdvoo9BTjhbf5Yvp8lAQ==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- Format Codex subagent display names as Role: Nickname - path label (with trailing ellipsis truncation) and automatically backfill existing records.
+- Support free dragging of the Mechanical HUD across displays with magnetic four-edge snapping and distance-scaled spring bounce.
+- Add a Follow pointer toggle in HUD Settings so you can keep the HUD pinned to a specific display.
+- Detect real Dock width and auto-hidden Dock / menu bar states so bottom corners sit flush at the screen edge when clear and glide smoothly out of the way when overlapping.
+- Add fast, interruptible edge retract and pop-out animations shared by display switching, idle auto-hide, and HUD toggle, with full Reduce Motion support.
 
 ## Fixes
 
-- Keep empty-state overview, trend, and speed cards at a stable layout with zeroed values instead of collapsing their size.
-- Align the Speed tab chart and breakdown colors with the updated overview palette.
-- Fix zero-usage and failed subagent row alignment, remove legacy leading disclosure chevrons in favor of clean indentation, and fix nested hover highlight clipping.
-- Prevent background scans from locking the toolbar refresh icon in a spinning state.
+- Remove excessive aspect-ratio side margins on HUD corners so the panel sits neatly against screen edges.
 </description><description xml:lang="zh-Hans" sparkle:format="markdown">## 新功能
 
-- Codex 子代理名称升级为「角色: 昵称 - 路径标签」格式，支持过长尾部省略号截断，并在扫描时自动更新历史记录。
+- 桌面机械 HUD 支持跨屏自由拖拽，松手后自动磁性吸附到最近屏幕边缘，并带有随距离增强的微弹手感。
+- HUD 设置新增「跟随光标」开关，关闭后可将 HUD 固定在指定屏幕上。
+- 智能感知 Dock 实际宽度及 Dock / 菜单栏自动隐藏状态：底角未被 Dock 遮挡时直接贴底，重叠或 Dock / 菜单栏滑出时平滑上浮/下移避让。
+- 跨屏切换、闲置自动隐藏与显隐开关统一采用干脆可打断的边缘收进与微弹弹出动效，并完整适配系统「减少动态效果」。
 
 ## 修复
 
-- 修复空数据日期下总览、趋势与速度卡片尺寸塌陷的问题，保持原有版式并展示为 0 或空图表。
-- 统一速度页图表与耗时拆分的配色方案，与新版总览色盘保持一致。
-- 修复启动失败或 0 用量子代理的对齐与样式，移除折叠行首的旧式箭头图标改用纯缩进层次，并修复嵌套悬停高亮右侧被裁切的问题。
-- 修复后台自动扫描导致右上角刷新按钮长时间停留在加载旋转状态的问题。
+- 取消四角按屏幕宽高比放大的横向留白，HUD 贴边更紧凑利落。
 </description></item>
     </channel>
 </rss>

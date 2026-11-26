@@ -3,24 +3,24 @@
     <channel>
         <title>Tokenory</title>
         <item>
-            <title>0.2.4</title>
-            <pubDate>Thu, 26 Nov 2026 17:08:46 +0800</pubDate>
-            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.4</link>
-            <sparkle:version>22</sparkle:version>
-            <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
+            <title>0.2.5</title>
+            <pubDate>Thu, 26 Nov 2026 18:47:27 +0800</pubDate>
+            <link>https://github.com/ryekee/tokenory/releases/tag/v0.2.5</link>
+            <sparkle:version>23</sparkle:version>
+            <sparkle:shortVersionString>0.2.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.4/Tokenory-0.2.4-macOS-arm64.zip" length="21546234" type="application/octet-stream" sparkle:edSignature="DO2ue1eCxCdbzHDUv7+GppEOYwO2GUdqj3QDGRl2UMfv+E5n/S+l3JnHV7AMQTo2hxyY3c2sAV1QxYJVN/iIAw==" />
+            <enclosure url="https://github.com/ryekee/tokenory/releases/download/v0.2.5/Tokenory-0.2.5-macOS-arm64.zip" length="21574905" type="application/octet-stream" sparkle:edSignature="0KIuuBwkzsavPGfLL+lOVxcqPDnSye39PzAWpMh28q7InDVJtEGSJYIOAeYDTii103mdvoo9BTjhbf5Yvp8lAQ==" />
         <description xml:lang="en" sparkle:format="markdown">## New Features
 
-- Format Codex subagent display names as Role: Nickname - path label (with trailing ellipsis truncation) and automatically backfill existing records.
+- Support free dragging of the Mechanical HUD across displays with magnetic four-edge snapping and distance-scaled spring bounce.
+- Add a Follow pointer toggle in HUD Settings so you can keep the HUD pinned to a specific display.
+- Detect real Dock width and auto-hidden Dock / menu bar states so bottom corners sit flush at the screen edge when clear and glide smoothly out of the way when overlapping.
+- Add fast, interruptible edge retract and pop-out animations shared by display switching, idle auto-hide, and HUD toggle, with full Reduce Motion support.
 
 ## Fixes
 
-- Keep empty-state overview, trend, and speed cards at a stable layout with zeroed values instead of collapsing their size.
-- Align the Speed tab chart and breakdown colors with the updated overview palette.
-- Fix zero-usage and failed subagent row alignment, remove legacy leading disclosure chevrons in favor of clean indentation, and fix nested hover highlight clipping.
-- Prevent background scans from locking the toolbar refresh icon in a spinning state.
+- Remove excessive aspect-ratio side margins on HUD corners so the panel sits neatly against screen edges.
 </description></item>
     </channel>
 </rss>
